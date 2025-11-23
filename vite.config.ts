@@ -7,7 +7,6 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     minify: 'esbuild',
-    // Otimização para chunks menores e carregamento mais rápido
     rollupOptions: {
       output: {
         manualChunks: {
