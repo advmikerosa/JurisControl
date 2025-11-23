@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -63,12 +62,18 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      // Simula delay de rede para UX
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      setCases(storageService.getCases());
-      setTasks(storageService.getTasks());
-      setIsLoading(false);
+      try {
+        const [loadedCases, loadedTasks] = await Promise.all([
+          storageService.getCases(),
+          storageService.getTasks()
+        ]);
+        setCases(loadedCases);
+        setTasks(loadedTasks);
+      } catch (error) {
+        console.error("Failed to load dashboard data", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     loadData();
@@ -95,14 +100,13 @@ export const Dashboard: React.FC = () => {
     .filter(c => c.nextHearing)
     .sort((a, b) => {
         if (!a.nextHearing || !b.nextHearing) return 0;
-        // Assume dd/mm/yyyy format for sorting
         const [dA, mA, yA] = a.nextHearing.split('/').map(Number);
         const [dB, mB, yB] = b.nextHearing.split('/').map(Number);
         return new Date(yA, mA - 1, dA).getTime() - new Date(yB, mB - 1, dB).getTime();
     })
     .slice(0, 4);
 
-  // Agenda do Dia (Tarefas e Audiências HOJE)
+  // Agenda do Dia
   const todayStr = new Date().toLocaleDateString('pt-BR');
   const todaysAgenda = [
       ...tasks.filter(t => t.dueDate === todayStr && t.status !== 'Concluído').map(t => ({ type: 'task', title: t.title, sub: 'Prazo Fatal', id: t.id })),
@@ -126,7 +130,7 @@ export const Dashboard: React.FC = () => {
         </button>
       </div>
 
-      {/* AGENDA DO DIA (NOVO WIDGET) */}
+      {/* AGENDA DO DIA */}
       {!isLoading && todaysAgenda.length > 0 && (
          <div className="bg-gradient-to-r from-indigo-900/40 to-slate-900/40 border border-indigo-500/20 rounded-2xl p-5">
             <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -195,8 +199,7 @@ export const Dashboard: React.FC = () => {
 
       {/* MAIN CONTENT */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* CHART: Carteira de Processos */}
+        {/* CHART */}
         {isLoading ? (
           <div className="lg:col-span-2"><ChartSkeleton /></div>
         ) : (
@@ -229,7 +232,7 @@ export const Dashboard: React.FC = () => {
           </GlassCard>
         )}
 
-        {/* LIST: Próximas Audiências / Prazos */}
+        {/* LIST */}
         {isLoading ? (
           <ListSkeleton />
         ) : (
@@ -266,7 +269,6 @@ export const Dashboard: React.FC = () => {
                 </div>
               </GlassCard>
 
-              {/* Mini Widget para Tarefas Urgentes */}
               {highPriorityTasks > 0 && (
                   <GlassCard className="h-fit p-5 border-l-4 border-l-rose-500 bg-rose-500/5">
                       <div className="flex justify-between items-center mb-2">

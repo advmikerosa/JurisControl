@@ -3,10 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storageService } from '../services/storageService';
 import { GlassCard } from '../components/ui/GlassCard';
-import { ArrowLeft, Calendar, User, FileText, DollarSign, Plus, MoreHorizontal, Paperclip, Clock, CheckCircle, AlertTriangle, MessageSquare, Send } from 'lucide-react';
+import { ArrowLeft, Calendar, User, DollarSign, Plus, Paperclip, Clock, CheckCircle, AlertTriangle, Send, Loader2, FileText } from 'lucide-react';
 import { LegalCase, Task, FinancialRecord, SystemDocument, CaseMovement } from '../types';
 import { useToast } from '../context/ToastContext';
-import { Modal } from '../components/ui/Modal';
 
 export const CaseDetails: React.FC = () => {
   const { id } = useParams();
@@ -19,32 +18,43 @@ export const CaseDetails: React.FC = () => {
   const [documents, setDocuments] = useState<SystemDocument[]>([]);
   const [activeTab, setActiveTab] = useState<'timeline' | 'tasks' | 'docs' | 'financial'>('timeline');
   const [newMovement, setNewMovement] = useState('');
-
-  // Modais
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (id) {
-      const cases = storageService.getCases();
-      const foundCase = cases.find(c => c.id === id);
-      
-      if (foundCase) {
-        setCaseData(foundCase);
-        // Mock fetching related data
-        // Na vida real, filtraria por caseId. Aqui vamos simular ou filtrar se existir.
-        const allTasks = storageService.getTasks();
-        const allFin = storageService.getFinancials();
-        const allDocs = storageService.getDocuments();
-        
-        // Filtros simplificados (Assumindo que no futuro teremos caseId em todos)
-        setTasks(allTasks.filter(t => t.caseId === id || t.title.includes(foundCase.title))); 
-        setFinancials(allFin.filter(f => f.caseId === id || f.title.includes(foundCase.title)));
-        setDocuments(allDocs.filter(d => d.caseId === id));
+    const loadData = async () => {
+      setLoading(true);
+      if (id) {
+        try {
+          const cases = await storageService.getCases();
+          const foundCase = cases.find(c => c.id === id);
+          
+          if (foundCase) {
+            setCaseData(foundCase);
+            // Na vida real, filtraria por caseId diretamente no serviço
+            const [allTasks, allFin, allDocs] = await Promise.all([
+              storageService.getTasks(),
+              storageService.getFinancials(),
+              storageService.getDocuments()
+            ]);
+            
+            setTasks(allTasks.filter(t => t.caseId === id || (foundCase.title && t.title.includes(foundCase.title)))); 
+            setFinancials(allFin.filter(f => f.caseId === id || (foundCase.title && f.title.includes(foundCase.title))));
+            setDocuments(allDocs.filter(d => d.caseId === id));
+          }
+        } catch (error) {
+          console.error("Error loading case details:", error);
+          addToast("Erro ao carregar detalhes do processo", "error");
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setLoading(false);
       }
-    }
-  }, [id]);
+    };
+    loadData();
+  }, [id, addToast]);
 
-  const handleAddMovement = () => {
+  const handleAddMovement = async () => {
     if (!newMovement.trim() || !caseData) return;
 
     const movement: CaseMovement = {
@@ -61,13 +71,21 @@ export const CaseDetails: React.FC = () => {
         movements: [movement, ...(caseData.movements || [])] 
     };
 
-    storageService.saveCase(updatedCase);
+    await storageService.saveCase(updatedCase);
     setCaseData(updatedCase);
     setNewMovement('');
     addToast('Movimentação registrada.', 'success');
   };
 
-  if (!caseData) return <div className="p-8 text-white">Processo não encontrado ou carregando...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-slate-400">
+        <Loader2 className="animate-spin mr-2" /> Carregando processo...
+      </div>
+    );
+  }
+
+  if (!caseData) return <div className="p-8 text-white">Processo não encontrado.</div>;
 
   return (
     <div className="space-y-6 animate-fade-in pb-20">

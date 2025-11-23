@@ -1,237 +1,330 @@
-
-import { Client, LegalCase, Task, FinancialRecord, User, ActivityLog, SystemDocument, AppSettings, CaseStatus } from '../types';
+import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings } from '../types';
 import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS } from './mockData';
-import { notificationService } from './notificationService';
+import { supabase, isSupabaseConfigured } from './supabase';
 
-const KEYS = {
+const TABLE_NAMES = {
+  CLIENTS: 'clients',
+  CASES: 'cases',
+  TASKS: 'tasks',
+  FINANCIAL: 'financial',
+  DOCUMENTS: 'documents',
+};
+
+const LOCAL_KEYS = {
   CLIENTS: '@JurisControl:clients',
   CASES: '@JurisControl:cases',
   TASKS: '@JurisControl:tasks',
   FINANCIAL: '@JurisControl:financial',
   DOCUMENTS: '@JurisControl:documents',
-  LOGS: '@JurisControl:logs',
-  SETTINGS: '@JurisControl:settings',
-  AUTH: '@JurisControl:auth',
-  DRAFTS: '@JurisControl:drafts',
-};
-
-const DEFAULT_SETTINGS: AppSettings = {
-  general: {
-    language: 'pt-BR',
-    dateFormat: 'DD/MM/YYYY',
-    compactMode: false,
-  },
-  notifications: {
-    email: true,
-    desktop: true,
-    sound: false,
-    dailyDigest: false,
-  },
-  automation: {
-    autoArchiveWonCases: false, // Default off
-    autoSaveDrafts: true,
-  }
 };
 
 class StorageService {
-  private get<T>(key: string, initialData: T | T[]): any {
-    const data = localStorage.getItem(key);
-    if (!data) {
-      return initialData;
+  
+  private async getUserId(): Promise<string> {
+    if (isSupabaseConfigured && supabase) {
+      const { data } = await supabase.auth.getSession();
+      return data.session?.user?.id || 'anon';
     }
-    try {
-        return JSON.parse(data);
-    } catch (e) {
-        return initialData;
-    }
-  }
-
-  private set<T>(key: string, data: T) {
-    localStorage.setItem(key, JSON.stringify(data));
+    const stored = localStorage.getItem('@JurisControl:user');
+    return stored ? JSON.parse(stored).id : 'demo-user';
   }
 
   // --- Clientes ---
-  getClients(): Client[] { return this.get(KEYS.CLIENTS, []); }
-  
-  saveClient(client: Client) {
-    const list = this.getClients();
-    const index = list.findIndex(c => c.id === client.id);
-    if (index >= 0) {
-      list[index] = client;
+  async getClients(): Promise<Client[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.from(TABLE_NAMES.CLIENTS).select('*');
+        if (error) throw error;
+        return data as Client[];
+      } catch (error) { 
+        console.error("Supabase Error:", error); 
+        return []; 
+      }
     } else {
-      list.unshift(client);
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.CLIENTS) || '[]');
     }
-    this.set(KEYS.CLIENTS, list);
+  }
+  
+  async saveClient(client: Client) {
+    const userId = await this.getUserId();
+    if (isSupabaseConfigured && supabase) {
+      const { id, ...rest } = client;
+      // Se for ID gerado localmente (cli-...), removemos para o DB gerar ou tratamos como insert
+      // Se o ID já existir no Supabase (UUID), fazemos upsert
+      
+      const payload = { ...rest, user_id: userId };
+      
+      if (id && !id.startsWith('cli-')) {
+        await supabase.from(TABLE_NAMES.CLIENTS).update(payload).eq('id', id);
+      } else {
+        await supabase.from(TABLE_NAMES.CLIENTS).insert([payload]);
+      }
+    } else {
+      const list = await this.getClients();
+      if (client.id && !client.id.startsWith('cli-')) {
+        const idx = list.findIndex(i => i.id === client.id);
+        if (idx >= 0) list[idx] = client;
+      } else {
+        list.unshift({ ...client, id: client.id || `cli-${Date.now()}`, userId }); // Fake ID for local
+      }
+      localStorage.setItem(LOCAL_KEYS.CLIENTS, JSON.stringify(list));
+    }
   }
 
-  deleteClient(id: string) {
-    const list = this.getClients().filter(c => c.id !== id);
-    this.set(KEYS.CLIENTS, list);
+  async deleteClient(id: string) {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id);
+    } else {
+      const list = await this.getClients();
+      localStorage.setItem(LOCAL_KEYS.CLIENTS, JSON.stringify(list.filter(i => i.id !== id)));
+    }
   }
 
   // --- Processos ---
-  getCases(): LegalCase[] { return this.get(KEYS.CASES, []); }
-
-  saveCase(legalCase: LegalCase) {
-    const list = this.getCases();
-    // Atualiza lastUpdate para automação
-    legalCase.lastUpdate = new Date().toISOString();
-
-    const index = list.findIndex(c => c.id === legalCase.id);
-    if (index >= 0) {
-      list[index] = legalCase;
+  async getCases(): Promise<LegalCase[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.from(TABLE_NAMES.CASES).select('*');
+        if (error) throw error;
+        // Precisamos garantir que client venha completo ou fazer join.
+        // Simplificação: Supabase retorna JSON no campo client se configurado como JSONB, ou fazemos join.
+        // Assumindo que no Supabase salvamos o objeto client completo dentro da tabela cases por simplicidade (NoSQL style em coluna JSONB) ou fazemos fetch separado.
+        // Para manter compatibilidade com o código frontend, vamos assumir que 'client' é salvo como JSONB.
+        return data as LegalCase[];
+      } catch { return []; }
     } else {
-      list.unshift(legalCase);
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]');
     }
-    this.set(KEYS.CASES, list);
   }
 
-  deleteCase(id: string) {
-    const list = this.getCases().filter(c => c.id !== id);
-    this.set(KEYS.CASES, list);
+  async saveCase(legalCase: LegalCase) {
+    const userId = await this.getUserId();
+    legalCase.lastUpdate = new Date().toISOString();
+    
+    if (isSupabaseConfigured && supabase) {
+      const { id, ...rest } = legalCase;
+      const payload = { ...rest, user_id: userId };
+
+      if (id && !id.startsWith('case-')) {
+        await supabase.from(TABLE_NAMES.CASES).update(payload).eq('id', id);
+      } else {
+        await supabase.from(TABLE_NAMES.CASES).insert([payload]);
+      }
+    } else {
+      const list = await this.getCases();
+      if (legalCase.id && !legalCase.id.startsWith('case-')) {
+        const idx = list.findIndex(i => i.id === legalCase.id);
+        if (idx >= 0) list[idx] = legalCase;
+      } else {
+        list.unshift({ ...legalCase, id: legalCase.id || `case-${Date.now()}`, userId });
+      }
+      localStorage.setItem(LOCAL_KEYS.CASES, JSON.stringify(list));
+    }
+  }
+
+  async deleteCase(id: string) {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from(TABLE_NAMES.CASES).delete().eq('id', id);
+    } else {
+      const list = await this.getCases();
+      localStorage.setItem(LOCAL_KEYS.CASES, JSON.stringify(list.filter(i => i.id !== id)));
+    }
   }
 
   // --- Tarefas ---
-  getTasks(): Task[] { return this.get(KEYS.TASKS, []); }
-  
-  saveTask(task: Task) {
-    const list = this.getTasks();
-    const index = list.findIndex(t => t.id === task.id);
-    if (index >= 0) {
-      list[index] = task;
+  async getTasks(): Promise<Task[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*');
+        return data as Task[];
+      } catch { return []; }
     } else {
-      list.push(task);
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.TASKS) || '[]');
     }
-    this.set(KEYS.TASKS, list);
   }
   
-  deleteTask(id: string) {
-    const list = this.getTasks().filter(t => t.id !== id);
-    this.set(KEYS.TASKS, list);
+  async saveTask(task: Task) {
+    const userId = await this.getUserId();
+    if (isSupabaseConfigured && supabase) {
+      const { id, ...rest } = task;
+      const payload = { ...rest, user_id: userId };
+      
+      if (id && !id.startsWith('task-')) {
+        await supabase.from(TABLE_NAMES.TASKS).update(payload).eq('id', id);
+      } else {
+        await supabase.from(TABLE_NAMES.TASKS).insert([payload]);
+      }
+    } else {
+      const list = await this.getTasks();
+      if (task.id && !task.id.startsWith('task-')) {
+        const idx = list.findIndex(i => i.id === task.id);
+        if (idx >= 0) list[idx] = task;
+      } else {
+        list.unshift({ ...task, id: task.id || `task-${Date.now()}`, userId });
+      }
+      localStorage.setItem(LOCAL_KEYS.TASKS, JSON.stringify(list));
+    }
+  }
+  
+  async deleteTask(id: string) {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from(TABLE_NAMES.TASKS).delete().eq('id', id);
+    } else {
+      const list = await this.getTasks();
+      localStorage.setItem(LOCAL_KEYS.TASKS, JSON.stringify(list.filter(i => i.id !== id)));
+    }
   }
 
   // --- Financeiro ---
-  getFinancials(): FinancialRecord[] { return this.get(KEYS.FINANCIAL, []); }
+  async getFinancials(): Promise<FinancialRecord[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*');
+        return data as FinancialRecord[];
+      } catch { return []; }
+    } else {
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.FINANCIAL) || '[]');
+    }
+  }
   
-  saveFinancial(record: FinancialRecord) {
-    const list = this.getFinancials();
-    list.unshift(record);
-    this.set(KEYS.FINANCIAL, list);
+  async saveFinancial(record: FinancialRecord) {
+    const userId = await this.getUserId();
+    if (isSupabaseConfigured && supabase) {
+      const { id, ...rest } = record;
+      const payload = { ...rest, user_id: userId };
+      
+      if (id && !id.startsWith('trans-')) {
+        await supabase.from(TABLE_NAMES.FINANCIAL).update(payload).eq('id', id);
+      } else {
+        await supabase.from(TABLE_NAMES.FINANCIAL).insert([payload]);
+      }
+    } else {
+      const list = await this.getFinancials();
+      if (record.id && !record.id.startsWith('trans-')) {
+        const idx = list.findIndex(i => i.id === record.id);
+        if (idx >= 0) list[idx] = record;
+      } else {
+        list.unshift({ ...record, id: record.id || `trans-${Date.now()}`, userId });
+      }
+      localStorage.setItem(LOCAL_KEYS.FINANCIAL, JSON.stringify(list));
+    }
   }
 
-  // --- Documentos (Geral) ---
-  getDocuments(): SystemDocument[] { return this.get(KEYS.DOCUMENTS, []); }
-
-  saveDocument(doc: SystemDocument) {
-    const list = this.getDocuments();
-    list.unshift(doc);
-    this.set(KEYS.DOCUMENTS, list);
+  // --- Documentos ---
+  async getDocuments(): Promise<SystemDocument[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*');
+        return data as SystemDocument[];
+      } catch { return []; }
+    } else {
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.DOCUMENTS) || '[]');
+    }
   }
 
-  deleteDocument(id: string) {
-    const list = this.getDocuments().filter(d => d.id !== id);
-    this.set(KEYS.DOCUMENTS, list);
+  async saveDocument(docData: SystemDocument) {
+    const userId = await this.getUserId();
+    if (isSupabaseConfigured && supabase) {
+      const { id, ...rest } = docData;
+      const payload = { ...rest, user_id: userId };
+      await supabase.from(TABLE_NAMES.DOCUMENTS).insert([payload]);
+    } else {
+      const list = await this.getDocuments();
+      list.unshift({ ...docData, userId });
+      localStorage.setItem(LOCAL_KEYS.DOCUMENTS, JSON.stringify(list));
+    }
   }
 
-  // --- Logs ---
-  getLogs(): ActivityLog[] { return this.get(KEYS.LOGS, []); }
+  async deleteDocument(id: string) {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id);
+    } else {
+      const list = await this.getDocuments();
+      localStorage.setItem(LOCAL_KEYS.DOCUMENTS, JSON.stringify(list.filter(i => i.id !== id)));
+    }
+  }
+
+  // --- Utils & Logs ---
+  getLogs(): ActivityLog[] { 
+    try { return JSON.parse(localStorage.getItem('@JurisControl:logs') || '[]'); } catch { return []; }
+  }
   
   logActivity(action: string, status: 'Success' | 'Failed' | 'Warning' = 'Success') {
     const logs = this.getLogs();
-    const newLog: ActivityLog = {
+    logs.unshift({
       id: Date.now().toString(),
       action,
       date: new Date().toLocaleString('pt-BR'),
       device: navigator.userAgent.split(')')[0] + ')',
-      ip: 'Localhost',
+      ip: '127.0.0.1',
       status
-    };
-    logs.unshift(newLog);
-    this.set(KEYS.LOGS, logs.slice(0, 50));
+    });
+    localStorage.setItem('@JurisControl:logs', JSON.stringify(logs.slice(0, 50)));
   }
 
-  // --- Configurações ---
   getSettings(): AppSettings {
-      const stored = this.get(KEYS.SETTINGS, DEFAULT_SETTINGS);
-      return { ...DEFAULT_SETTINGS, ...stored };
+      try {
+          const s = localStorage.getItem('@JurisControl:settings');
+          return s ? JSON.parse(s) : {
+            general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false },
+            notifications: { email: true, desktop: true, sound: false, dailyDigest: false },
+            automation: { autoArchiveWonCases: false, autoSaveDrafts: true }
+          };
+      } catch { return {} as any; }
   }
 
   saveSettings(settings: AppSettings) {
-      this.set(KEYS.SETTINGS, settings);
+      localStorage.setItem('@JurisControl:settings', JSON.stringify(settings));
   }
 
-  // --- Drafts (Auto-Save) ---
   saveDraft(key: string, data: any) {
-    const settings = this.getSettings();
-    if (settings.automation.autoSaveDrafts) {
-      const drafts = this.get(KEYS.DRAFTS, {});
-      drafts[key] = data;
-      this.set(KEYS.DRAFTS, drafts);
-    }
+    const drafts = JSON.parse(localStorage.getItem('@JurisControl:drafts') || '{}');
+    drafts[key] = data;
+    localStorage.setItem('@JurisControl:drafts', JSON.stringify(drafts));
   }
 
   getDraft(key: string) {
-    const drafts = this.get(KEYS.DRAFTS, {});
+    const drafts = JSON.parse(localStorage.getItem('@JurisControl:drafts') || '{}');
     return drafts[key] || null;
   }
 
   clearDraft(key: string) {
-    const drafts = this.get(KEYS.DRAFTS, {});
+    const drafts = JSON.parse(localStorage.getItem('@JurisControl:drafts') || '{}');
     delete drafts[key];
-    this.set(KEYS.DRAFTS, drafts);
+    localStorage.setItem('@JurisControl:drafts', JSON.stringify(drafts));
   }
 
-  // --- Automation Logic ---
-  runAutomations() {
-    const settings = this.getSettings();
-    let changesMade = false;
+  // --- SEEDER (Rodar apenas em modo Local/Demo para preencher dados) ---
+  async seedDatabase() {
+    // Verifica se já tem dados locais
+    const clients = await this.getClients();
+    if (clients.length > 0) return;
 
-    // 1. Auto-Archive Won Cases (> 30 days)
-    if (settings.automation.autoArchiveWonCases) {
-      const cases = this.getCases();
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const updatedCases = cases.map(c => {
-        // Se for GANHO e (tiver lastUpdate antigo ou não tiver data e assumirmos antigo)
-        // Aqui usamos uma lógica simplificada: se lastUpdate existe, usa ele. Se não, não arquiva automaticamente para evitar erros em dados legados.
-        if (c.status === CaseStatus.WON && c.lastUpdate) {
-          const updateDate = new Date(c.lastUpdate);
-          if (updateDate < thirtyDaysAgo) {
-            c.status = CaseStatus.ARCHIVED;
-            c.lastUpdate = new Date().toISOString();
-            changesMade = true;
-            this.logActivity(`Automação: Processo ${c.cnj} arquivado automaticamente.`, 'Success');
-            notificationService.notify('Automação Executada', `Processo ${c.title} foi arquivado automaticamente.`, 'info');
-          }
-        }
-        return c;
-      });
-
-      if (changesMade) {
-        this.set(KEYS.CASES, updatedCases);
-      }
+    // Se estiver conectado ao Supabase, verifica se a tabela está vazia antes de seedar (opcional, aqui focado em Demo Local)
+    if (isSupabaseConfigured) {
+        // Em produção/Supabase, evitamos auto-seed no cliente para não duplicar. 
+        // Seed deve ser feito via SQL no dashboard do Supabase.
+        return; 
     }
+
+    const userId = await this.getUserId();
+    console.log("Seeding local database...");
+    
+    localStorage.setItem(LOCAL_KEYS.CLIENTS, JSON.stringify(MOCK_CLIENTS.map(c => ({...c, userId}))));
+    localStorage.setItem(LOCAL_KEYS.CASES, JSON.stringify(MOCK_CASES.map(c => ({...c, userId}))));
+    localStorage.setItem(LOCAL_KEYS.TASKS, JSON.stringify(MOCK_TASKS.map(c => ({...c, userId}))));
+    localStorage.setItem(LOCAL_KEYS.FINANCIAL, JSON.stringify(MOCK_FINANCIALS.map(c => ({...c, userId}))));
+    
+    console.log("Seeding complete.");
   }
 
-  // --- SYSTEM RESET ---
+  runAutomations() {
+    // Placeholder para automações locais
+  }
+  
   factoryReset() {
-    localStorage.removeItem(KEYS.CLIENTS);
-    localStorage.removeItem(KEYS.CASES);
-    localStorage.removeItem(KEYS.TASKS);
-    localStorage.removeItem(KEYS.FINANCIAL);
-    localStorage.removeItem(KEYS.DOCUMENTS);
-    localStorage.removeItem(KEYS.LOGS);
-    localStorage.removeItem(KEYS.SETTINGS);
-    localStorage.removeItem(KEYS.AUTH);
-    localStorage.removeItem(KEYS.DRAFTS);
-  }
-
-  seedDatabase() {
-    if (!localStorage.getItem(KEYS.CLIENTS)) this.set(KEYS.CLIENTS, MOCK_CLIENTS);
-    if (!localStorage.getItem(KEYS.CASES)) this.set(KEYS.CASES, MOCK_CASES);
-    if (!localStorage.getItem(KEYS.TASKS)) this.set(KEYS.TASKS, MOCK_TASKS);
-    if (!localStorage.getItem(KEYS.FINANCIAL)) this.set(KEYS.FINANCIAL, MOCK_FINANCIALS);
+    localStorage.clear();
+    window.location.reload();
   }
 }
 

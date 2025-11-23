@@ -3,9 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storageService } from '../services/storageService';
 import { GlassCard } from '../components/ui/GlassCard';
-import { ArrowLeft, MapPin, Phone, Mail, Calendar, Building, User, FileText, Plus, Paperclip, Trash2, Scale, Clock, MessageSquare } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, Mail, Calendar, Building, User, Plus, Paperclip, Trash2, Scale, Clock, MessageSquare, Loader2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
-import { Client, LegalCase, ClientInteraction } from '../types';
+import { Client, LegalCase } from '../types';
 
 export const ClientDetails: React.FC = () => {
   const { id } = useParams();
@@ -15,26 +15,48 @@ export const ClientDetails: React.FC = () => {
   const [clientData, setClientData] = useState<Client | null>(null);
   const [clientCases, setClientCases] = useState<LegalCase[]>([]);
   const [activeTab, setActiveTab] = useState<'timeline' | 'cases' | 'docs'>('cases');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (id) {
-      const allClients = storageService.getClients();
-      const found = allClients.find(c => c.id === id);
-      if (found) {
-        setClientData(found);
-        const allCases = storageService.getCases();
-        setClientCases(allCases.filter(c => c.client.id === id));
+    const loadData = async () => {
+      setLoading(true);
+      if (id) {
+        try {
+          const allClients = await storageService.getClients();
+          const found = allClients.find(c => c.id === id);
+          if (found) {
+            setClientData(found);
+            const allCases = await storageService.getCases();
+            setClientCases(allCases.filter(c => c.client.id === id));
+          }
+        } catch (error) {
+          console.error("Error loading client data:", error);
+          addToast("Erro ao carregar dados do cliente", "error");
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        setLoading(false);
       }
-    }
-  }, [id]);
+    };
+    loadData();
+  }, [id, addToast]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-slate-400">
+        <Loader2 className="animate-spin mr-2" /> Carregando perfil...
+      </div>
+    );
+  }
 
   if (!clientData) {
     return <div className="p-8 text-white">Cliente não encontrado.</div>;
   }
 
-  const handleDeleteClient = () => {
+  const handleDeleteClient = async () => {
     if (confirm('ATENÇÃO: Excluir o cliente também deve ser feito com cautela. Deseja prosseguir?')) {
-        storageService.deleteClient(clientData.id);
+        await storageService.deleteClient(clientData.id);
         addToast('Cliente removido.', 'success');
         navigate('/clients');
     }

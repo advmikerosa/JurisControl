@@ -33,6 +33,7 @@ export interface SystemDocument {
   date: string;
   category?: string;
   caseId?: string; // Vínculo com processo
+  userId?: string;
 }
 
 export interface ClientInteraction {
@@ -86,6 +87,7 @@ export interface Client {
   documents: ClientDocument[];
   history: ClientInteraction[];
   alerts: ClientAlert[];
+  userId?: string;
 }
 
 export interface CaseMovement {
@@ -109,6 +111,7 @@ export interface LegalCase {
   lastUpdate?: string; // Para automação de arquivamento
   movements?: CaseMovement[]; // Histórico do processo
   court?: string; // Vara/Tribunal
+  userId?: string;
 }
 
 export interface Task {
@@ -121,6 +124,7 @@ export interface Task {
   description?: string;
   caseId?: string; // Vínculo com processo
   caseTitle?: string; // Cache do título para display
+  userId?: string;
 }
 
 export type FinancialStatus = 'Pago' | 'Pendente' | 'Atrasado';
@@ -141,6 +145,7 @@ export interface FinancialRecord {
     current: number;
     total: number;
   };
+  userId?: string;
 }
 
 export interface Office {

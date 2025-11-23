@@ -2,14 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { storageService } from '../services/storageService';
-import { Search, UserPlus, MoreHorizontal, Filter, Building, User, MapPin, Phone, Mail, ChevronRight, Trash2, X, Users } from 'lucide-react';
+import { Search, UserPlus, Filter, Building, User, MapPin, Phone, Mail, ChevronRight, X, Users, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
-import { Client, ClientType } from '../types';
+import { Client, ClientType, ClientStatus } from '../types';
 
-// Masks (Mantidas)
+// Masks
 const masks = {
   cpf: (v: string) => v.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2').substring(0, 14),
   cnpj: (v: string) => v.replace(/\D/g, '').replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d)/, '$1-$2').substring(0, 18),
@@ -27,8 +27,11 @@ export const Clients: React.FC = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
+  
+  // Filters State
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'Todos' | ClientType>('Todos');
+  const [filterStatus, setFilterStatus] = useState<'Todos' | ClientStatus>('Todos');
   
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -53,9 +56,14 @@ export const Clients: React.FC = () => {
 
   const filteredClients = clients.filter(client => {
     const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          client.email.toLowerCase().includes(searchTerm.toLowerCase());
+                          client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (client.cpf && client.cpf.includes(searchTerm)) ||
+                          (client.cnpj && client.cnpj.includes(searchTerm));
+    
     const matchesType = filterType === 'Todos' || client.type === filterType;
-    return matchesSearch && matchesType;
+    const matchesStatus = filterStatus === 'Todos' || client.status === filterStatus;
+    
+    return matchesSearch && matchesType && matchesStatus;
   });
 
   const handleCreateClient = (e: React.FormEvent) => {
@@ -91,8 +99,19 @@ export const Clients: React.FC = () => {
     setFormData({ cpf: '', cnpj: '', phone: '', cep: '', rg: '', name: '', corporateName: '', email: '', city: '', state: '' });
   };
 
+  const getStatusColor = (status: ClientStatus) => {
+    switch(status) {
+      case 'Ativo': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+      case 'Inativo': return 'text-slate-400 bg-slate-500/10 border-slate-500/20';
+      case 'Lead': return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+      case 'Em Litígio': return 'text-rose-400 bg-rose-500/10 border-rose-500/20';
+      case 'Sob Análise': return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+      default: return 'text-slate-400 bg-slate-500/10';
+    }
+  };
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-20">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6">
         <div>
@@ -110,12 +129,14 @@ export const Clients: React.FC = () => {
 
       {/* SEARCH & FILTER BAR */}
       <GlassCard className="p-4">
-        <div className="flex flex-col md:flex-row items-stretch gap-4">
-            <div className="relative flex-1 w-full">
+        <div className="flex flex-col xl:flex-row gap-4">
+            
+            {/* Search Input */}
+            <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                 <input 
                   type="text" 
-                  placeholder="Buscar por nome, e-mail ou documento..." 
+                  placeholder="Buscar por nome, e-mail, CPF ou CNPJ..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full bg-slate-900/50 border border-white/10 rounded-xl py-2.5 pl-10 pr-10 text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-slate-600"
@@ -129,20 +150,44 @@ export const Clients: React.FC = () => {
                   </button>
                 )}
             </div>
-            <div className="flex bg-white/5 p-1 rounded-xl border border-white/10 shrink-0">
-                {(['Todos', 'PF', 'PJ'] as const).map(type => (
-                    <button 
-                      key={type}
-                      onClick={() => setFilterType(type)}
-                      className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                        filterType === type 
-                          ? 'bg-indigo-600 text-white shadow-lg' 
-                          : 'text-slate-400 hover:text-white hover:bg-white/5'
-                      }`}
+
+            {/* Filters Group */}
+            <div className="flex flex-col sm:flex-row gap-4">
+                {/* Type Filter */}
+                <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/10">
+                    {(['Todos', 'PF', 'PJ'] as const).map(type => (
+                        <button 
+                          key={type}
+                          onClick={() => setFilterType(type)}
+                          className={`flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                            filterType === type 
+                              ? 'bg-indigo-600 text-white shadow-lg' 
+                              : 'text-slate-400 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          {type}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Status Filter Dropdown */}
+                <div className="relative min-w-[180px]">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                        <Filter size={16} />
+                    </div>
+                    <select
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value as any)}
+                        className="w-full h-full bg-slate-900/50 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer appearance-none"
                     >
-                      {type}
-                    </button>
-                ))}
+                        <option value="Todos" className="bg-slate-900 text-slate-300">Todos os Status</option>
+                        <option value="Ativo" className="bg-slate-900 text-emerald-400">Ativo</option>
+                        <option value="Lead" className="bg-slate-900 text-blue-400">Lead (Prospecção)</option>
+                        <option value="Sob Análise" className="bg-slate-900 text-amber-400">Sob Análise</option>
+                        <option value="Em Litígio" className="bg-slate-900 text-rose-400">Em Litígio</option>
+                        <option value="Inativo" className="bg-slate-900 text-slate-500">Inativo</option>
+                    </select>
+                </div>
             </div>
         </div>
       </GlassCard>
@@ -158,43 +203,50 @@ export const Clients: React.FC = () => {
               transition={{ delay: idx * 0.05 }}
               onClick={() => navigate(`/clients/${client.id}`)}
             >
-              <GlassCard className="h-full hover:border-indigo-500/40 cursor-pointer transition-all group relative p-6" hoverEffect>
-                <div className="absolute top-5 right-5">
-                  <div className={`w-2.5 h-2.5 rounded-full ${client.status === 'Ativo' ? 'bg-emerald-500' : 'bg-slate-500'} shadow-[0_0_8px_currentColor]`}></div>
+              <GlassCard className="h-full hover:border-indigo-500/40 cursor-pointer transition-all group relative p-6 flex flex-col" hoverEffect>
+                <div className="flex justify-between items-start mb-4">
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border uppercase tracking-wider ${getStatusColor(client.status)}`}>
+                      {client.status}
+                    </span>
+                    {client.type === 'PJ' ? <Building size={16} className="text-slate-500" /> : <User size={16} className="text-slate-500" />}
                 </div>
 
-                <div className="flex items-center gap-5 mb-6">
-                  <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-br from-slate-700 to-slate-800 shrink-0">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-br from-slate-700 to-slate-800 shrink-0 shadow-lg">
                      <img src={client.avatarUrl} alt={client.name} className="w-full h-full rounded-full object-cover" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-bold text-lg text-white group-hover:text-indigo-300 transition-colors truncate">{client.name}</h3>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-white/5 text-slate-400 border border-white/5 mt-1">
-                      {client.type === 'PJ' ? <Building size={10} /> : <User size={10} />}
-                      {client.type}
-                    </span>
+                    <h3 className="font-bold text-lg text-white group-hover:text-indigo-300 transition-colors truncate" title={client.name}>
+                        {client.name}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">
+                      {client.type === 'PJ' ? client.cnpj : client.cpf || 'Documento N/A'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="space-y-3 text-sm text-slate-400">
+                <div className="space-y-3 text-sm text-slate-400 flex-1">
                   <div className="flex items-center gap-3">
-                    <Mail size={16} className="text-slate-500 shrink-0" />
+                    <Mail size={16} className="text-indigo-500/70 shrink-0" />
                     <span className="truncate">{client.email || 'Sem e-mail'}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Phone size={16} className="text-slate-500 shrink-0" />
+                    <Phone size={16} className="text-indigo-500/70 shrink-0" />
                     <span>{client.phone || 'Sem telefone'}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <MapPin size={16} className="text-slate-500 shrink-0" />
+                    <MapPin size={16} className="text-indigo-500/70 shrink-0" />
                     <span className="truncate">{client.city || 'Cidade não informada'}</span>
                   </div>
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-white/5 flex justify-between items-center text-xs">
-                   <span className="text-slate-500">Desde: {client.createdAt}</span>
+                   <div className="flex items-center gap-1.5 text-slate-500">
+                      <Clock size={12} />
+                      <span>Cadastrado em {client.createdAt}</span>
+                   </div>
                    <span className="flex items-center gap-1 text-indigo-400 group-hover:translate-x-1 transition-transform font-medium">
-                     Ver Perfil <ChevronRight size={12} />
+                     Ver Detalhes <ChevronRight size={12} />
                    </span>
                 </div>
               </GlassCard>
@@ -203,16 +255,19 @@ export const Clients: React.FC = () => {
         </div>
       ) : (
         /* EMPTY STATE */
-        <div className="flex flex-col items-center justify-center py-20 text-slate-500">
-            <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-4">
+        <div className="flex flex-col items-center justify-center py-20 text-slate-500 bg-white/5 rounded-2xl border border-dashed border-white/10">
+            <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4">
                <Users size={40} className="opacity-40" />
             </div>
             <h3 className="text-xl font-medium text-slate-200 mb-2">Nenhum cliente encontrado</h3>
             <p className="text-sm text-slate-400 max-w-md text-center mb-6">
               Não encontramos clientes correspondentes aos seus filtros de busca. Tente limpar os filtros ou cadastre um novo cliente.
             </p>
-            <button onClick={() => { setSearchTerm(''); setFilterType('Todos'); }} className="text-indigo-400 hover:text-indigo-300 font-medium">
-              Limpar Filtros
+            <button 
+                onClick={() => { setSearchTerm(''); setFilterType('Todos'); setFilterStatus('Todos'); }} 
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors"
+            >
+              Limpar Todos os Filtros
             </button>
         </div>
       )}
@@ -237,23 +292,47 @@ export const Clients: React.FC = () => {
 
           {newClientType === 'PF' ? (
              <div className="space-y-4">
-               <input type="text" placeholder="Nome Completo" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-               <input type="text" placeholder="CPF" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.cpf} onChange={e => handleInputChange('cpf', e.target.value)} />
+               <div>
+                   <label className="text-xs text-slate-400 mb-1 block ml-1">Nome Completo</label>
+                   <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+               </div>
+               <div>
+                   <label className="text-xs text-slate-400 mb-1 block ml-1">CPF</label>
+                   <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.cpf} onChange={e => handleInputChange('cpf', e.target.value)} placeholder="000.000.000-00" />
+               </div>
              </div>
           ) : (
              <div className="space-y-4">
-               <input type="text" placeholder="Razão Social" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.corporateName} onChange={e => setFormData({...formData, corporateName: e.target.value})} />
-               <input type="text" placeholder="CNPJ" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.cnpj} onChange={e => handleInputChange('cnpj', e.target.value)} />
+               <div>
+                   <label className="text-xs text-slate-400 mb-1 block ml-1">Razão Social</label>
+                   <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.corporateName} onChange={e => setFormData({...formData, corporateName: e.target.value})} />
+               </div>
+               <div>
+                   <label className="text-xs text-slate-400 mb-1 block ml-1">CNPJ</label>
+                   <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.cnpj} onChange={e => handleInputChange('cnpj', e.target.value)} placeholder="00.000.000/0000-00" />
+               </div>
              </div>
           )}
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <input type="email" placeholder="Email" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-             <input type="text" placeholder="Telefone" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.phone} onChange={e => handleInputChange('phone', e.target.value)} />
+             <div>
+                 <label className="text-xs text-slate-400 mb-1 block ml-1">Email</label>
+                 <input type="email" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+             </div>
+             <div>
+                 <label className="text-xs text-slate-400 mb-1 block ml-1">Telefone / WhatsApp</label>
+                 <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.phone} onChange={e => handleInputChange('phone', e.target.value)} />
+             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <input type="text" placeholder="Cidade" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} />
-             <input type="text" placeholder="UF" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} />
+             <div>
+                 <label className="text-xs text-slate-400 mb-1 block ml-1">Cidade</label>
+                 <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} />
+             </div>
+             <div>
+                 <label className="text-xs text-slate-400 mb-1 block ml-1">Estado (UF)</label>
+                 <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} maxLength={2} style={{ textTransform: 'uppercase' }} />
+             </div>
           </div>
         </div>
       </Modal>

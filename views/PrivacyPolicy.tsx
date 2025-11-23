@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Shield, Lock, Eye, FileText, ArrowLeft, Server, Scale, Globe, Mail, CheckCircle } from 'lucide-react';
@@ -164,7 +165,7 @@ export const PrivacyPolicy: React.FC = () => {
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
               <span className="text-indigo-400">6.</span> Seus Direitos (Art. 18 da LGPD)
             </h2>
-            <p className="mb-4">O Usuário pode exercer a qualquer momento, através do painel de controle (Meu Perfil > Privacidade), os seguintes direitos:</p>
+            <p className="mb-4">O Usuário pode exercer a qualquer momento, através do painel de controle (Meu Perfil &gt; Privacidade), os seguintes direitos:</p>
             <div className="grid md:grid-cols-3 gap-4">
               <div className="border border-white/10 rounded-lg p-4 hover:bg-white/5 transition-colors">
                 <strong className="block text-white mb-1">Acesso e Confirmação</strong>
@@ -221,7 +222,7 @@ export const PrivacyPolicy: React.FC = () => {
                  <Globe className="text-indigo-400" size={20} />
                  <div>
                    <span className="text-slate-400 block text-xs uppercase">Canal de Atendimento</span>
-                   <span className="text-white font-medium">Painel do Usuário > Privacidade</span>
+                   <span className="text-white font-medium">Painel do Usuário &gt; Privacidade</span>
                  </div>
                </div>
             </div>
