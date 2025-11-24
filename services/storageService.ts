@@ -1,6 +1,7 @@
 
+
 import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User } from '../types';
-import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS, MOCK_OFFICES } from './mockData';
+import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS } from './mockData';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { notificationService } from './notificationService';
 
@@ -24,6 +25,54 @@ const LOCAL_KEYS = {
   LAST_CHECK: '@JurisControl:lastCheck',
 };
 
+// --- MOCK UPDATED ---
+export const MOCK_OFFICES: Office[] = [
+  { 
+    id: '1', 
+    name: 'Advocacia Silva & Associados', 
+    handle: '@silvaassociados',
+    ownerId: 'u1',
+    location: 'São Paulo - SP',
+    logoUrl: undefined,
+    cnpj: '12.345.678/0001-90',
+    email: 'contato@silvaassociados.com.br',
+    phone: '(11) 3322-1100',
+    website: 'www.silvaassociados.adv.br',
+    description: 'Escritório especializado em direito empresarial e tributário com mais de 20 anos de tradição.',
+    areaOfActivity: 'Full Service',
+    members: [
+      {
+        userId: 'u1',
+        name: 'Dr. Usuário',
+        role: 'Admin',
+        permissions: { financial: true, cases: true, documents: true, settings: true },
+        email: 'admin@silva.com',
+        avatarUrl: 'https://ui-avatars.com/api/?name=Dr+Usuario&background=6366f1&color=fff'
+      },
+      {
+        userId: 'lawyer-2',
+        name: 'Dra. Amanda (Sócia)',
+        role: 'Advogado',
+        permissions: { financial: false, cases: true, documents: true, settings: false },
+        email: 'amanda@silva.com',
+        avatarUrl: 'https://ui-avatars.com/api/?name=Amanda&background=random'
+      },
+      {
+        userId: 'lawyer-3',
+        name: 'Dr. Roberto (Júnior)',
+        role: 'Advogado',
+        permissions: { financial: false, cases: true, documents: true, settings: false },
+        email: 'roberto@silva.com',
+        avatarUrl: 'https://ui-avatars.com/api/?name=Roberto&background=random'
+      }
+    ],
+    social: {
+      linkedin: 'linkedin.com/company/silva-associados',
+      instagram: '@silva.adv'
+    }
+  },
+];
+
 class StorageService {
   
   private async getUserId(): Promise<string> {
@@ -39,7 +88,6 @@ class StorageService {
   async getClients(): Promise<Client[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        // PERFORMANCE: Select only necessary fields
         const { data, error } = await supabase
           .from(TABLE_NAMES.CLIENTS)
           .select('id, name, type, status, email, phone, city, state, avatarUrl, cpf, cnpj, corporateName, createdAt')
@@ -94,7 +142,6 @@ class StorageService {
   async getCases(): Promise<LegalCase[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        // PERFORMANCE: Otimização do relacionamento para trazer apenas dados essenciais do cliente
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
           .select(`
@@ -109,7 +156,6 @@ class StorageService {
     }
   }
 
-  // NEW: Optimized Single Fetch
   async getCaseById(id: string): Promise<LegalCase | null> {
     if (isSupabaseConfigured && supabase) {
       try {
@@ -144,7 +190,6 @@ class StorageService {
     const end = start + limit - 1;
 
     if (isSupabaseConfigured && supabase) {
-      // PERFORMANCE: Select explícito para listagem
       let query = supabase
         .from(TABLE_NAMES.CASES)
         .select(`
@@ -164,7 +209,6 @@ class StorageService {
       if (error) throw error;
       return { data: data as LegalCase[], total: count || 0 };
     } else {
-      // Fallback Local Storage logic remains the same
       let allCases = JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]') as LegalCase[];
       
       if (searchTerm) {
@@ -198,7 +242,6 @@ class StorageService {
         responsibleLawyer: rest.responsibleLawyer
       };
       
-      // Limpeza de campos undefined para evitar erro no supabase
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
       if (id && !id.startsWith('case-')) {
@@ -231,7 +274,6 @@ class StorageService {
   async getTasks(): Promise<Task[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        // PERFORMANCE: Select specific fields
         const { data } = await supabase
           .from(TABLE_NAMES.TASKS)
           .select('id, title, dueDate, priority, status, assignedTo, caseId, clientId, clientName, description');
@@ -242,7 +284,6 @@ class StorageService {
     }
   }
 
-  // NEW: Optimized Task Fetch by Case
   async getTasksByCaseId(caseId: string): Promise<Task[]> {
     if (isSupabaseConfigured && supabase) {
         const { data } = await supabase
@@ -291,7 +332,6 @@ class StorageService {
   async getFinancials(): Promise<FinancialRecord[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        // PERFORMANCE: Select specific fields
         const { data } = await supabase
           .from(TABLE_NAMES.FINANCIAL)
           .select('id, title, amount, type, category, status, dueDate, paymentDate, clientId, clientName, installment');
@@ -302,7 +342,6 @@ class StorageService {
     }
   }
 
-  // NEW: Optimized Financial Fetch by Case
   async getFinancialsByCaseId(caseId: string): Promise<FinancialRecord[]> {
     if (isSupabaseConfigured && supabase) {
         const { data } = await supabase
@@ -350,7 +389,6 @@ class StorageService {
     }
   }
 
-  // NEW: Optimized Document Fetch by Case
   async getDocumentsByCaseId(caseId: string): Promise<SystemDocument[]> {
     if (isSupabaseConfigured && supabase) {
         const { data } = await supabase
@@ -395,41 +433,37 @@ class StorageService {
     const offices = await this.getOffices();
     return offices.find(o => o.id === id);
   }
+  
+  async saveOffice(office: Office): Promise<void> {
+    const offices = await this.getOffices();
+    const index = offices.findIndex(o => o.id === office.id);
+    if (index >= 0) {
+      offices[index] = office;
+      localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
+    }
+  }
 
   async getOfficeMembers(officeId?: string): Promise<{id: string, name: string}[]> {
-    if (isSupabaseConfigured && supabase) {
-       try {
-         let query = supabase.from(TABLE_NAMES.PROFILES).select('id, full_name');
-         const { data, error } = await query;
-         if (!error && data && data.length > 0) {
-             return data.map((u: any) => ({
-                 id: u.id,
-                 name: u.full_name || 'Usuário Sem Nome'
-             }));
-         }
-       } catch (e) { console.warn("Erro ao buscar membros no Supabase.", e); }
-    }
-
-    const currentUserStr = localStorage.getItem('@JurisControl:user');
-    const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+    const offices = await this.getOffices();
+    const office = offices.find(o => o.id === officeId);
     
-    const members = [
-        { id: 'lawyer-1', name: 'Dra. Amanda (Sócia)' },
-        { id: 'lawyer-2', name: 'Dr. Roberto (Júnior)' },
-        { id: 'lawyer-3', name: 'Dra. Júlia (Associada)' }
-    ];
-
-    if (currentUser && currentUser.currentOfficeId === officeId) {
-        if (!members.find(m => m.name === currentUser.name)) {
-             members.unshift({ id: currentUser.id, name: currentUser.name });
-        }
+    if (office && office.members) {
+      // Map complex member object to simple selection list
+      return office.members.map(m => ({ id: m.userId, name: m.name }));
     }
-
-    return members;
+    
+    // Fallback Mock if no office found
+    return [
+        { id: 'lawyer-1', name: 'Dra. Amanda (Sócia)' },
+        { id: 'lawyer-2', name: 'Dr. Roberto (Júnior)' }
+    ];
   }
 
   async createOffice(officeData: Partial<Office>): Promise<Office> {
     const userId = await this.getUserId();
+    const userStr = localStorage.getItem('@JurisControl:user');
+    const user = userStr ? JSON.parse(userStr) : { name: 'Admin', email: 'admin@email.com', avatar: '' };
+
     const offices = await this.getOffices();
     
     let handle = officeData.handle || `@office${Date.now()}`;
@@ -445,7 +479,16 @@ class StorageService {
       handle: handle,
       location: officeData.location || 'Brasil',
       ownerId: userId,
-      members: [userId],
+      members: [
+        {
+          userId: userId,
+          name: user.name,
+          email: user.email,
+          avatarUrl: user.avatar,
+          role: 'Admin',
+          permissions: { financial: true, cases: true, documents: true, settings: true }
+        }
+      ],
       createdAt: new Date().toISOString()
     };
 
@@ -463,9 +506,18 @@ class StorageService {
     }
 
     const userId = await this.getUserId();
+    const userStr = localStorage.getItem('@JurisControl:user');
+    const user = userStr ? JSON.parse(userStr) : { name: 'Novo Membro', email: '', avatar: '' };
     
-    if (!targetOffice.members?.includes(userId)) {
-       targetOffice.members = [...(targetOffice.members || []), userId];
+    if (!targetOffice.members.some(m => m.userId === userId)) {
+       targetOffice.members.push({
+         userId: userId,
+         name: user.name,
+         email: user.email,
+         avatarUrl: user.avatar,
+         role: 'Advogado', // Default role
+         permissions: { financial: false, cases: true, documents: true, settings: false }
+       });
        
        const updatedOffices = offices.map(o => o.id === targetOffice.id ? targetOffice : o);
        localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(updatedOffices));

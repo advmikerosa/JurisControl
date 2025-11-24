@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { storageService } from '../services/storageService';
 import { notificationService } from '../services/notificationService';
 import { Modal } from '../components/ui/Modal';
+import { OfficeEditModal } from '../components/OfficeEditModal';
 import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus } from 'lucide-react';
 import { AppSettings, Office } from '../types';
 
@@ -22,6 +23,7 @@ export const Settings: React.FC = () => {
 
   // State para Escritório
   const [myOffice, setMyOffice] = useState<Office | null>(null);
+  const [isOfficeEditModalOpen, setIsOfficeEditModalOpen] = useState(false);
   const [officeForm, setOfficeForm] = useState({
     name: '',
     handle: '',
@@ -163,6 +165,11 @@ export const Settings: React.FC = () => {
     } catch (error: any) {
         addToast(error.message, 'error');
     }
+  };
+
+  const handleOfficeUpdate = (updatedOffice: Office) => {
+      setMyOffice(updatedOffice);
+      // Update global store logic here if necessary
   };
 
   if (!settings) return null;
@@ -435,10 +442,15 @@ export const Settings: React.FC = () => {
                ) : (
                  <div className="space-y-6">
                     {/* Exibição do Escritório */}
-                    <div className="bg-gradient-to-r from-indigo-900/40 to-slate-900/40 border border-indigo-500/30 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-6">
-                       <div className="flex items-center gap-4">
-                          <div className="w-16 h-16 bg-indigo-600 rounded-xl flex items-center justify-center text-2xl font-bold text-white shadow-lg">
-                             {myOffice?.name.charAt(0)}
+                    <div className="bg-gradient-to-r from-indigo-900/40 to-slate-900/40 border border-indigo-500/30 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
+                       <div className="absolute top-0 right-0 p-32 bg-indigo-500/10 blur-3xl rounded-full -mr-10 -mt-10"></div>
+                       <div className="flex items-center gap-4 relative z-10">
+                          <div className="w-16 h-16 bg-indigo-600 rounded-xl flex items-center justify-center text-2xl font-bold text-white shadow-lg overflow-hidden">
+                             {myOffice?.logoUrl ? (
+                                <img src={myOffice.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                             ) : (
+                                myOffice?.name.charAt(0)
+                             )}
                           </div>
                           <div>
                              <h3 className="text-xl font-bold text-white">{myOffice?.name}</h3>
@@ -446,31 +458,43 @@ export const Settings: React.FC = () => {
                              <p className="text-slate-400 text-xs flex items-center gap-1 mt-1"><MapPin size={10} /> {myOffice?.location}</p>
                           </div>
                        </div>
-                       <div className="flex gap-3">
-                          <button className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-sm font-medium">
-                            Editar Perfil
+                       <div className="flex gap-3 relative z-10">
+                          <button 
+                            onClick={() => setIsOfficeEditModalOpen(true)}
+                            className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Editar Perfil do Escritório
                           </button>
                        </div>
                     </div>
 
                     {/* Membros */}
                     <div>
-                       <h4 className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2"><Users size={16} /> Equipe</h4>
+                       <div className="flex justify-between items-center mb-3">
+                           <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2"><Users size={16} /> Equipe</h4>
+                           <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded">{myOffice.members.length} Membros</span>
+                       </div>
                        <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                          <div className="p-4 flex items-center justify-between border-b border-white/5">
-                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-xs font-bold text-white">
-                                   VC
-                                </div>
-                                <div>
-                                   <p className="text-sm text-white font-medium">Você (Admin)</p>
-                                   <p className="text-xs text-slate-500">{user?.email}</p>
-                                </div>
-                             </div>
-                             <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">Ativo</span>
-                          </div>
+                          {myOffice.members.map((member, idx) => (
+                              <div key={member.userId} className={`p-4 flex items-center justify-between ${idx !== myOffice.members.length - 1 ? 'border-b border-white/5' : ''}`}>
+                                  <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden">
+                                          {member.avatarUrl ? <img src={member.avatarUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white font-bold">{member.name.charAt(0)}</div>}
+                                      </div>
+                                      <div>
+                                          <p className="text-sm text-white font-medium">{member.name} {user?.id === member.userId && '(Você)'}</p>
+                                          <p className="text-xs text-slate-500">{member.role}</p>
+                                      </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                     <span className="text-[10px] text-slate-500 bg-black/20 px-2 py-0.5 rounded">
+                                        {Object.values(member.permissions).filter(Boolean).length} Permissões
+                                     </span>
+                                  </div>
+                              </div>
+                          ))}
                           
-                          {/* Convite de Membro */}
+                          {/* Convite de Membro Rápido */}
                           <div className="p-4 bg-black/20 border-t border-white/5">
                              <div className="flex gap-3 items-center">
                                 <div className="relative flex-1">
@@ -520,6 +544,15 @@ export const Settings: React.FC = () => {
            )}
         </GlassCard>
       </div>
+
+      {myOffice && (
+        <OfficeEditModal 
+            isOpen={isOfficeEditModalOpen} 
+            onClose={() => setIsOfficeEditModalOpen(false)} 
+            office={myOffice} 
+            onUpdate={handleOfficeUpdate}
+        />
+      )}
 
       <Modal isOpen={confirmModal.open} onClose={() => setConfirmModal({ ...confirmModal, open: false })} title="Confirmar Ação Crítica">
          <div className="text-center">

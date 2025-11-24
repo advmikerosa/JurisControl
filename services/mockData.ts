@@ -7,7 +7,20 @@ export const MOCK_OFFICES: Office[] = [
     name: 'Advocacia Silva & Associados', 
     location: 'São Paulo - SP',
     handle: '@silvaassociados',
-    ownerId: 'u1'
+    ownerId: 'u1',
+    members: [
+      {
+        userId: 'u1',
+        name: 'Dr. Usuário',
+        role: 'Admin',
+        permissions: {
+          financial: true,
+          cases: true,
+          documents: true,
+          settings: true
+        }
+      }
+    ]
   },
 ];
 

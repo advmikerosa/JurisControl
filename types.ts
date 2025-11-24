@@ -182,15 +182,47 @@ export interface FinancialRecord {
   userId?: string;
 }
 
+// Office & Team Types
+export type MemberRole = 'Admin' | 'Advogado' | 'Estagiário' | 'Financeiro';
+
+export interface OfficePermissions {
+  financial: boolean;
+  cases: boolean;
+  documents: boolean;
+  settings: boolean;
+}
+
+export interface OfficeMember {
+  userId: string;
+  name: string; // Cache do nome para facilitar display
+  role: MemberRole;
+  permissions: OfficePermissions;
+  email?: string;
+  avatarUrl?: string;
+}
+
 export interface Office {
   id: string;
   name: string;
   handle: string; // ex: @silvaadvocacia
   ownerId: string; // ID do usuário dono/gerente
   location: string;
-  members?: string[]; // IDs dos membros
+  members: OfficeMember[]; // Agora é um array de objetos complexos
   logoUrl?: string;
   createdAt?: string;
+  
+  // Novos campos de perfil do escritório
+  cnpj?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  description?: string;
+  areaOfActivity?: string; // ex: Full Service, Trabalhista, Criminal
+  social?: {
+    linkedin?: string;
+    instagram?: string;
+    facebook?: string;
+  };
 }
 
 // Auth Types
@@ -211,7 +243,7 @@ export interface User {
   // Novos campos de perfil
   oab?: string;
   phone?: string;
-  role?: string; // ex: "Sócio Sênior"
+  role?: string; // ex: "Sócio Sênior" (apenas visual, role real está em OfficeMember)
 }
 
 // Settings Types

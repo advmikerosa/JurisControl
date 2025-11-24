@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthProvider as AuthProviderType } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
@@ -157,8 +156,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = async (data: Partial<User>) => {
     // Atualiza estado local para UI instantânea
     setUser(prev => {
-        const newUser = prev ? ({ ...prev, ...data }) : null;
-        if (!isSupabaseConfigured && newUser) {
+        if (!prev) return null;
+        const newUser = { ...prev, ...data };
+        
+        if (!isSupabaseConfigured) {
+            // Em modo demo, persista no localStorage para que o reload não perca os dados
             localStorage.setItem('@JurisControl:user', JSON.stringify(newUser));
         }
         return newUser;

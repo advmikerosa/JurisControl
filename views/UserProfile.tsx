@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
@@ -24,10 +23,10 @@ import {
   Trash2,
   EyeOff,
   Activity,
-  Clock,
-  FileText,
+  AtSign,
+  Copy,
   Loader2,
-  Copy
+  Info
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ActivityLog, DataRequest } from '../types';
@@ -48,23 +47,23 @@ const MOCK_DATA_REQUESTS: DataRequest[] = [
 export const UserProfile: React.FC = () => {
   const { user, updateProfile, logout } = useAuth();
   const { addToast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
+  
+  // UI States
   const [activeTab, setActiveTab] = useState<'personal' | 'security' | 'preferences' | 'privacy'>('personal');
-
+  const [isSaving, setIsSaving] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  
   // Form State
   const [formData, setFormData] = useState({
     name: '',
+    username: '',
     email: '',
     phone: '',
     oab: '',
     avatar: ''
   });
 
-  // Validation State
-  const [oabError, setOabError] = useState('');
-
-  // Security State (Mock)
+  // Security State
   const [securityData, setSecurityData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -78,11 +77,15 @@ export const UserProfile: React.FC = () => {
     analyticsCookies: true
   });
 
-  // Load user data
+  // Validation Errors
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  // Initialize Data
   useEffect(() => {
     if (user) {
       setFormData({
         name: user.name || '',
+        username: user.username || '',
         email: user.email || '',
         phone: user.phone || '',
         oab: user.oab || '',
@@ -92,399 +95,495 @@ export const UserProfile: React.FC = () => {
     }
   }, [user]);
 
-  const validateOab = (value: string) => {
-    // Regex: 2 letras maiúsculas, barra, 3 dígitos, ponto opcional, 3 dígitos
-    // Ex aceitos: SP/123.456 ou SP/123456
-    if (!value) {
-      setOabError('');
-      return true;
+  // Masks and Validations
+  const masks = {
+    phone: (value: string) => {
+      return value
+        .replace(/\D/g, '')
+        .replace(/^(\d{2})(\d)/, '($1) $2')
+        .replace(/(\d{5})(\d)/, '$1-$2')
+        .substring(0, 15);
+    },
+    oab: (value: string) => {
+      // Formato esperado: UF/000.000 ou apenas números
+      let v = value.toUpperCase().replace(/[^A-Z0-9]/g, ''); 
+      if (v.length > 2 && /^[A-Z]{2}/.test(v)) {
+         v = v.replace(/^([A-Z]{2})(\d)/, '$1/$2');
+      }
+      return v.substring(0, 10);
+    },
+    username: (value: string) => {
+      // Apenas letras minúsculas, números, . e _
+      let v = value.toLowerCase().replace(/[^a-z0-9._]/g, '');
+      return v ? '@' + v.replace(/^@/, '') : '';
     }
-    const regex = /^[A-Z]{2}\/\d{3}\.?\d{3}$/;
-    if (!regex.test(value)) {
-      setOabError('Formato inválido. Use o formato UF/000.000');
-      return false;
-    }
-    setOabError('');
-    return true;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     let finalValue = value;
 
-    if (name === 'oab') {
-      // Remove tudo que não é letra ou número e converte para maiúsculo
-      let v = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      
-      // Limita a 8 caracteres (2 letras + 6 números) antes da formatação
-      v = v.slice(0, 8);
-
-      // Aplica a máscara UF/000.000
-      // 1. Adiciona barra após as duas primeiras letras se houver número na sequência
-      v = v.replace(/^([A-Z]{2})(\d)/, '$1/$2');
-      // 2. Adiciona ponto após os 3 primeiros dígitos
-      v = v.replace(/(\/\d{3})(\d)/, '$1.$2');
-      
-      finalValue = v;
-      
-      // Limpa erro ao digitar se estava com erro
-      if (oabError) setOabError('');
-    }
+    if (name === 'phone') finalValue = masks.phone(value);
+    if (name === 'oab') finalValue = masks.oab(value);
+    if (name === 'username') finalValue = masks.username(value);
 
     setFormData(prev => ({ ...prev, [name]: finalValue }));
+    
+    // Clear error when typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors: { [key: string]: string } = {};
+    
+    if (!formData.name.trim()) newErrors.name = 'Nome completo é obrigatório.';
+    if (!formData.email.trim()) newErrors.email = 'E-mail é obrigatório.';
+    if (formData.username && formData.username.length < 4) newErrors.username = 'Usuário muito curto.';
+    if (formData.oab && !/^[A-Z]{2}\/\d+$/.test(formData.oab) && !/^\d+$/.test(formData.oab)) {
+        // Validação branda para OAB, permitindo formatos variados mas alertando estrutura estranha
+        // newErrors.oab = 'Formato sugerido: UF/123456'; 
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Basic size validation (2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        addToast('A imagem deve ter no máximo 2MB.', 'error');
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
           setFormData(prev => ({ ...prev, avatar: event.target!.result as string }));
-          addToast('Nova foto selecionada. Clique em Salvar.', 'info');
         }
       };
-      reader.readAsDataURL(e.target.files[0]);
+      reader.readAsDataURL(file);
     }
   };
 
   const handleSavePersonal = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validação antes de salvar
-    if (formData.oab && !validateOab(formData.oab)) {
-      addToast('Corrija os erros no formulário antes de salvar.', 'error');
+    if (!validateForm()) {
+      addToast('Verifique os erros no formulário.', 'error');
       return;
     }
 
-    setIsLoading(true);
+    setIsSaving(true);
     
-    // Simulação de delay de API
-    setTimeout(() => {
+    try {
+      // Simulação de delay de rede para UX
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       updateProfile({
         name: formData.name,
+        username: formData.username,
         email: formData.email,
         phone: formData.phone,
         oab: formData.oab,
         avatar: formData.avatar
       });
-      setIsLoading(false);
+      
       addToast('Perfil atualizado com sucesso!', 'success');
-    }, 1000);
+    } catch (error) {
+      addToast('Erro ao salvar alterações.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleVerifyEmail = () => {
+  const handleVerifyEmail = async () => {
     setIsVerifying(true);
-    addToast('Enviando link de verificação...', 'info');
     
-    // Simula confirmação automática para fins de UX Demo
+    // Simulação de delay de rede
     setTimeout(() => {
-       updateProfile({ emailVerified: true });
-       addToast('E-mail verificado com sucesso!', 'success');
+       // Em produção, isso dispararia o email. Aqui, simulamos o sucesso.
+       addToast(`Link de verificação enviado para ${formData.email}`, 'success');
        setIsVerifying(false);
-    }, 2500);
+       
+       // Opcional: Simular verificação imediata para demonstração
+       if (window.confirm("Demo: Deseja simular que o link foi clicado e verificar a conta agora?")) {
+           updateProfile({ emailVerified: true });
+       }
+    }, 2000);
   };
 
   const handleSaveSecurity = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSaving(true);
+    
     setTimeout(() => {
       if (securityData.newPassword) {
+          if (securityData.newPassword.length < 6) {
+             addToast('A nova senha deve ter no mínimo 6 caracteres.', 'error');
+             setIsSaving(false);
+             return;
+          }
           addToast('Senha alterada com sucesso!', 'success');
       }
       updateProfile({ twoFactorEnabled: securityData.twoFactor });
       setSecurityData(prev => ({ ...prev, currentPassword: '', newPassword: '' }));
-      setIsLoading(false);
+      setIsSaving(false);
     }, 1000);
   };
 
   const handleExportData = () => {
-    addToast('Solicitação de dados enviada. Você será notificado quando o arquivo estiver pronto.', 'info');
+    addToast('Solicitação de dados enviada. Você será notificado por e-mail.', 'info');
   };
 
   const handleDeleteAccount = () => {
-    if (confirm('ATENÇÃO: Esta ação é irreversível e excluirá todos os seus processos e clientes. Deseja continuar?')) {
-        addToast('Solicitação de exclusão enviada. Seus dados serão apagados em 30 dias.', 'warning');
-        setTimeout(() => logout(), 3000);
+    if (confirm('ATENÇÃO: Esta ação é irreversível e excluirá todos os seus processos e clientes. Para confirmar, digite sua senha na próxima etapa (não implementado na demo). Deseja continuar?')) {
+        addToast('Conta agendada para exclusão em 30 dias.', 'warning');
+        setTimeout(() => logout(), 2000);
     }
   };
 
   const copyUsername = () => {
-     if (user?.username) {
-         navigator.clipboard.writeText(user.username);
-         addToast('Copiado!', 'success');
+     if (formData.username) {
+         navigator.clipboard.writeText(formData.username);
+         addToast('Nome de usuário copiado!', 'success');
      }
   };
 
   if (!user) return null;
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12">
-      <div className="mb-4">
-        <h1 className="text-3xl font-bold text-white">Meu Perfil</h1>
-        <p className="text-slate-400">Gerencie suas informações pessoais e preferências de segurança.</p>
-      </div>
+  const tabs = [
+    { id: 'personal', label: 'Dados Pessoais', icon: User },
+    { id: 'security', label: 'Segurança', icon: Shield },
+    { id: 'privacy', label: 'Privacidade e LGPD', icon: FileCheck },
+    { id: 'preferences', label: 'Preferências', icon: Bell },
+  ];
 
-      {/* Header Card */}
-      <GlassCard className="relative overflow-hidden">
-         <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-indigo-900/50 to-slate-900/50 z-0"></div>
-         <div className="relative z-10 flex flex-col md:flex-row items-end md:items-center gap-6 pt-12 md:pt-4">
-             <div className="relative group">
-               <div className="w-24 h-24 rounded-full border-4 border-[#0f172a] bg-slate-800 overflow-hidden shadow-xl">
-                  <img src={formData.avatar} alt="Profile" className="w-full h-full object-cover" />
+  return (
+    <div className="max-w-5xl mx-auto space-y-6 pb-20">
+      
+      {/* Header Banner */}
+      <GlassCard className="relative overflow-hidden p-0 border-0">
+         <div className="absolute inset-0 bg-gradient-to-r from-indigo-900 via-[#1e1b4b] to-slate-900 z-0"></div>
+         {/* Decorative abstract shapes */}
+         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+         <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl -ml-10 -mb-10"></div>
+         
+         <div className="relative z-10 px-6 py-8 md:px-10 md:py-10 flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-8">
+             {/* Avatar Section */}
+             <div className="relative group shrink-0">
+               <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-[#0f172a] bg-slate-800 shadow-2xl overflow-hidden relative">
+                  {formData.avatar ? (
+                     <img src={formData.avatar} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                     <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-slate-500">{formData.name.charAt(0)}</div>
+                  )}
+                  {/* Overlay on hover */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                     <Camera className="text-white" size={24} />
+                  </div>
                </div>
-               <label className="absolute bottom-0 right-0 p-1.5 bg-indigo-600 rounded-full text-white cursor-pointer hover:bg-indigo-500 transition-colors shadow-lg">
+               <label className="absolute bottom-1 right-1 p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full cursor-pointer shadow-lg transition-transform hover:scale-110 active:scale-95 border-2 border-[#0f172a]" title="Alterar foto">
                   <Camera size={14} />
                   <input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
                </label>
              </div>
-             <div className="flex-1 mb-2">
-                <h2 className="text-2xl font-bold text-white">{formData.name}</h2>
-                <div onClick={copyUsername} className="text-indigo-300 font-mono text-sm cursor-pointer hover:text-white flex items-center gap-1 w-fit mb-2" title="Copiar identificador">
-                   {user.username} <Copy size={12} />
+
+             {/* User Info Section */}
+             <div className="flex-1 text-center md:text-left mb-1">
+                <div className="flex flex-col md:flex-row md:items-center gap-2 mb-1">
+                    <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">{formData.name}</h2>
+                    {user.emailVerified && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider mx-auto md:mx-0 w-fit">
+                            <CheckCircle size={10} /> Verificado
+                        </span>
+                    )}
                 </div>
-                <div className="flex items-center gap-3">
-                  <p className="text-slate-400 text-sm flex items-center gap-2">
-                    {user.role || 'Advogado'} 
-                    <span className="w-1 h-1 bg-slate-500 rounded-full"></span>
-                    {user.email}
-                  </p>
-                  {user.emailVerified ? (
-                    <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
-                      <CheckCircle size={10} /> Verificado
-                    </span>
-                  ) : (
-                    <span className="bg-amber-500/20 text-amber-400 text-[10px] px-2 py-0.5 rounded-full border border-amber-500/20 flex items-center gap-1">
-                      <AlertCircle size={10} /> Não Verificado
-                    </span>
-                  )}
+                
+                <div 
+                    onClick={copyUsername} 
+                    className="inline-flex items-center gap-1.5 text-indigo-300 font-mono text-sm bg-indigo-500/10 px-2 py-1 rounded-md cursor-pointer hover:bg-indigo-500/20 hover:text-white transition-colors mb-3"
+                    title="Clique para copiar"
+                >
+                   {formData.username || '@usuario'} <Copy size={12} className="opacity-70" />
                 </div>
+                
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-sm text-slate-400">
+                  <span className="flex items-center gap-1.5 bg-black/20 px-2 py-1 rounded">
+                     <Briefcase size={14} /> {user.role || 'Advogado'}
+                  </span>
+                  <span className="flex items-center gap-1.5 bg-black/20 px-2 py-1 rounded">
+                     <Mail size={14} /> {formData.email}
+                  </span>
+                </div>
+             </div>
+             
+             {/* Action */}
+             <div className="hidden md:block">
+                 <button onClick={() => setActiveTab('security')} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-lg border border-white/10 transition-colors">
+                    Segurança
+                 </button>
              </div>
          </div>
       </GlassCard>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Sidebar Navigation */}
-        <GlassCard className="h-fit p-2 lg:col-span-1">
-           <nav className="space-y-1">
-             <button 
-               onClick={() => setActiveTab('personal')}
-               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${activeTab === 'personal' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-             >
-               <User size={18} /> Dados Pessoais
-             </button>
-             <button 
-               onClick={() => setActiveTab('security')}
-               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${activeTab === 'security' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-             >
-               <Shield size={18} /> Segurança
-             </button>
-             <button 
-               onClick={() => setActiveTab('privacy')}
-               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${activeTab === 'privacy' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-             >
-               <FileCheck size={18} /> Privacidade e LGPD
-             </button>
-             <button 
-               onClick={() => setActiveTab('preferences')}
-               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${activeTab === 'preferences' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-             >
-               <Bell size={18} /> Preferências
-             </button>
-           </nav>
-        </GlassCard>
+        {/* Navigation Sidebar */}
+        <div className="lg:col-span-1">
+           <GlassCard className="p-2 sticky top-24">
+               <nav className="space-y-1">
+                 {tabs.map(tab => (
+                    <button 
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as any)}
+                      className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all text-sm font-medium group relative overflow-hidden ${
+                          activeTab === tab.id 
+                          ? 'bg-indigo-600/10 text-indigo-300 shadow-sm ring-1 ring-indigo-500/20' 
+                          : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <tab.icon size={18} className={`transition-colors ${activeTab === tab.id ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                      {tab.label}
+                      {activeTab === tab.id && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-indigo-500 rounded-r-full" />}
+                    </button>
+                 ))}
+               </nav>
+               
+               <div className="mt-6 pt-6 border-t border-white/5 px-4 pb-2">
+                   <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 rounded-xl p-4 border border-white/5">
+                       <h4 className="text-xs font-bold text-white mb-1">Plano Pro</h4>
+                       <p className="text-[10px] text-slate-400 mb-3">Sua assinatura está ativa e renova em 15/12.</p>
+                       <button className="w-full py-1.5 bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold rounded transition-colors">
+                           Gerenciar Assinatura
+                       </button>
+                   </div>
+               </div>
+           </GlassCard>
+        </div>
 
-        {/* Main Content */}
-        <GlassCard className="lg:col-span-3 min-h-[400px]">
+        {/* Main Content Area */}
+        <div className="lg:col-span-3">
            {activeTab === 'personal' && (
-             <form onSubmit={handleSavePersonal} className="space-y-6 animate-fade-in">
-               <div className="flex justify-between items-center border-b border-white/10 pb-4">
-                  <h3 className="text-lg font-semibold text-white">Informações Básicas</h3>
+             <GlassCard className="min-h-[500px]">
+               <div className="mb-6">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <User size={20} className="text-indigo-400" /> Dados Pessoais
+                  </h3>
+                  <p className="text-slate-400 text-sm mt-1">Mantenha suas informações de contato atualizadas.</p>
                </div>
                
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                     <label className="text-xs text-slate-400 font-medium ml-1">Nome Completo</label>
-                     <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                        <input 
-                          type="text" 
-                          name="name"
-                          value={formData.name} 
-                          onChange={handleInputChange}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-slate-200 focus:border-indigo-500 focus:outline-none transition-colors"
-                        />
-                     </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                     <label className="text-xs text-slate-400 font-medium ml-1">Número OAB</label>
-                     <div className="relative">
-                        <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                        <input 
-                          type="text" 
-                          name="oab"
-                          value={formData.oab} 
-                          onChange={handleInputChange}
-                          onBlur={() => validateOab(formData.oab)}
-                          placeholder="UF/000.000"
-                          maxLength={10}
-                          className={`w-full bg-white/5 border rounded-lg py-2.5 pl-10 pr-4 text-slate-200 focus:outline-none transition-colors ${
-                            oabError ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'
-                          }`}
-                        />
-                        {oabError && (
-                          <span className="absolute -bottom-5 left-1 text-[10px] text-rose-400 flex items-center gap-1">
-                            <AlertCircle size={10} /> {oabError}
-                          </span>
-                        )}
-                     </div>
+               <form onSubmit={handleSavePersonal} className="space-y-6">
+                  {/* Name & Username Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                         <label className="text-xs uppercase font-bold text-slate-500 ml-1">Nome Completo <span className="text-rose-400">*</span></label>
+                         <input 
+                           type="text" 
+                           name="name"
+                           value={formData.name} 
+                           onChange={handleInputChange}
+                           className={`w-full bg-slate-900/50 border rounded-lg p-3 text-slate-200 focus:outline-none transition-all ${errors.name ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'}`}
+                           placeholder="Seu nome"
+                         />
+                         {errors.name && <span className="text-[10px] text-rose-400 ml-1">{errors.name}</span>}
+                      </div>
+
+                      <div className="space-y-2">
+                         <label className="text-xs uppercase font-bold text-slate-500 ml-1">Nome de Usuário (Único)</label>
+                         <div className="relative">
+                            <input 
+                              type="text" 
+                              name="username"
+                              value={formData.username} 
+                              onChange={handleInputChange}
+                              className={`w-full bg-slate-900/50 border rounded-lg p-3 text-slate-200 focus:outline-none transition-all font-mono ${errors.username ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'}`}
+                              placeholder="@usuario"
+                            />
+                         </div>
+                         <p className="text-[10px] text-slate-500 ml-1">Usado para login e identificação na equipe.</p>
+                      </div>
                   </div>
 
-                  <div className="space-y-2">
-                     <div className="flex justify-between items-end">
-                       <label className="text-xs text-slate-400 font-medium ml-1">E-mail Profissional</label>
-                       {user.emailVerified ? (
-                          <span className="text-[10px] text-emerald-400 flex items-center gap-1 mb-0.5">
-                            <CheckCircle size={10} /> Verificado
-                          </span>
-                       ) : (
-                          <span className="text-[10px] text-amber-400 flex items-center gap-1 mb-0.5 animate-pulse">
-                            <AlertCircle size={10} /> Não Verificado
-                          </span>
-                       )}
-                     </div>
-                     <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                        <input 
-                          type="email" 
-                          name="email"
-                          value={formData.email} 
-                          onChange={handleInputChange}
-                          className={`w-full bg-white/5 border rounded-lg py-2.5 pl-10 pr-4 text-slate-200 focus:outline-none transition-colors ${
-                            !user.emailVerified ? 'border-amber-500/30 focus:border-amber-500' : 'border-white/10 focus:border-indigo-500'
-                          }`}
-                        />
-                        {!user.emailVerified && (
-                          <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                             <AlertCircle size={16} className="text-amber-500" />
+                  {/* Professional Info Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                         <label className="text-xs uppercase font-bold text-slate-500 ml-1">E-mail Profissional <span className="text-rose-400">*</span></label>
+                         <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                            <input 
+                              type="email" 
+                              name="email"
+                              value={formData.email} 
+                              onChange={handleInputChange}
+                              className={`w-full bg-slate-900/50 border rounded-lg py-3 pl-10 pr-10 text-slate-200 focus:outline-none transition-all ${errors.email ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'}`}
+                            />
+                            {user.emailVerified ? (
+                                <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" size={16} />
+                            ) : (
+                                <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-500" size={16} />
+                            )}
+                         </div>
+                      </div>
+
+                      <div className="space-y-2">
+                         <label className="text-xs uppercase font-bold text-slate-500 ml-1">Número OAB</label>
+                         <div className="relative">
+                            <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                            <input 
+                              type="text" 
+                              name="oab"
+                              value={formData.oab} 
+                              onChange={handleInputChange}
+                              placeholder="UF/123456"
+                              className="w-full bg-slate-900/50 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-slate-200 focus:border-indigo-500 focus:outline-none transition-all"
+                            />
+                         </div>
+                      </div>
+                  </div>
+
+                  {/* Verification Alert Box */}
+                  {!user.emailVerified && (
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between animate-fade-in">
+                          <div className="flex gap-3">
+                              <div className="p-2 bg-amber-500/20 rounded-lg h-fit text-amber-500 shrink-0">
+                                  <AlertCircle size={20} />
+                              </div>
+                              <div>
+                                  <h4 className="text-amber-200 font-bold text-sm">Conta Não Verificada</h4>
+                                  <p className="text-amber-200/70 text-xs mt-1 leading-relaxed">
+                                      Para garantir a segurança da sua conta e habilitar recuperação de senha, precisamos confirmar que este e-mail pertence a você.
+                                  </p>
+                              </div>
                           </div>
-                        )}
-                     </div>
-                     {!user.emailVerified && (
-                        <button 
-                          type="button"
-                          onClick={handleVerifyEmail}
-                          disabled={isVerifying}
-                          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-medium transition-colors border border-amber-500/20 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isVerifying ? (
-                            <>
-                                <Loader2 size={12} className="animate-spin" /> Verificando...
-                            </>
-                          ) : (
-                            <>
-                                <Send size={12} /> Enviar Link de Verificação
-                            </>
-                          )}
-                        </button>
-                     )}
-                  </div>
+                          <button 
+                             type="button"
+                             onClick={handleVerifyEmail}
+                             disabled={isVerifying}
+                             className="whitespace-nowrap px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition-colors shadow-lg shadow-amber-500/20 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                          >
+                             {isVerifying ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                             {isVerifying ? 'Enviando...' : 'Enviar Link de Verificação'}
+                          </button>
+                      </div>
+                  )}
 
                   <div className="space-y-2">
-                     <label className="text-xs text-slate-400 font-medium ml-1">Telefone / WhatsApp</label>
+                     <label className="text-xs uppercase font-bold text-slate-500 ml-1">Telefone / Celular</label>
                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                         <input 
                           type="text" 
                           name="phone"
                           value={formData.phone} 
                           onChange={handleInputChange}
-                          placeholder="(00) 00000-0000"
-                          className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-slate-200 focus:border-indigo-500 focus:outline-none transition-colors"
+                          placeholder="(11) 99999-9999"
+                          className="w-full bg-slate-900/50 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-slate-200 focus:border-indigo-500 focus:outline-none transition-all"
                         />
                      </div>
                   </div>
-               </div>
 
-               <div className="flex justify-end pt-4 border-t border-white/10">
-                 <button 
-                   type="submit" 
-                   disabled={isLoading}
-                   className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-70"
-                 >
-                   {isLoading ? 'Salvando...' : <><Save size={18} /> Salvar Alterações</>}
-                 </button>
-               </div>
-             </form>
+                  {/* Action Footer */}
+                  <div className="flex justify-end pt-6 border-t border-white/10">
+                     <button 
+                       type="submit" 
+                       disabled={isSaving}
+                       className="flex items-center gap-2 px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20 hover:scale-105 disabled:opacity-70 disabled:scale-100 disabled:cursor-not-allowed"
+                     >
+                       {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                       {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                     </button>
+                  </div>
+               </form>
+             </GlassCard>
            )}
 
            {activeTab === 'security' && (
-             <div className="space-y-6 animate-fade-in">
-               <div className="flex justify-between items-center border-b border-white/10 pb-4">
-                  <h3 className="text-lg font-semibold text-white">Segurança da Conta</h3>
+             <GlassCard className="min-h-[500px]">
+               <div className="mb-6">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Shield size={20} className="text-emerald-400" /> Segurança
+                  </h3>
+                  <p className="text-slate-400 text-sm mt-1">Gerencie sua senha e métodos de autenticação.</p>
                </div>
 
-               <form onSubmit={handleSaveSecurity} className="space-y-6">
+               <form onSubmit={handleSaveSecurity} className="space-y-8">
                  <div className="space-y-4">
-                   <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2"><Lock size={16} /> Alterar Senha</h4>
+                   <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2">Alterar Senha</h4>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <input 
-                        type="password" 
-                        placeholder="Senha Atual"
-                        value={securityData.currentPassword}
-                        onChange={(e) => setSecurityData({...securityData, currentPassword: e.target.value})}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-slate-200 focus:border-indigo-500 focus:outline-none"
-                     />
-                     <input 
-                        type="password" 
-                        placeholder="Nova Senha"
-                        value={securityData.newPassword}
-                        onChange={(e) => setSecurityData({...securityData, newPassword: e.target.value})}
-                        className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-slate-200 focus:border-indigo-500 focus:outline-none"
-                     />
+                     <div className="space-y-1">
+                        <label className="text-xs text-slate-500 font-bold ml-1">Senha Atual</label>
+                        <input 
+                            type="password" 
+                            value={securityData.currentPassword}
+                            onChange={(e) => setSecurityData({...securityData, currentPassword: e.target.value})}
+                            className="w-full bg-slate-900/50 border border-white/10 rounded-lg p-3 text-slate-200 focus:border-indigo-500 focus:outline-none"
+                            placeholder="••••••••"
+                        />
+                     </div>
+                     <div className="space-y-1">
+                        <label className="text-xs text-slate-500 font-bold ml-1">Nova Senha</label>
+                        <input 
+                            type="password" 
+                            value={securityData.newPassword}
+                            onChange={(e) => setSecurityData({...securityData, newPassword: e.target.value})}
+                            className="w-full bg-slate-900/50 border border-white/10 rounded-lg p-3 text-slate-200 focus:border-indigo-500 focus:outline-none"
+                            placeholder="••••••••"
+                        />
+                     </div>
                    </div>
+                   <p className="text-xs text-slate-500 flex items-center gap-1"><Info size={12}/> Use no mínimo 8 caracteres com letras e números.</p>
                  </div>
 
-                 <div className="pt-6 border-t border-white/5 space-y-4">
-                   <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2"><Smartphone size={16} /> Autenticação em Duas Etapas</h4>
-                   <div className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
+                 <div className="space-y-4">
+                   <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2">Autenticação de Dois Fatores (2FA)</h4>
+                   <div className="flex items-center justify-between p-4 rounded-xl bg-slate-900/50 border border-white/10">
                       <div>
-                         <p className="text-white font-medium">Ativar 2FA</p>
-                         <p className="text-xs text-slate-500">Adiciona uma camada extra de segurança via SMS ou App.</p>
+                         <p className="text-white font-medium flex items-center gap-2">
+                            {securityData.twoFactor ? <Lock size={14} className="text-emerald-400"/> : <Lock size={14} className="text-slate-500"/>}
+                            Verificação em Duas Etapas
+                         </p>
+                         <p className="text-xs text-slate-500 mt-1 max-w-sm">Adiciona uma camada extra de segurança exigindo um código via SMS ou App ao fazer login.</p>
                       </div>
                       <button 
                         type="button"
                         onClick={() => setSecurityData(prev => ({...prev, twoFactor: !prev.twoFactor}))}
                         className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${securityData.twoFactor ? 'bg-indigo-500' : 'bg-slate-700'}`}
+                        aria-label="Toggle 2FA"
                       >
                         <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${securityData.twoFactor ? 'translate-x-6' : 'translate-x-0'}`}></div>
                       </button>
                    </div>
                  </div>
 
-                 <div className="flex justify-end pt-2">
+                 <div className="flex justify-end pt-4 border-t border-white/10">
                    <button 
                      type="submit" 
-                     disabled={isLoading}
-                     className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-70"
+                     disabled={isSaving}
+                     className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold transition-all disabled:opacity-70"
                    >
-                     {isLoading ? 'Processando...' : <><Check size={18} /> Atualizar Segurança</>}
+                     {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                     {isSaving ? 'Processando...' : 'Atualizar Segurança'}
                    </button>
                  </div>
                </form>
 
-               {/* Audit Logs Table */}
-               <div className="pt-8 border-t border-white/10">
-                 <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2 mb-4"><Activity size={16} /> Logs de Atividade Recente (Auditoria)</h4>
-                 <div className="overflow-x-auto rounded-xl border border-white/10">
+               {/* Activity Logs */}
+               <div className="mt-10">
+                 <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2 mb-4 flex items-center gap-2">
+                    <Activity size={16} /> Dispositivos e Atividade
+                 </h4>
+                 <div className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/30">
                    <table className="w-full text-sm text-left">
-                     <thead className="bg-white/5 text-xs uppercase text-slate-400">
+                     <thead className="bg-white/5 text-xs uppercase text-slate-400 font-semibold">
                        <tr>
-                         <th className="px-4 py-3">Ação</th>
-                         <th className="px-4 py-3">Data/Hora</th>
-                         <th className="px-4 py-3">Dispositivo</th>
-                         <th className="px-4 py-3">IP</th>
-                         <th className="px-4 py-3">Status</th>
+                         <th className="px-4 py-3">Evento</th>
+                         <th className="px-4 py-3">Quando</th>
+                         <th className="px-4 py-3 hidden sm:table-cell">Dispositivo</th>
+                         <th className="px-4 py-3 text-right">Status</th>
                        </tr>
                      </thead>
                      <tbody className="divide-y divide-white/5">
@@ -492,14 +591,16 @@ export const UserProfile: React.FC = () => {
                          <tr key={log.id} className="hover:bg-white/5 transition-colors">
                            <td className="px-4 py-3 font-medium text-white">{log.action}</td>
                            <td className="px-4 py-3 text-slate-400">{log.date}</td>
-                           <td className="px-4 py-3 text-slate-400">{log.device}</td>
-                           <td className="px-4 py-3 text-slate-500 font-mono text-xs">{log.ip}</td>
-                           <td className="px-4 py-3">
-                             <span className={`text-xs px-2 py-0.5 rounded-full ${
+                           <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">
+                               <span className="block">{log.device}</span>
+                               <span className="text-[10px] font-mono opacity-70">{log.ip}</span>
+                           </td>
+                           <td className="px-4 py-3 text-right">
+                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
                                log.status === 'Success' ? 'bg-emerald-500/20 text-emerald-400' : 
                                log.status === 'Failed' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'
                              }`}>
-                               {log.status}
+                               {log.status === 'Success' ? 'Sucesso' : 'Falha'}
                              </span>
                            </td>
                          </tr>
@@ -508,132 +609,110 @@ export const UserProfile: React.FC = () => {
                    </table>
                  </div>
                </div>
-             </div>
+             </GlassCard>
            )}
 
            {activeTab === 'privacy' && (
-             <div className="space-y-8 animate-fade-in">
-               <div className="flex justify-between items-center border-b border-white/10 pb-4">
-                  <h3 className="text-lg font-semibold text-white">Privacidade e Controle de Dados (LGPD)</h3>
-                  <div className="flex gap-2 text-sm">
-                    <Link to="/privacy" className="text-indigo-400 hover:underline">Política de Privacidade</Link>
-                    <span className="text-slate-500">•</span>
-                    <Link to="/terms" className="text-indigo-400 hover:underline">Termos de Uso</Link>
-                  </div>
+             <GlassCard className="min-h-[500px]">
+               <div className="flex justify-between items-start mb-6">
+                 <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <FileCheck size={20} className="text-blue-400" /> Privacidade e Dados
+                    </h3>
+                    <p className="text-slate-400 text-sm mt-1">Gerencie seus direitos conforme a LGPD.</p>
+                 </div>
+                 <Link to="/privacy" className="text-xs text-indigo-400 hover:text-white border border-indigo-500/30 px-3 py-1.5 rounded-lg transition-colors">
+                    Ler Política Completa
+                 </Link>
                </div>
 
-               {/* Data Subject Requests History */}
-               <div className="space-y-4">
-                 <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2"><FileText size={16} /> Histórico de Solicitações (Direitos do Titular)</h4>
-                 <div className="bg-slate-900/50 border border-white/10 rounded-xl p-4">
-                   {MOCK_DATA_REQUESTS.length > 0 ? (
-                     <div className="space-y-3">
-                       {MOCK_DATA_REQUESTS.map(req => (
-                         <div key={req.id} className="flex items-center justify-between text-sm border-b border-white/5 pb-2 last:border-0 last:pb-0">
-                            <div>
-                              <p className="text-white font-medium">{req.type === 'Access' ? 'Solicitação de Acesso aos Dados' : req.type === 'Deletion' ? 'Solicitação de Exclusão' : req.type === 'Portability' ? 'Portabilidade de Dados' : 'Retificação'}</p>
-                              <p className="text-xs text-slate-500">Solicitado em: {req.dateRequested}</p>
-                            </div>
-                            <div className="text-right">
-                               <span className={`text-xs px-2 py-1 rounded-md border ${
-                                 req.status === 'Completed' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
-                                 req.status === 'Processing' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' :
-                                 'bg-slate-500/10 border-slate-500/30 text-slate-400'
-                               }`}>
-                                 {req.status === 'Completed' ? 'Concluído' : req.status === 'Processing' ? 'Em Processamento' : req.status}
-                               </span>
-                               {req.completionDate && <p className="text-[10px] text-slate-600 mt-1">Concluído: {req.completionDate}</p>}
-                            </div>
+               <div className="space-y-8">
+                 {/* Requests */}
+                 <div className="space-y-4">
+                     <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2">Minhas Solicitações</h4>
+                     <div className="bg-slate-900/50 border border-white/10 rounded-xl p-1">
+                         {MOCK_DATA_REQUESTS.map((req, idx) => (
+                             <div key={req.id} className={`p-4 flex items-center justify-between ${idx !== MOCK_DATA_REQUESTS.length - 1 ? 'border-b border-white/5' : ''}`}>
+                                 <div>
+                                     <p className="text-white text-sm font-medium">
+                                         {req.type === 'Access' ? 'Solicitação de Acesso' : req.type === 'Portability' ? 'Portabilidade' : 'Exclusão'}
+                                     </p>
+                                     <p className="text-xs text-slate-500">Iniciado em: {req.dateRequested}</p>
+                                 </div>
+                                 <span className={`text-[10px] font-bold px-2 py-1 rounded border ${
+                                     req.status === 'Completed' ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-blue-500/30 text-blue-400 bg-blue-500/10'
+                                 }`}>
+                                     {req.status === 'Completed' ? 'Concluído' : 'Processando'}
+                                 </span>
+                             </div>
+                         ))}
+                     </div>
+                 </div>
+
+                 {/* Consent */}
+                 <div className="space-y-4">
+                     <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2">Preferências de Consentimento</h4>
+                     <div className="grid gap-3">
+                         {[
+                             { id: 'marketingEmails', label: 'E-mails de Marketing', desc: 'Receber novidades, dicas e ofertas.' },
+                             { id: 'activityLog', label: 'Análise de Uso', desc: 'Permitir coleta de dados anônimos para melhorias.' },
+                         ].map(item => (
+                             <div key={item.id} className="flex items-center justify-between p-4 rounded-xl bg-slate-900/50 border border-white/10">
+                                 <div>
+                                     <p className="text-slate-200 font-medium text-sm">{item.label}</p>
+                                     <p className="text-xs text-slate-500">{item.desc}</p>
+                                 </div>
+                                 <button 
+                                    onClick={() => setPrivacySettings(prev => ({...prev, [item.id]: !prev[item.id as keyof typeof privacySettings]}))}
+                                    className={`relative w-10 h-5 rounded-full transition-colors duration-300 ${privacySettings[item.id as keyof typeof privacySettings] ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                                 >
+                                     <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow-md transform transition-transform duration-300 ${privacySettings[item.id as keyof typeof privacySettings] ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                 </button>
+                             </div>
+                         ))}
+                     </div>
+                 </div>
+
+                 {/* Actions */}
+                 <div className="pt-6 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-xl flex flex-col justify-between">
+                         <div>
+                             <h5 className="text-indigo-200 font-bold text-sm flex items-center gap-2"><Download size={16}/> Portabilidade</h5>
+                             <p className="text-xs text-indigo-200/60 mt-1 mb-3">Baixe uma cópia completa dos seus dados.</p>
                          </div>
-                       ))}
+                         <button onClick={handleExportData} className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors">
+                             Solicitar Arquivo
+                         </button>
                      </div>
-                   ) : (
-                     <p className="text-slate-500 text-sm">Nenhuma solicitação registrada.</p>
-                   )}
+                     <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl flex flex-col justify-between">
+                         <div>
+                             <h5 className="text-rose-200 font-bold text-sm flex items-center gap-2"><Trash2 size={16}/> Zona de Perigo</h5>
+                             <p className="text-xs text-rose-200/60 mt-1 mb-3">Solicitar exclusão permanente da conta.</p>
+                         </div>
+                         <button onClick={handleDeleteAccount} className="w-full py-2 border border-rose-500/50 text-rose-400 hover:bg-rose-500 hover:text-white rounded-lg text-xs font-bold transition-colors">
+                             Excluir Minha Conta
+                         </button>
+                     </div>
                  </div>
                </div>
-
-               {/* Consent Management */}
-               <div className="space-y-4 pt-4 border-t border-white/5">
-                 <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2"><EyeOff size={16} /> Gestão de Consentimento</h4>
-                 <p className="text-xs text-slate-400 mb-4">Gerencie como utilizamos seus dados para personalização e comunicações.</p>
-                 
-                 <div className="space-y-3">
-                   {[
-                     { id: 'marketingEmails', label: 'Comunicações de Marketing', desc: 'Receber e-mails sobre novidades e ofertas.' },
-                     { id: 'activityLog', label: 'Logs de Atividade Detalhados', desc: 'Permitir análise de uso para melhoria do sistema.' },
-                     { id: 'analyticsCookies', label: 'Cookies de Análise', desc: 'Permitir cookies de terceiros para métricas.' },
-                   ].map(item => (
-                     <div key={item.id} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10">
-                       <div>
-                         <p className="text-slate-200 font-medium text-sm">{item.label}</p>
-                         <p className="text-xs text-slate-500">{item.desc}</p>
-                       </div>
-                       <button 
-                          onClick={() => setPrivacySettings(prev => ({...prev, [item.id]: !prev[item.id as keyof typeof privacySettings]}))}
-                          className={`relative w-10 h-5 rounded-full transition-colors duration-300 ${privacySettings[item.id as keyof typeof privacySettings] ? 'bg-emerald-500' : 'bg-slate-700'}`}
-                        >
-                          <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow-md transform transition-transform duration-300 ${privacySettings[item.id as keyof typeof privacySettings] ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                       </button>
-                     </div>
-                   ))}
-                 </div>
-               </div>
-
-               {/* Data Portability */}
-               <div className="pt-6 border-t border-white/5 space-y-4">
-                 <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2"><Download size={16} /> Portabilidade de Dados</h4>
-                 <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-xl">
-                   <div className="flex items-center justify-between">
-                     <div>
-                       <p className="text-slate-200 text-sm font-medium">Exportar meus dados</p>
-                       <p className="text-xs text-slate-400 mt-1">Baixe uma cópia de seus dados pessoais, casos e clientes em formato JSON/PDF.</p>
-                     </div>
-                     <button onClick={handleExportData} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2">
-                       <Download size={14} /> Solicitar Cópia
-                     </button>
-                   </div>
-                 </div>
-               </div>
-
-               {/* Danger Zone / Right to be Forgotten */}
-               <div className="pt-6 border-t border-white/5 space-y-4">
-                 <h4 className="text-sm font-medium text-rose-400 flex items-center gap-2"><Trash2 size={16} /> Zona de Perigo</h4>
-                 <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl">
-                   <div className="flex items-center justify-between">
-                     <div>
-                       <p className="text-rose-200 text-sm font-medium">Excluir Conta (Direito ao Esquecimento)</p>
-                       <p className="text-xs text-rose-300/70 mt-1">
-                         Solicitar a exclusão permanente de sua conta e dados associados conforme Art. 18 da LGPD.
-                       </p>
-                     </div>
-                     <button onClick={handleDeleteAccount} className="px-4 py-2 border border-rose-500/50 text-rose-400 hover:bg-rose-500 hover:text-white rounded-lg text-xs font-medium transition-colors">
-                       Excluir Conta
-                     </button>
-                   </div>
-                 </div>
-               </div>
-               
-               <div className="text-center pt-4">
-                 <p className="text-xs text-slate-500">
-                   Encarregado de Dados (DPO): <a href="mailto:dpo@lexglass.com" className="text-indigo-400 hover:underline">dpo@lexglass.com</a>
-                 </p>
-               </div>
-             </div>
+             </GlassCard>
            )}
 
            {activeTab === 'preferences' && (
-             <div className="space-y-6 animate-fade-in">
-               <div className="flex justify-between items-center border-b border-white/10 pb-4">
-                  <h3 className="text-lg font-semibold text-white">Preferências do Sistema</h3>
-               </div>
-               <div className="text-center py-12 text-slate-500">
-                  <AlertCircle size={32} className="mx-auto mb-2 opacity-50" />
-                  <p>Configurações de notificação e tema em breve.</p>
-               </div>
-             </div>
+             <GlassCard className="min-h-[500px] flex flex-col items-center justify-center text-center">
+                 <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-white/10">
+                     <Bell size={40} className="text-slate-500 opacity-50" />
+                 </div>
+                 <h3 className="text-xl font-bold text-white mb-2">Preferências em Breve</h3>
+                 <p className="text-slate-400 max-w-sm mb-6">
+                     Estamos trabalhando em novos temas, configurações de notificação granulares e atalhos de teclado personalizados.
+                 </p>
+                 <button onClick={() => addToast('Obrigado pelo interesse! Notificaremos quando disponível.', 'info')} className="px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium text-slate-300 transition-colors">
+                     Notificar-me
+                 </button>
+             </GlassCard>
            )}
-        </GlassCard>
+        </div>
       </div>
     </div>
   );
