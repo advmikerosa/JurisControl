@@ -1,4 +1,5 @@
 
+
 import { User, AuthProvider } from '../types';
 
 // Simula atraso de rede
@@ -16,6 +17,7 @@ export const authMockService = {
     return {
       id: 'u1',
       name: 'Dr. Usuário', // Simulando retorno do banco
+      username: '@drusuario',
       email: email,
       avatar: `https://ui-avatars.com/api/?name=Dr+Usuario&background=6366f1&color=fff`,
       provider: 'email',
@@ -29,7 +31,7 @@ export const authMockService = {
     };
   },
 
-  async register(name: string, email: string, password: string): Promise<User> {
+  async register(name: string, email: string, password: string, oab?: string): Promise<User> {
     await delay(1500);
 
     // Simula validação de email existente
@@ -37,19 +39,23 @@ export const authMockService = {
       throw new Error('Este e-mail já está em uso.');
     }
 
+    // Gerar username automático
+    const username = '@' + name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '').substring(0, 15);
+
     return {
       id: 'u_new_' + Date.now(),
       name: name,
+      username: username,
       email: email,
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=10b981&color=fff`,
       provider: 'email',
-      offices: ['1'], // Novo usuário já entra no escritório padrão
-      currentOfficeId: '1',
+      offices: [], // Usuário novo SEM escritório (deve criar ou entrar em um)
+      currentOfficeId: undefined,
       twoFactorEnabled: false,
-      emailVerified: false,
+      emailVerified: false, // Precisa verificar
       phone: '',
-      oab: '',
-      role: 'Advogado Associado'
+      oab: oab || '',
+      role: 'Advogado'
     };
   },
 
@@ -65,11 +71,12 @@ export const authMockService = {
     return {
       id: `u_social_${provider}_1`,
       name: names[provider] || 'Usuário Social',
+      username: `@social${provider}`,
       email: `user.${provider}@email.com`,
       avatar: `https://ui-avatars.com/api/?name=User+Social&background=random`,
       provider: provider,
-      offices: ['1'],
-      currentOfficeId: '1',
+      offices: [], // Novo usuário social também entra sem escritório
+      currentOfficeId: undefined,
       twoFactorEnabled: true, // Social logins often count as MFA
       emailVerified: true, // Login social geralmente implica verificação
       phone: '',

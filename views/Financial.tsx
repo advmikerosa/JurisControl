@@ -56,8 +56,15 @@ export const Financial: React.FC = () => {
   });
 
   useEffect(() => {
-    setTransactions(storageService.getFinancials());
-    setClients(storageService.getClients());
+    const loadData = async () => {
+      const [loadedTransactions, loadedClients] = await Promise.all([
+        storageService.getFinancials(),
+        storageService.getClients()
+      ]);
+      setTransactions(loadedTransactions);
+      setClients(loadedClients);
+    };
+    loadData();
   }, []);
 
   // --- Cálculos de Resumo ---
@@ -118,7 +125,7 @@ export const Financial: React.FC = () => {
   }, [transactions, filterMonth]);
 
   // --- Handlers ---
-  const handleSaveTransaction = (e: React.FormEvent) => {
+  const handleSaveTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.amount) {
       addToast('Preencha os campos obrigatórios.', 'error');
@@ -153,10 +160,12 @@ export const Financial: React.FC = () => {
       });
     }
 
-    // Salva cada parcela individualmente (na prática seria uma transação pai e filhas, mas simplificado aqui)
-    newTransactions.reverse().forEach(t => storageService.saveFinancial(t)); // Reverse para manter ordem na lista (unshift)
+    // Salva cada parcela
+    for (const t of newTransactions.reverse()) {
+      await storageService.saveFinancial(t);
+    }
     
-    setTransactions(storageService.getFinancials());
+    setTransactions(await storageService.getFinancials());
     addToast(`${numInstallments} registro(s) salvo(s) com sucesso!`, 'success');
     setIsModalOpen(false);
     setFormData({
@@ -165,26 +174,24 @@ export const Financial: React.FC = () => {
     });
   };
 
-  const toggleStatus = (id: string, currentStatus: FinancialStatus) => {
-    const newStatus = currentStatus === 'Pago' ? 'Pendente' : 'Pago';
+  const toggleStatus = async (id: string, currentStatus: FinancialStatus) => {
+    const newStatus: FinancialStatus = currentStatus === 'Pago' ? 'Pendente' : 'Pago';
     const updatedList = transactions.map(t => {
       if (t.id === id) {
-        return { 
+        const updatedRecord: FinancialRecord = { 
           ...t, 
           status: newStatus, 
           paymentDate: newStatus === 'Pago' ? new Date().toISOString().slice(0, 10) : undefined 
         };
+        return updatedRecord;
       }
       return t;
     });
-    // Hacky way to update specific item in storage without rewrite all logic
-    // In a real app, we would have an update method in service
-    // For now, re-saving the whole list logic isn't in storageService, so let's just overwrite list logic
-    // Actually storageService.saveFinancial does unshift/replace based on ID.
+
     const target = updatedList.find(t => t.id === id);
-    if(target) storageService.saveFinancial(target);
+    if(target) await storageService.saveFinancial(target);
     
-    setTransactions(storageService.getFinancials()); // Reload
+    setTransactions(await storageService.getFinancials()); // Reload
     addToast(`Status alterado para ${newStatus}`, 'info');
   };
 
@@ -275,61 +282,71 @@ export const Financial: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
              {/* Chart: Cash Flow */}
-             <GlassCard className="lg:col-span-2 h-[350px] p-6">
-               <h3 className="text-lg font-semibold text-white mb-6">Fluxo de Caixa (Últimos 6 Meses)</h3>
-               <ResponsiveContainer width="100%" height="85%">
-                 <AreaChart data={chartDataFlow}>
-                    <defs>
-                      <linearGradient id="colorRec" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorDesp" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                    <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.5)', fontSize: 12}} axisLine={false} />
-                    <YAxis stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.5)', fontSize: 12}} axisLine={false} tickFormatter={(val) => `k${val/1000}`} />
-                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff' }} />
-                    <Area type="monotone" dataKey="Receitas" stroke="#818cf8" fillOpacity={1} fill="url(#colorRec)" />
-                    <Area type="monotone" dataKey="Despesas" stroke="#f43f5e" fillOpacity={1} fill="url(#colorDesp)" />
-                 </AreaChart>
-               </ResponsiveContainer>
+             <GlassCard className="lg:col-span-2 h-[350px] p-6 flex flex-col">
+               <h3 className="text-lg font-semibold text-white mb-6 shrink-0">Fluxo de Caixa (Últimos 6 Meses)</h3>
+               {/* FIX: Use relative positioning with absolute inset for ResponsiveContainer to fix width(-1) issues */}
+               <div className="flex-1 w-full min-h-0 relative">
+                 <div className="absolute inset-0">
+                   <ResponsiveContainer width="100%" height="100%">
+                     <AreaChart data={chartDataFlow}>
+                        <defs>
+                          <linearGradient id="colorRec" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#818cf8" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorDesp" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                        <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.5)', fontSize: 12}} axisLine={false} />
+                        <YAxis stroke="rgba(255,255,255,0.3)" tick={{fill: 'rgba(255,255,255,0.5)', fontSize: 12}} axisLine={false} tickFormatter={(val) => `k${val/1000}`} />
+                        <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff' }} />
+                        <Area type="monotone" dataKey="Receitas" stroke="#818cf8" fillOpacity={1} fill="url(#colorRec)" />
+                        <Area type="monotone" dataKey="Despesas" stroke="#f43f5e" fillOpacity={1} fill="url(#colorDesp)" />
+                     </AreaChart>
+                   </ResponsiveContainer>
+                 </div>
+               </div>
              </GlassCard>
 
              {/* Chart: Categories */}
-             <GlassCard className="h-[350px] p-6">
-               <h3 className="text-lg font-semibold text-white mb-2">Despesas por Categoria</h3>
-               <p className="text-xs text-slate-400 mb-4">Mês de Referência: {filterMonth}</p>
-               <ResponsiveContainer width="100%" height="80%">
-                  {chartDataCategories.length > 0 ? (
-                    <PieChart>
-                      <Pie
-                        data={chartDataCategories}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {chartDataCategories.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff' }} />
-                    </PieChart>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-500">
-                       <PieIcon size={40} className="opacity-20 mb-2" />
-                       <p>Sem dados</p>
-                    </div>
-                  )}
-               </ResponsiveContainer>
+             <GlassCard className="h-[350px] p-6 flex flex-col">
+               <h3 className="text-lg font-semibold text-white mb-2 shrink-0">Despesas por Categoria</h3>
+               <p className="text-xs text-slate-400 mb-4 shrink-0">Mês de Referência: {filterMonth}</p>
+               {/* FIX: Use relative positioning with absolute inset for ResponsiveContainer to fix width(-1) issues */}
+               <div className="flex-1 w-full min-h-0 relative">
+                 <div className="absolute inset-0">
+                   <ResponsiveContainer width="100%" height="100%">
+                      {chartDataCategories.length > 0 ? (
+                        <PieChart>
+                          <Pie
+                            data={chartDataCategories}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={50}
+                            outerRadius={70}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {chartDataCategories.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
+                            ))}
+                          </Pie>
+                          <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff' }} />
+                        </PieChart>
+                      ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-500">
+                           <PieIcon size={40} className="opacity-20 mb-2" />
+                           <p>Sem dados</p>
+                        </div>
+                      )}
+                   </ResponsiveContainer>
+                 </div>
+               </div>
                {/* Legend */}
-               <div className="flex flex-wrap justify-center gap-2 mt-2">
+               <div className="flex flex-wrap justify-center gap-2 mt-2 shrink-0">
                   {chartDataCategories.slice(0, 4).map((entry, index) => (
                     <div key={index} className="flex items-center gap-1 text-xs text-slate-400">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>

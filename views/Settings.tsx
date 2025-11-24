@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
@@ -6,11 +7,11 @@ import { useToast } from '../context/ToastContext';
 import { storageService } from '../services/storageService';
 import { notificationService } from '../services/notificationService';
 import { Modal } from '../components/ui/Modal';
-import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive } from 'lucide-react';
-import { AppSettings } from '../types';
+import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus } from 'lucide-react';
+import { AppSettings, Office } from '../types';
 
 export const Settings: React.FC = () => {
-  const { logout } = useAuth();
+  const { logout, user, updateProfile } = useAuth();
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState('general');
   const [confirmModal, setConfirmModal] = useState({ open: false, action: () => {} });
@@ -19,9 +20,30 @@ export const Settings: React.FC = () => {
   // State para Configurações
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
+  // State para Escritório
+  const [myOffice, setMyOffice] = useState<Office | null>(null);
+  const [officeForm, setOfficeForm] = useState({
+    name: '',
+    handle: '',
+    location: ''
+  });
+  const [isCreatingOffice, setIsCreatingOffice] = useState(false);
+  
+  // State para Entrar e Convidar
+  const [joinOfficeHandle, setJoinOfficeHandle] = useState('');
+  const [inviteUserHandle, setInviteUserHandle] = useState('');
+
   useEffect(() => {
     setSettings(storageService.getSettings());
-  }, []);
+    loadOfficeData();
+  }, [user]);
+
+  const loadOfficeData = async () => {
+    if (user && user.currentOfficeId) {
+      const office = await storageService.getOfficeById(user.currentOfficeId);
+      if (office) setMyOffice(office);
+    }
+  };
 
   const handleSaveSettings = () => {
     if (settings) {
@@ -80,6 +102,69 @@ export const Settings: React.FC = () => {
     });
   };
 
+  const handleCreateOffice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!officeForm.name || !officeForm.handle) {
+      addToast('Preencha nome e identificador.', 'error');
+      return;
+    }
+    
+    // Validar formato do handle
+    if (!/^@[a-zA-Z0-9_]+$/.test(officeForm.handle)) {
+      addToast('O identificador deve começar com @ e conter apenas letras, números ou underline.', 'error');
+      return;
+    }
+
+    try {
+      const newOffice = await storageService.createOffice(officeForm);
+      // Atualizar usuário
+      updateProfile({
+        offices: [...(user?.offices || []), newOffice.id],
+        currentOfficeId: newOffice.id
+      });
+      setMyOffice(newOffice);
+      setIsCreatingOffice(false);
+      addToast('Escritório criado com sucesso!', 'success');
+    } catch (error: any) {
+      addToast(error.message, 'error');
+    }
+  };
+
+  const handleJoinOffice = async () => {
+    if (!joinOfficeHandle.startsWith('@')) {
+        addToast('O identificador deve começar com @.', 'error');
+        return;
+    }
+    try {
+        const joinedOffice = await storageService.joinOffice(joinOfficeHandle);
+        updateProfile({
+            offices: [...(user?.offices || []), joinedOffice.id],
+            currentOfficeId: joinedOffice.id
+        });
+        setMyOffice(joinedOffice);
+        addToast(`Você entrou em ${joinedOffice.name}!`, 'success');
+        setJoinOfficeHandle('');
+    } catch (error: any) {
+        addToast(error.message, 'error');
+    }
+  };
+
+  const handleInviteUser = async () => {
+    if (!inviteUserHandle.startsWith('@')) {
+        addToast('Digite um nome de usuário válido (@usuario).', 'error');
+        return;
+    }
+    if (!myOffice) return;
+
+    try {
+        await storageService.inviteUserToOffice(myOffice.id, inviteUserHandle);
+        addToast(`Convite enviado para ${inviteUserHandle}!`, 'success');
+        setInviteUserHandle('');
+    } catch (error: any) {
+        addToast(error.message, 'error');
+    }
+  };
+
   if (!settings) return null;
 
   return (
@@ -93,6 +178,7 @@ export const Settings: React.FC = () => {
         <GlassCard className="p-2 h-fit">
           <nav className="space-y-1">
              <button onClick={() => setActiveTab('general')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${activeTab === 'general' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:bg-white/5'}`}><SettingsIcon size={18} /> Preferências</button>
+             <button onClick={() => setActiveTab('office')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${activeTab === 'office' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:bg-white/5'}`}><Building size={18} /> Meu Escritório</button>
              <button onClick={() => setActiveTab('danger')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${activeTab === 'danger' ? 'bg-rose-600/20 text-rose-400' : 'text-slate-400 hover:bg-white/5'}`}><AlertTriangle size={18} /> Zona de Perigo</button>
           </nav>
         </GlassCard>
@@ -224,6 +310,192 @@ export const Settings: React.FC = () => {
                         <Save size={18} /> Salvar Preferências
                     </button>
                 </div>
+             </div>
+           )}
+
+           {activeTab === 'office' && (
+             <div className="space-y-8 animate-fade-in">
+               <div className="border-b border-white/10 pb-4 mb-6">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2"><Building size={24} className="text-indigo-400" /> Perfil do Escritório</h2>
+                  <p className="text-sm text-slate-400 mt-1">Gerencie a identidade do seu escritório e equipe.</p>
+               </div>
+
+               {!myOffice && !isCreatingOffice ? (
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Card Criar Novo */}
+                    <div className="bg-white/5 hover:bg-white/10 transition-colors rounded-2xl p-6 border border-white/10 flex flex-col justify-between h-full">
+                        <div>
+                            <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center mb-4">
+                                <Plus size={24} className="text-indigo-400" />
+                            </div>
+                            <h3 className="text-lg font-medium text-white mb-2">Criar Novo Escritório</h3>
+                            <p className="text-slate-400 text-sm mb-4">
+                                Funde seu próprio escritório digital, convide membros e centralize sua gestão. Você será o administrador.
+                            </p>
+                        </div>
+                        <button 
+                            onClick={() => setIsCreatingOffice(true)}
+                            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/20 transition-all"
+                        >
+                            Criar Escritório
+                        </button>
+                    </div>
+
+                    {/* Card Entrar Existente */}
+                    <div className="bg-white/5 hover:bg-white/10 transition-colors rounded-2xl p-6 border border-white/10 flex flex-col justify-between h-full">
+                        <div>
+                            <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center mb-4">
+                                <LogIn size={24} className="text-emerald-400" />
+                            </div>
+                            <h3 className="text-lg font-medium text-white mb-2">Entrar em Existente</h3>
+                            <p className="text-slate-400 text-sm mb-4">
+                                Junte-se a uma equipe já existente usando o identificador único do escritório (ex: @silvaassociados).
+                            </p>
+                            <div className="relative mb-2">
+                                <AtSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                <input 
+                                    type="text" 
+                                    placeholder="@handle_do_escritorio"
+                                    value={joinOfficeHandle}
+                                    onChange={(e) => setJoinOfficeHandle(e.target.value)}
+                                    className="w-full bg-black/20 border border-white/10 rounded-lg p-2.5 pl-10 text-white focus:border-emerald-500 focus:outline-none text-sm"
+                                />
+                            </div>
+                        </div>
+                        <button 
+                            onClick={handleJoinOffice}
+                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium shadow-lg shadow-emerald-500/20 transition-all"
+                        >
+                            Entrar no Escritório
+                        </button>
+                    </div>
+                 </div>
+               ) : isCreatingOffice ? (
+                 <div className="bg-white/5 rounded-2xl p-6 border border-white/10 animate-fade-in max-w-2xl mx-auto">
+                    <h3 className="text-lg font-semibold text-white mb-4">Criar Novo Escritório</h3>
+                    <form onSubmit={handleCreateOffice} className="space-y-4">
+                       <div className="space-y-2">
+                          <label className="text-xs text-slate-400 font-medium ml-1">Nome do Escritório</label>
+                          <input 
+                             type="text" 
+                             placeholder="Ex: Silva & Associados"
+                             value={officeForm.name}
+                             onChange={(e) => setOfficeForm({...officeForm, name: e.target.value})}
+                             className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none"
+                          />
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-xs text-slate-400 font-medium ml-1">Identificador Único (@handle)</label>
+                          <div className="relative">
+                             <AtSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                             <input 
+                                type="text" 
+                                placeholder="@silvaassociados"
+                                value={officeForm.handle}
+                                onChange={(e) => {
+                                   let val = e.target.value;
+                                   if (!val.startsWith('@')) val = '@' + val;
+                                   setOfficeForm({...officeForm, handle: val.toLowerCase()})
+                                }}
+                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 pl-10 text-white focus:border-indigo-500 focus:outline-none"
+                             />
+                          </div>
+                          <p className="text-[10px] text-slate-500 ml-1">Use letras minúsculas, números e underline. Deve começar com @.</p>
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-xs text-slate-400 font-medium ml-1">Localização (Cidade/UF)</label>
+                          <div className="relative">
+                             <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                             <input 
+                                type="text" 
+                                placeholder="São Paulo - SP"
+                                value={officeForm.location}
+                                onChange={(e) => setOfficeForm({...officeForm, location: e.target.value})}
+                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 pl-10 text-white focus:border-indigo-500 focus:outline-none"
+                             />
+                          </div>
+                       </div>
+                       <div className="flex gap-3 justify-end pt-4">
+                          <button 
+                            type="button" 
+                            onClick={() => setIsCreatingOffice(false)}
+                            className="px-4 py-2 text-slate-400 hover:text-white"
+                          >
+                            Cancelar
+                          </button>
+                          <button 
+                            type="submit"
+                            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium shadow-lg shadow-emerald-500/20"
+                          >
+                            Criar Perfil
+                          </button>
+                       </div>
+                    </form>
+                 </div>
+               ) : (
+                 <div className="space-y-6">
+                    {/* Exibição do Escritório */}
+                    <div className="bg-gradient-to-r from-indigo-900/40 to-slate-900/40 border border-indigo-500/30 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-6">
+                       <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 bg-indigo-600 rounded-xl flex items-center justify-center text-2xl font-bold text-white shadow-lg">
+                             {myOffice?.name.charAt(0)}
+                          </div>
+                          <div>
+                             <h3 className="text-xl font-bold text-white">{myOffice?.name}</h3>
+                             <p className="text-indigo-300 font-mono text-sm">{myOffice?.handle}</p>
+                             <p className="text-slate-400 text-xs flex items-center gap-1 mt-1"><MapPin size={10} /> {myOffice?.location}</p>
+                          </div>
+                       </div>
+                       <div className="flex gap-3">
+                          <button className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-sm font-medium">
+                            Editar Perfil
+                          </button>
+                       </div>
+                    </div>
+
+                    {/* Membros */}
+                    <div>
+                       <h4 className="text-sm font-medium text-slate-300 mb-3 flex items-center gap-2"><Users size={16} /> Equipe</h4>
+                       <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                          <div className="p-4 flex items-center justify-between border-b border-white/5">
+                             <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-xs font-bold text-white">
+                                   VC
+                                </div>
+                                <div>
+                                   <p className="text-sm text-white font-medium">Você (Admin)</p>
+                                   <p className="text-xs text-slate-500">{user?.email}</p>
+                                </div>
+                             </div>
+                             <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">Ativo</span>
+                          </div>
+                          
+                          {/* Convite de Membro */}
+                          <div className="p-4 bg-black/20 border-t border-white/5">
+                             <div className="flex gap-3 items-center">
+                                <div className="relative flex-1">
+                                    <AtSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Convidar usuário por @handle"
+                                        value={inviteUserHandle}
+                                        onChange={(e) => setInviteUserHandle(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                                    />
+                                </div>
+                                <button 
+                                    onClick={handleInviteUser}
+                                    disabled={!inviteUserHandle}
+                                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 disabled:cursor-not-allowed text-white text-xs rounded-lg font-medium transition-colors"
+                                >
+                                    Enviar Convite
+                                </button>
+                             </div>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+               )}
              </div>
            )}
 

@@ -2,7 +2,13 @@
 import { CaseStatus, Client, FinancialRecord, LegalCase, Office, Priority, Task, Lead } from '../types';
 
 export const MOCK_OFFICES: Office[] = [
-  { id: '1', name: 'Advocacia Silva & Associados', location: 'São Paulo - SP' },
+  { 
+    id: '1', 
+    name: 'Advocacia Silva & Associados', 
+    location: 'São Paulo - SP',
+    handle: '@silvaassociados',
+    ownerId: 'u1'
+  },
 ];
 
 // Helper para datas relativas

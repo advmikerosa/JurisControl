@@ -80,12 +80,12 @@ export const ClientDetails: React.FC = () => {
              </button>
           </div>
         </div>
-        <div className="px-8 pb-8">
+        <div className="px-8 pb-8 relative z-10">
           <div className="flex flex-col md:flex-row gap-6 -mt-12 items-start">
-            <div className="w-24 h-24 rounded-full border-4 border-[#0f172a] bg-slate-800 overflow-hidden shadow-xl">
+            <div className="w-24 h-24 rounded-full border-4 border-[#0f172a] bg-slate-800 overflow-hidden shadow-xl shrink-0">
               <img src={clientData.avatarUrl} alt={clientData.name} className="w-full h-full object-cover" />
             </div>
-            <div className="flex-1 pt-14 md:pt-2">
+            <div className="flex-1 pt-14 md:pt-12">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                 <div>
                    <h1 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -100,7 +100,7 @@ export const ClientDetails: React.FC = () => {
                      {clientData.type === 'PJ' ? `CNPJ: ${clientData.cnpj}` : `CPF: ${clientData.cpf}`}
                    </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 mt-4 md:mt-0">
                    <button onClick={handleNewCase} className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                      <Scale size={16} /> Novo Processo
                    </button>

@@ -27,6 +27,7 @@ export const Clients: React.FC = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,7 +44,19 @@ export const Clients: React.FC = () => {
   });
 
   useEffect(() => {
-    setClients(storageService.getClients());
+    const loadClients = async () => {
+      setIsLoading(true);
+      try {
+        const data = await storageService.getClients();
+        setClients(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Failed to load clients", error);
+        setClients([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadClients();
   }, []);
 
   const handleInputChange = (field: string, value: string) => {
@@ -66,7 +79,7 @@ export const Clients: React.FC = () => {
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const handleCreateClient = (e: React.FormEvent) => {
+  const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name && !formData.corporateName) {
       addToast('Nome/Razão Social obrigatório.', 'error');
@@ -91,8 +104,9 @@ export const Clients: React.FC = () => {
       corporateName: newClientType === 'PJ' ? formData.corporateName : undefined
     };
     
-    storageService.saveClient(newClient);
-    setClients(storageService.getClients());
+    await storageService.saveClient(newClient);
+    const updatedClients = await storageService.getClients();
+    setClients(updatedClients);
     
     addToast('Cliente cadastrado com sucesso!', 'success');
     setIsModalOpen(false);
@@ -109,6 +123,10 @@ export const Clients: React.FC = () => {
       default: return 'text-slate-400 bg-slate-500/10';
     }
   };
+
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-64 text-slate-500">Carregando clientes...</div>;
+  }
 
   return (
     <div className="space-y-8 pb-20">

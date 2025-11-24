@@ -12,10 +12,13 @@ export const Documents: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    setDocs(storageService.getDocuments());
+    const loadDocs = async () => {
+      setDocs(await storageService.getDocuments());
+    };
+    loadDocs();
   }, []);
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     // Simulação de upload que cria um registro no banco
     const fileNames = ['Contrato Honorários.pdf', 'Procuração Geral.docx', 'Declaração de Hipossuficiência.pdf', 'Identidade.png'];
     const randomName = fileNames[Math.floor(Math.random() * fileNames.length)];
@@ -29,15 +32,15 @@ export const Documents: React.FC = () => {
       category: 'Geral'
     };
     
-    storageService.saveDocument(newDoc);
-    setDocs(storageService.getDocuments());
+    await storageService.saveDocument(newDoc);
+    setDocs(await storageService.getDocuments());
     addToast('Documento enviado com sucesso!', 'success');
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Deseja excluir este arquivo?')) {
-      storageService.deleteDocument(id);
-      setDocs(storageService.getDocuments());
+      await storageService.deleteDocument(id);
+      setDocs(await storageService.getDocuments());
       addToast('Documento excluído.', 'info');
     }
   };

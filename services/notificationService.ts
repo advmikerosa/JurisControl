@@ -1,9 +1,29 @@
+import { AppSettings } from '../types';
 
-import { storageService } from './storageService';
+export type NotificationType = 'info' | 'success' | 'warning' | 'error';
+
+export interface SystemNotification {
+  id: string;
+  title: string;
+  body: string;
+  type: NotificationType;
+  read: boolean;
+  timestamp: Date;
+}
+
+type NotificationListener = (notification: SystemNotification) => void;
 
 class NotificationService {
-  
-  // Play a system sound using Web Audio API (no external assets needed)
+  private listeners: NotificationListener[] = [];
+
+  // Register a listener to update React State
+  public subscribe(listener: NotificationListener) {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
+  }
+
   private playSound() {
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -31,44 +51,79 @@ class NotificationService {
     }
   }
 
-  // Send notification based on user settings
-  public notify(title: string, body: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') {
-    const settings = storageService.getSettings();
+  private async simulateEmailDispatch(title: string, body: string) {
+    // Em um cenário real, isso chamaria uma API de backend (ex: SendGrid, AWS SES)
+    console.group('📧 [Simulação de E-mail Enviado]');
+    console.log(`To: usuario@juriscontrol.com`);
+    console.log(`Subject: ${title}`);
+    console.log(`Body: ${body}`);
+    console.groupEnd();
+  }
 
-    // 1. System Sound
-    if (settings.notifications.sound) {
+  // Send notification based on user settings
+  public notify(title: string, body: string, type: NotificationType = 'info') {
+    // FIX: Avoid circular dependency by reading directly from storage instead of importing storageService
+    let settings = { email: true, desktop: true, sound: false };
+    try {
+        const stored = localStorage.getItem('@JurisControl:settings');
+        if (stored) {
+            const parsed = JSON.parse(stored) as AppSettings;
+            if (parsed.notifications) settings = parsed.notifications;
+        }
+    } catch (e) {
+        console.warn("Failed to read notification settings", e);
+    }
+
+    // Create internal notification object
+    const newNotification: SystemNotification = {
+      id: Date.now().toString() + Math.random().toString().slice(2,5),
+      title,
+      body,
+      type,
+      read: false,
+      timestamp: new Date()
+    };
+
+    // 1. Notify React Subscribers (In-App Panel)
+    this.listeners.forEach(listener => listener(newNotification));
+
+    // 2. System Sound
+    if (settings.sound) {
       this.playSound();
     }
 
-    // 2. Desktop Notification
-    if (settings.notifications.desktop) {
+    // 3. Desktop Notification
+    if (settings.desktop) {
       if (Notification.permission === 'granted') {
         new Notification(title, {
           body,
           icon: '/vite.svg', // Fallback icon
           tag: 'juriscontrol-notification'
         });
+      } else if (Notification.permission !== 'denied') {
+        // Try to request permission if not explicitly denied yet
+        this.requestDesktopPermission().then(granted => {
+          if (granted) {
+            new Notification(title, { body, icon: '/vite.svg' });
+          }
+        });
       }
     }
 
-    // 3. Email Notification (Simulation)
-    if (settings.notifications.email) {
-      console.log(`[MOCK EMAIL SERVICE] Sending email to user: Subject: ${title} | Body: ${body}`);
-      // In a real app, this would call an API endpoint.
-      // We can trigger a specific toast or just log it for this demo.
+    // 4. Email Notification
+    if (settings.email) {
+      this.simulateEmailDispatch(title, body);
     }
   }
 
-  public requestDesktopPermission() {
+  public async requestDesktopPermission(): Promise<boolean> {
     if (!('Notification' in window)) {
-      alert('Este navegador não suporta notificações de desktop.');
-      return;
+      console.warn('Este navegador não suporta notificações de desktop.');
+      return false;
     }
-    Notification.requestPermission().then((permission) => {
-      if (permission === 'granted') {
-        new Notification('JurisControl', { body: 'Notificações ativadas com sucesso!' });
-      }
-    });
+    
+    const permission = await Notification.requestPermission();
+    return permission === 'granted';
   }
 }
 

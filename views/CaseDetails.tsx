@@ -25,21 +25,21 @@ export const CaseDetails: React.FC = () => {
       setLoading(true);
       if (id) {
         try {
-          const cases = await storageService.getCases();
-          const foundCase = cases.find(c => c.id === id);
+          // PERFORMANCE: Use specialized methods to fetch single record and related data
+          const [foundCase, caseTasks, caseFin, caseDocs] = await Promise.all([
+            storageService.getCaseById(id),
+            storageService.getTasksByCaseId(id),
+            storageService.getFinancialsByCaseId(id),
+            storageService.getDocumentsByCaseId(id)
+          ]);
           
           if (foundCase) {
             setCaseData(foundCase);
-            // Na vida real, filtraria por caseId diretamente no serviço
-            const [allTasks, allFin, allDocs] = await Promise.all([
-              storageService.getTasks(),
-              storageService.getFinancials(),
-              storageService.getDocuments()
-            ]);
-            
-            setTasks(allTasks.filter(t => t.caseId === id || (foundCase.title && t.title.includes(foundCase.title)))); 
-            setFinancials(allFin.filter(f => f.caseId === id || (foundCase.title && f.title.includes(foundCase.title))));
-            setDocuments(allDocs.filter(d => d.caseId === id));
+            setTasks(caseTasks); 
+            setFinancials(caseFin);
+            setDocuments(caseDocs);
+          } else {
+            addToast("Processo não encontrado.", "error");
           }
         } catch (error) {
           console.error("Error loading case details:", error);

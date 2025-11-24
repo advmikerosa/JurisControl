@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, User as UserIcon, Check } from 'lucide-react';
+import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { Logo } from '../components/Logo';
 
@@ -18,6 +19,7 @@ export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [oab, setOab] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,15 +31,22 @@ export const Login: React.FC = () => {
         if (!email || !password) throw new Error('Preencha todos os campos.');
         await login(email, password);
         addToast('Login realizado com sucesso!', 'success');
+        navigate('/');
       } else {
         if (!name || !email || !password) throw new Error('Preencha todos os campos.');
         if (password !== confirmPassword) throw new Error('As senhas não coincidem.');
         if (password.length < 6) throw new Error('A senha deve ter no mínimo 6 caracteres.');
         
-        await register(name, email, password);
-        addToast('Conta criada com sucesso! Bem-vindo.', 'success');
+        const needsVerification = await register(name, email, password, oab);
+        
+        if (needsVerification) {
+           // Redireciona para a página de confirmação passando o e-mail
+           navigate('/confirm-email', { state: { email } });
+        } else {
+           addToast('Conta criada e logada!', 'success');
+           navigate('/');
+        }
       }
-      navigate('/');
     } catch (err: any) {
       addToast(err.message || 'Ocorreu um erro.', 'error');
     } finally {
@@ -93,25 +102,47 @@ export const Login: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <AnimatePresence mode="wait">
             {mode === 'register' && (
-              <motion.div
-                key="name-field"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-2 overflow-hidden"
-              >
-                <label className="text-xs font-medium text-slate-300 ml-1">Nome Completo</label>
-                <div className="relative">
-                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                  <input 
-                    type="text" 
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-colors"
-                    placeholder="Dr. João Silva"
-                  />
-                </div>
-              </motion.div>
+              <>
+                <motion.div
+                  key="name-field"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2 overflow-hidden"
+                >
+                  <label className="text-xs font-medium text-slate-300 ml-1">Nome Completo</label>
+                  <div className="relative">
+                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                    <input 
+                      type="text" 
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-colors"
+                      placeholder="Dr. João Silva"
+                    />
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  key="oab-field"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2 overflow-hidden"
+                >
+                  <label className="text-xs font-medium text-slate-300 ml-1">Número OAB (Opcional)</label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                    <input 
+                      type="text" 
+                      value={oab}
+                      onChange={(e) => setOab(e.target.value.toUpperCase())}
+                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-colors"
+                      placeholder="UF/000.000"
+                    />
+                  </div>
+                </motion.div>
+              </>
             )}
           </AnimatePresence>
 

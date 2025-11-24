@@ -1,3 +1,5 @@
+
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthProvider as AuthProviderType } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
@@ -7,7 +9,7 @@ interface AuthContextData {
   isAuthenticated: boolean;
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string, oab?: string) => Promise<boolean>; // Retorna true se precisar de verificação de email
   socialLogin: (provider: AuthProviderType) => Promise<void>;
   updateProfile: (data: Partial<User>) => void;
   logout: () => void;
@@ -23,18 +25,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Check current session
+    let mounted = true;
+
     const checkSession = async () => {
       if (isSupabaseConfigured && supabase) {
+        // PERFORMANCE: Use getUser() instead of getSession() for stricter security,
+        // but getSession is faster for checking local state initially.
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          mapSupabaseUserToContext(session.user);
-        } else {
-          setUser(null);
-          setIsAuthenticated(false);
+        
+        if (mounted) {
+            if (session?.user) {
+              mapSupabaseUserToContext(session.user);
+            } else {
+              setUser(null);
+              setIsAuthenticated(false);
+            }
+            setIsLoading(false);
         }
         
         // Listen for changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+          if (!mounted) return;
           if (session?.user) {
              mapSupabaseUserToContext(session.user);
           } else {
@@ -44,20 +55,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsLoading(false);
         });
 
-        setIsLoading(false);
         return () => subscription.unsubscribe();
       } else {
         // Fallback LocalStorage (Demo Mode)
         const storedUser = localStorage.getItem('@JurisControl:user');
-        if (storedUser) {
+        if (storedUser && mounted) {
           setUser(JSON.parse(storedUser));
           setIsAuthenticated(true);
         }
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     };
 
     checkSession();
+    return () => { mounted = false; };
   }, []);
 
   const mapSupabaseUserToContext = (sbUser: any) => {
@@ -65,11 +76,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const mappedUser: User = {
       id: sbUser.id,
       name: meta.full_name || meta.name || 'Usuário',
+      username: meta.username || '',
       email: sbUser.email || '',
       avatar: meta.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(meta.full_name || 'User')}&background=6366f1&color=fff`,
       provider: sbUser.app_metadata?.provider || 'email',
-      offices: ['default'],
-      currentOfficeId: 'default',
+      offices: meta.offices || [],
+      currentOfficeId: meta.currentOfficeId,
       twoFactorEnabled: false,
       emailVerified: !!sbUser.email_confirmed_at,
       phone: meta.phone || '',
@@ -92,24 +104,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (name: string, email: string, password: string) => {
+  const register = async (name: string, email: string, password: string, oab?: string): Promise<boolean> => {
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             full_name: name,
-            role: 'Advogado'
+            role: 'Advogado',
+            oab: oab || '',
+            username: '@' + name.toLowerCase().replace(/\s+/g, '') // Basic generation for supabase
           }
         }
       });
       if (error) throw new Error(error.message);
+      
+      // Se o Supabase estiver configurado para confirmar email, a sessão pode vir nula ou usuário identities vazio
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+         throw new Error('Este email já está cadastrado.');
+      }
+      
+      // Se não tem sessão ativa logo após o cadastro, significa que precisa confirmar email
+      return !data.session;
     } else {
-      const user = await authMockService.register(name, email, password);
-      setUser(user);
-      setIsAuthenticated(true);
-      localStorage.setItem('@JurisControl:user', JSON.stringify(user));
+      const user = await authMockService.register(name, email, password, oab);
+      // Em modo mock, NÃO loga automaticamente para simular confirmação de e-mail (ou apenas retorna true)
+      
+      // Armazenamos o usuário "pendente" ou apenas simulamos que foi criado no "backend"
+      // Para fins de demo, vamos assumir que o login subsequente funcionará com as credenciais criadas.
+      
+      // IMPORTANTE: Para o fluxo de "novo usuário sem escritório", o authMockService.register
+      // já retorna um usuário com offices: [] e username gerado.
+      return true; 
     }
   };
 
@@ -144,6 +171,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data.avatar) updates.avatar_url = data.avatar;
         if (data.phone) updates.phone = data.phone;
         if (data.oab) updates.oab = data.oab;
+        if (data.username) updates.username = data.username;
+        
+        // Escritório
+        if (data.offices) updates.offices = data.offices;
+        if (data.currentOfficeId) updates.currentOfficeId = data.currentOfficeId;
 
         const { error } = await supabase.auth.updateUser({
             data: updates

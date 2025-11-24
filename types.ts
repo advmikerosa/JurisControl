@@ -13,6 +13,28 @@ export enum Priority {
   LOW = 'Baixa',
 }
 
+export type LegalCategory = 
+  | 'Administrativo' 
+  | 'Cível' 
+  | 'Comercial/Empresarial' 
+  | 'Consumidor' 
+  | 'Família' 
+  | 'Trabalhista' 
+  | 'Imobiliário' 
+  | 'Tributário' 
+  | 'Penal' 
+  | 'Previdenciário' 
+  | 'Outro';
+
+export type CasePhase = 
+  | 'Distributivo' 
+  | 'Conhecimento' 
+  | 'Instrução' 
+  | 'Julgamento' 
+  | 'Recurso' 
+  | 'Execução' 
+  | 'Encerrado';
+
 export type ClientType = 'PF' | 'PJ';
 export type ClientStatus = 'Ativo' | 'Inativo' | 'Sob Análise' | 'Em Litígio' | 'Lead';
 
@@ -105,12 +127,22 @@ export interface LegalCase {
   title: string;
   client: Client; // Referência ao cliente completo
   status: CaseStatus;
+  category?: LegalCategory; // Novo campo
+  phase?: CasePhase; // Novo campo
+  
   nextHearing?: string;
+  distributionDate?: string; // Novo campo
+  
   value: number;
   responsibleLawyer: string;
+  
+  court?: string; // Vara/Tribunal
+  judge?: string; // Novo campo
+  opposingParty?: string; // Novo campo
+  
+  description?: string; // Observações iniciais
   lastUpdate?: string; // Para automação de arquivamento
   movements?: CaseMovement[]; // Histórico do processo
-  court?: string; // Vara/Tribunal
   userId?: string;
 }
 
@@ -124,6 +156,8 @@ export interface Task {
   description?: string;
   caseId?: string; // Vínculo com processo
   caseTitle?: string; // Cache do título para display
+  clientId?: string; // Vínculo direto com cliente
+  clientName?: string; // Cache do nome do cliente
   userId?: string;
 }
 
@@ -151,7 +185,12 @@ export interface FinancialRecord {
 export interface Office {
   id: string;
   name: string;
+  handle: string; // ex: @silvaadvocacia
+  ownerId: string; // ID do usuário dono/gerente
   location: string;
+  members?: string[]; // IDs dos membros
+  logoUrl?: string;
+  createdAt?: string;
 }
 
 // Auth Types
@@ -160,6 +199,7 @@ export type AuthProvider = 'email' | 'google' | 'apple' | 'microsoft';
 export interface User {
   id: string;
   name: string;
+  username?: string; // ex: @drjoao
   email: string;
   avatar: string;
   provider: AuthProvider;
@@ -254,4 +294,23 @@ export interface Lead {
   history: ClientInteraction[]; // Reusing interaction type
   proposals: Proposal[];
   tasks: SalesTask[];
+}
+
+// Dashboard Aggregated Data
+export interface DashboardData {
+  counts: {
+    activeCases: number;
+    wonCases: number;
+    pendingCases: number;
+    hearings: number;
+    highPriorityTasks: number;
+  };
+  charts: {
+    caseDistribution: { name: string; value: number; color: string }[];
+  };
+  lists: {
+    upcomingHearings: LegalCase[];
+    todaysAgenda: { type: 'task' | 'hearing'; title: string; sub: string; id: string }[];
+    recentMovements: { id: string; caseId: string; caseTitle: string; description: string; date: string; type: string }[];
+  };
 }

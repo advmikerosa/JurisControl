@@ -14,5 +14,5 @@ export const supabase = isSupabaseConfigured
   : null;
 
 if (!isSupabaseConfigured) {
-  console.warn("JurisControl: Supabase não configurado. Rodando em modo Offline (LocalStorage).");
+  console.info("JurisControl: Supabase não configurado. Rodando em modo Offline (LocalStorage).");
 }

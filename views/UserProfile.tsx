@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
@@ -24,7 +25,9 @@ import {
   EyeOff,
   Activity,
   Clock,
-  FileText
+  FileText,
+  Loader2,
+  Copy
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ActivityLog, DataRequest } from '../types';
@@ -46,6 +49,7 @@ export const UserProfile: React.FC = () => {
   const { user, updateProfile, logout } = useAuth();
   const { addToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [activeTab, setActiveTab] = useState<'personal' | 'security' | 'preferences' | 'privacy'>('personal');
 
   // Form State
@@ -109,7 +113,20 @@ export const UserProfile: React.FC = () => {
     let finalValue = value;
 
     if (name === 'oab') {
-      finalValue = value.toUpperCase();
+      // Remove tudo que não é letra ou número e converte para maiúsculo
+      let v = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      
+      // Limita a 8 caracteres (2 letras + 6 números) antes da formatação
+      v = v.slice(0, 8);
+
+      // Aplica a máscara UF/000.000
+      // 1. Adiciona barra após as duas primeiras letras se houver número na sequência
+      v = v.replace(/^([A-Z]{2})(\d)/, '$1/$2');
+      // 2. Adiciona ponto após os 3 primeiros dígitos
+      v = v.replace(/(\/\d{3})(\d)/, '$1.$2');
+      
+      finalValue = v;
+      
       // Limpa erro ao digitar se estava com erro
       if (oabError) setOabError('');
     }
@@ -156,7 +173,15 @@ export const UserProfile: React.FC = () => {
   };
 
   const handleVerifyEmail = () => {
-    addToast('Link de verificação enviado para seu e-mail!', 'success');
+    setIsVerifying(true);
+    addToast('Enviando link de verificação...', 'info');
+    
+    // Simula confirmação automática para fins de UX Demo
+    setTimeout(() => {
+       updateProfile({ emailVerified: true });
+       addToast('E-mail verificado com sucesso!', 'success');
+       setIsVerifying(false);
+    }, 2500);
   };
 
   const handleSaveSecurity = (e: React.FormEvent) => {
@@ -183,6 +208,13 @@ export const UserProfile: React.FC = () => {
     }
   };
 
+  const copyUsername = () => {
+     if (user?.username) {
+         navigator.clipboard.writeText(user.username);
+         addToast('Copiado!', 'success');
+     }
+  };
+
   if (!user) return null;
 
   return (
@@ -207,8 +239,11 @@ export const UserProfile: React.FC = () => {
              </div>
              <div className="flex-1 mb-2">
                 <h2 className="text-2xl font-bold text-white">{formData.name}</h2>
+                <div onClick={copyUsername} className="text-indigo-300 font-mono text-sm cursor-pointer hover:text-white flex items-center gap-1 w-fit mb-2" title="Copiar identificador">
+                   {user.username} <Copy size={12} />
+                </div>
                 <div className="flex items-center gap-3">
-                  <p className="text-indigo-400 text-sm flex items-center gap-2">
+                  <p className="text-slate-400 text-sm flex items-center gap-2">
                     {user.role || 'Advogado'} 
                     <span className="w-1 h-1 bg-slate-500 rounded-full"></span>
                     {user.email}
@@ -268,7 +303,7 @@ export const UserProfile: React.FC = () => {
                
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                     <label className="text-xs text-slate-400 font-medium ml-1">Nome Completo / Usuário</label>
+                     <label className="text-xs text-slate-400 font-medium ml-1">Nome Completo</label>
                      <div className="relative">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                         <input 
@@ -292,6 +327,7 @@ export const UserProfile: React.FC = () => {
                           onChange={handleInputChange}
                           onBlur={() => validateOab(formData.oab)}
                           placeholder="UF/000.000"
+                          maxLength={10}
                           className={`w-full bg-white/5 border rounded-lg py-2.5 pl-10 pr-4 text-slate-200 focus:outline-none transition-colors ${
                             oabError ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'
                           }`}
@@ -338,9 +374,18 @@ export const UserProfile: React.FC = () => {
                         <button 
                           type="button"
                           onClick={handleVerifyEmail}
-                          className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-medium transition-colors border border-amber-500/20 mt-2"
+                          disabled={isVerifying}
+                          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-medium transition-colors border border-amber-500/20 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <Send size={12} /> Enviar Link de Verificação
+                          {isVerifying ? (
+                            <>
+                                <Loader2 size={12} className="animate-spin" /> Verificando...
+                            </>
+                          ) : (
+                            <>
+                                <Send size={12} /> Enviar Link de Verificação
+                            </>
+                          )}
                         </button>
                      )}
                   </div>
