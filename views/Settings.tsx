@@ -1,4 +1,7 @@
 
+
+
+
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
@@ -7,7 +10,7 @@ import { storageService } from '../services/storageService';
 import { notificationService } from '../services/notificationService';
 import { Modal } from '../components/ui/Modal';
 import { OfficeEditModal } from '../components/OfficeEditModal';
-import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2 } from 'lucide-react';
+import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink } from 'lucide-react';
 import { AppSettings, Office } from '../types';
 
 export const Settings: React.FC = () => {
@@ -230,6 +233,32 @@ export const Settings: React.FC = () => {
                             >
                                 <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow-md transform transition-transform duration-300 ${settings.general.compactMode ? 'translate-x-5' : 'translate-x-0'}`}></div>
                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Integration DataJud */}
+                <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2">
+                        <Key size={20} className="text-emerald-400" /> Integrações
+                    </h3>
+                    <div className="bg-white/5 p-4 rounded-xl border border-white/10">
+                        <div className="flex justify-between items-start mb-2">
+                            <h4 className="text-sm font-bold text-white">DataJud (CNJ)</h4>
+                            <a href="https://datajud-wiki.cnj.jus.br/api-publica/acesso/" target="_blank" rel="noreferrer" className="text-xs text-indigo-400 hover:underline flex items-center gap-1">
+                                Obter Chave <ExternalLink size={10} />
+                            </a>
+                        </div>
+                        <p className="text-xs text-slate-400 mb-3">Insira sua chave de API pública do CNJ para habilitar a busca automática de processos e atualizações.</p>
+                        <div className="relative">
+                            <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                            <input 
+                                type="password" 
+                                value={settings.general.dataJudApiKey || ''}
+                                onChange={(e) => updateSetting('general', 'dataJudApiKey', e.target.value)}
+                                className="w-full bg-black/20 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-slate-200 focus:border-indigo-500 focus:outline-none placeholder:text-slate-600"
+                                placeholder="Cole sua API Key aqui..."
+                            />
                         </div>
                     </div>
                 </div>

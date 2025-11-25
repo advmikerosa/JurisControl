@@ -263,6 +263,7 @@ export interface AppSettings {
     language: 'pt-BR' | 'en-US' | 'es-ES';
     dateFormat: 'DD/MM/YYYY' | 'MM/DD/YYYY';
     compactMode: boolean;
+    dataJudApiKey?: string; // Novo campo para integração CNJ
   };
   notifications: {
     email: boolean;
