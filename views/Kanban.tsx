@@ -223,17 +223,17 @@ export const Kanban: React.FC = () => {
         storageService.getCases(),
         storageService.getClients()
       ]);
-      setTasks(loadedTasks);
-      setAvailableCases(loadedCases);
-      setAvailableClients(loadedClients);
+      setTasks(loadedTasks || []);
+      setAvailableCases(loadedCases || []);
+      setAvailableClients(loadedClients || []);
     };
     loadData();
   }, []);
 
   const updateData = async () => {
-    setTasks(await storageService.getTasks());
-    setAvailableCases(await storageService.getCases());
-    setAvailableClients(await storageService.getClients());
+    setTasks(await storageService.getTasks() || []);
+    setAvailableCases(await storageService.getCases() || []);
+    setAvailableClients(await storageService.getClients() || []);
   };
 
   const handleTaskDrop = async (taskId: string, newStatus: Task['status']) => {
@@ -403,9 +403,9 @@ export const Kanban: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const todo = tasks.filter(t => t.status === 'A Fazer');
-  const inProgress = tasks.filter(t => t.status === 'Em Andamento');
-  const done = tasks.filter(t => t.status === 'Concluído');
+  const todo = (tasks || []).filter(t => t.status === 'A Fazer');
+  const inProgress = (tasks || []).filter(t => t.status === 'Em Andamento');
+  const done = (tasks || []).filter(t => t.status === 'Concluído');
 
   return (
     <div className="h-full flex flex-col space-y-6 pb-6">

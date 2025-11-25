@@ -257,6 +257,35 @@ export interface User {
   role?: string; // ex: "Sócio Sênior" (apenas visual, role real está em OfficeMember)
 }
 
+// Email & Notification Types
+export interface EmailSettings {
+  enabled: boolean;
+  frequency: 'immediate' | 'hourly' | 'daily';
+  categories: {
+    deadlines: boolean;
+    processes: boolean;
+    events: boolean;
+    financial: boolean;
+    marketing: boolean; // Opt-out LGPD
+  };
+  deadlineAlerts: {
+    sevenDays: boolean;
+    threeDays: boolean;
+    oneDay: boolean;
+    onDueDate: boolean;
+  };
+}
+
+export interface EmailLog {
+  id: string;
+  recipient: string;
+  subject: string;
+  templateType: string;
+  status: 'Sent' | 'Failed' | 'Queued';
+  sentAt: string;
+  openedAt?: string; // Mocking open tracking
+}
+
 // Settings Types
 export interface AppSettings {
   general: {
@@ -271,6 +300,7 @@ export interface AppSettings {
     sound: boolean;
     dailyDigest: boolean;
   };
+  emailPreferences?: EmailSettings; // Detailed email settings
   automation: {
     autoArchiveWonCases: boolean;
     autoSaveDrafts: boolean;

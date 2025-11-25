@@ -1,7 +1,9 @@
+
 import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, ChangeLogEntry } from '../types';
 import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS } from './mockData';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { notificationService } from './notificationService';
+import { emailService } from './emailService';
 
 const TABLE_NAMES = {
   CLIENTS: 'clients',
@@ -21,6 +23,7 @@ const LOCAL_KEYS = {
   DOCUMENTS: '@JurisControl:documents',
   OFFICES: '@JurisControl:offices',
   LAST_CHECK: '@JurisControl:lastCheck',
+  SETTINGS: '@JurisControl:settings',
 };
 
 export const MOCK_OFFICES: Office[] = [
@@ -88,6 +91,13 @@ class StorageService {
     } catch { return 'Usuário'; }
   }
 
+  private getCurrentUser(): User | null {
+    try {
+      const stored = localStorage.getItem('@JurisControl:user');
+      return stored ? JSON.parse(stored) : null;
+    } catch { return null; }
+  }
+
   // --- Clientes ---
   async getClients(): Promise<Client[]> {
     if (isSupabaseConfigured && supabase) {
@@ -98,7 +108,7 @@ class StorageService {
           .order('name');
         
         if (error) throw error;
-        return data as Client[];
+        return (data || []) as Client[];
       } catch (error) { 
         console.error("Supabase Error:", error); 
         return []; 
@@ -113,7 +123,6 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
       const { id, documents, history, alerts, ...rest } = client;
-      // Ensure fields match DB schema types
       const payload = { ...rest, user_id: userId };
       
       if (id && !id.startsWith('cli-')) {
@@ -143,7 +152,6 @@ class StorageService {
   }
 
   async deleteClient(id: string) {
-    // Integridade Referencial - QA Check 3.1
     const cases = await this.getCases();
     const hasActiveCases = cases.some(c => c.client.id === id && c.status !== CaseStatus.ARCHIVED);
     
@@ -173,7 +181,7 @@ class StorageService {
             client:clients(id, name, type, avatarUrl)
           `);
         if (error) throw error;
-        return data as LegalCase[];
+        return (data || []) as LegalCase[];
       } catch { return []; }
     } else {
       return JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]');
@@ -239,11 +247,10 @@ class StorageService {
       const { data, count, error } = await query.range(start, end).order('lastUpdate', { ascending: false });
       
       if (error) throw error;
-      return { data: data as LegalCase[], total: count || 0 };
+      return { data: (data || []) as LegalCase[], total: count || 0 };
     } else {
       let allCases = JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]') as LegalCase[];
       
-      // Search Logic
       if (searchTerm) {
         const lowerSearch = searchTerm.toLowerCase();
         allCases = allCases.filter(c => 
@@ -253,7 +260,6 @@ class StorageService {
         );
       }
       
-      // Filters
       if (statusFilter && statusFilter !== 'Todos') {
         allCases = allCases.filter(c => c.status === statusFilter);
       }
@@ -261,11 +267,9 @@ class StorageService {
         allCases = allCases.filter(c => c.category === categoryFilter);
       }
 
-      // Safe Date Range Filter (Using String comparison for ISO dates)
       if (dateRange && dateRange.start && dateRange.end) {
         allCases = allCases.filter(c => {
            if (!c.lastUpdate) return false;
-           // Handle ISO dates safely
            const dateStr = c.lastUpdate.split('T')[0];
            return dateStr >= dateRange.start && dateStr <= dateRange.end;
         });
@@ -284,7 +288,6 @@ class StorageService {
     legalCase.lastUpdate = new Date().toISOString();
     const isNew = !legalCase.id || legalCase.id.startsWith('case-');
     
-    // --- Change Log Logic ---
     if (!isNew) {
       const oldCase = await this.getCaseById(legalCase.id);
       if (oldCase) {
@@ -349,13 +352,11 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
       const { id, client, ...rest } = legalCase;
-      // Clean payload for Supabase
       const payload: any = {
         ...rest,
         user_id: userId,
         client_id: client.id, 
       };
-      // Remove undefined fields
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
       if (id && !id.startsWith('case-')) {
@@ -412,7 +413,7 @@ class StorageService {
         const { data } = await supabase
           .from(TABLE_NAMES.TASKS)
           .select('id, title, dueDate, priority, status, assignedTo, caseId, clientId, clientName, description');
-        return data as Task[];
+        return (data || []) as Task[];
       } catch { return []; }
     } else {
       return JSON.parse(localStorage.getItem(LOCAL_KEYS.TASKS) || '[]');
@@ -422,7 +423,7 @@ class StorageService {
   async getTasksByCaseId(caseId: string): Promise<Task[]> {
     if (isSupabaseConfigured && supabase) {
         const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('caseId', caseId);
-        return data as Task[];
+        return (data || []) as Task[];
     } else {
         const tasks = await this.getTasks();
         return tasks.filter(t => t.caseId === caseId);
@@ -466,7 +467,7 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('id, title, amount, type, category, status, dueDate, paymentDate, clientId, clientName, installment');
-        return data as FinancialRecord[];
+        return (data || []) as FinancialRecord[];
       } catch { return []; }
     } else {
       return JSON.parse(localStorage.getItem(LOCAL_KEYS.FINANCIAL) || '[]');
@@ -476,7 +477,7 @@ class StorageService {
   async getFinancialsByCaseId(caseId: string): Promise<FinancialRecord[]> {
     if (isSupabaseConfigured && supabase) {
         const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('caseId', caseId);
-        return data as FinancialRecord[];
+        return (data || []) as FinancialRecord[];
     } else {
         const fins = await this.getFinancials();
         return fins.filter(f => f.caseId === caseId);
@@ -511,7 +512,7 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*');
-        return data as SystemDocument[];
+        return (data || []) as SystemDocument[];
       } catch { return []; }
     } else {
       return JSON.parse(localStorage.getItem(LOCAL_KEYS.DOCUMENTS) || '[]');
@@ -521,7 +522,7 @@ class StorageService {
   async getDocumentsByCaseId(caseId: string): Promise<SystemDocument[]> {
     if (isSupabaseConfigured && supabase) {
         const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('caseId', caseId);
-        return data as SystemDocument[];
+        return (data || []) as SystemDocument[];
     } else {
         const docs = await this.getDocuments();
         return docs.filter(d => d.caseId === caseId);
@@ -673,17 +674,25 @@ class StorageService {
 
   getSettings(): AppSettings {
       try {
-          const s = localStorage.getItem('@JurisControl:settings');
-          return s ? JSON.parse(s) : {
-            general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false },
-            notifications: { email: true, desktop: true, sound: false, dailyDigest: false },
-            automation: { autoArchiveWonCases: false, autoSaveDrafts: true }
+          const s = localStorage.getItem(LOCAL_KEYS.SETTINGS);
+          const parsed = s ? JSON.parse(s) : {};
+          
+          return {
+            general: parsed.general || { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false },
+            notifications: parsed.notifications || { email: true, desktop: true, sound: false, dailyDigest: false },
+            emailPreferences: parsed.emailPreferences || {
+                enabled: false,
+                frequency: 'immediate',
+                categories: { deadlines: true, processes: true, events: true, financial: false, marketing: true },
+                deadlineAlerts: { sevenDays: true, threeDays: true, oneDay: true, onDueDate: true }
+            },
+            automation: parsed.automation || { autoArchiveWonCases: false, autoSaveDrafts: true }
           };
       } catch { return {} as any; }
   }
 
   saveSettings(settings: AppSettings) {
-      localStorage.setItem('@JurisControl:settings', JSON.stringify(settings));
+      localStorage.setItem(LOCAL_KEYS.SETTINGS, JSON.stringify(settings));
   }
 
   // --- Optimized Dashboard Data (O(n) complexity) ---
@@ -770,7 +779,6 @@ class StorageService {
 
     const results: SearchResult[] = [];
 
-    // Filter Clients
     for (const c of clients) {
         if (c.name.toLowerCase().includes(lowerQuery) || 
             c.email.toLowerCase().includes(lowerQuery) || 
@@ -786,7 +794,6 @@ class StorageService {
         }
     }
 
-    // Filter Cases
     for (const c of cases) {
         if (c.title.toLowerCase().includes(lowerQuery) || 
             c.cnj.includes(lowerQuery) || 
@@ -801,7 +808,6 @@ class StorageService {
         }
     }
 
-    // Filter Tasks
     for (const t of tasks) {
         if (t.title.toLowerCase().includes(lowerQuery)) {
             results.push({
@@ -839,38 +845,80 @@ class StorageService {
 
   async checkDeadlines() {
     const lastCheck = localStorage.getItem(LOCAL_KEYS.LAST_CHECK);
-    const todayStr = new Date().toDateString();
+    const today = new Date();
+    const todayStr = today.toDateString();
+    const currentUser = this.getCurrentUser();
+    const settings = this.getSettings();
+
+    // Prevent multiple checks per day (Simulating Cron Job frequency)
     if (lastCheck === todayStr) return;
-
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowPT = tomorrow.toLocaleDateString('pt-BR'); 
-
-    const isTomorrow = (dateStr: string) => {
-        if (!dateStr) return false;
-        if (dateStr === tomorrowPT) return true;
-        try {
-           if (dateStr.includes('-')) {
-             const [y, m, d] = dateStr.split('-');
-             if (parseInt(d) === tomorrow.getDate() && parseInt(m) === tomorrow.getMonth() + 1 && parseInt(y) === tomorrow.getFullYear()) return true;
-           }
-        } catch (e) { return false; }
-        return false;
-    };
 
     const tasks = await this.getTasks();
     const cases = await this.getCases();
 
+    // --- In-App Notifications ---
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const isDate = (dateStr: string, targetDate: Date) => {
+       if (!dateStr) return false;
+       const [d, m, y] = dateStr.split('/').map(Number); // Assumes PT-BR format from mock
+       if (!d || !m || !y) return false;
+       return d === targetDate.getDate() && m === targetDate.getMonth() + 1 && y === targetDate.getFullYear();
+    };
+
     for (const task of tasks) {
-        if (task.status !== 'Concluído' && isTomorrow(task.dueDate)) {
+        if (task.status !== 'Concluído' && isDate(task.dueDate, tomorrow)) {
             notificationService.notify('Prazo de Tarefa Próximo', `A tarefa "${task.title}" vence amanhã (${task.dueDate}).`, 'warning');
         }
     }
 
     for (const legalCase of cases) {
-        if (legalCase.status === CaseStatus.ACTIVE && legalCase.nextHearing && isTomorrow(legalCase.nextHearing)) {
+        if (legalCase.status === CaseStatus.ACTIVE && legalCase.nextHearing && isDate(legalCase.nextHearing, tomorrow)) {
             notificationService.notify('Audiência Amanhã', `Audiência do processo "${legalCase.title}" agendada para amanhã.`, 'warning');
         }
+    }
+
+    // --- Email Notifications System ---
+    if (currentUser && settings.emailPreferences?.enabled) {
+       const prefs = settings.emailPreferences;
+       
+       if (prefs.categories.deadlines) {
+          for (const task of tasks) {
+             if (task.status === 'Concluído') continue;
+             
+             const [d, m, y] = task.dueDate.split('/').map(Number);
+             const taskDate = new Date(y, m - 1, d);
+             const diffTime = taskDate.getTime() - today.setHours(0,0,0,0); // Normalized today
+             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+             let shouldSend = false;
+             if (diffDays === 7 && prefs.deadlineAlerts.sevenDays) shouldSend = true;
+             if (diffDays === 3 && prefs.deadlineAlerts.threeDays) shouldSend = true;
+             if (diffDays === 1 && prefs.deadlineAlerts.oneDay) shouldSend = true;
+             if (diffDays === 0 && prefs.deadlineAlerts.onDueDate) shouldSend = true;
+
+             if (shouldSend) {
+                // Send simulated email
+                await emailService.sendDeadlineAlert(currentUser, task, diffDays);
+             }
+          }
+       }
+
+       if (prefs.categories.events) {
+          for (const c of cases) {
+             if (!c.nextHearing) continue;
+             const [d, m, y] = c.nextHearing.split('/').map(Number);
+             const hearingDate = new Date(y, m - 1, d);
+             const diffTime = hearingDate.getTime() - today.setHours(0,0,0,0);
+             const diffHours = diffTime / (1000 * 60 * 60);
+
+             // Check 48h and 24h
+             if ((diffHours <= 48 && diffHours > 24) || (diffHours <= 24 && diffHours > 0)) {
+                await emailService.sendHearingReminder(currentUser, c, Math.ceil(diffHours));
+             }
+          }
+       }
     }
 
     localStorage.setItem(LOCAL_KEYS.LAST_CHECK, todayStr);

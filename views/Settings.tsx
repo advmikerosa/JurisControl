@@ -5,6 +5,10 @@
 
 
 
+
+
+
+
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
@@ -12,10 +16,11 @@ import { useToast } from '../context/ToastContext';
 import { storageService } from '../services/storageService';
 import { notificationService } from '../services/notificationService';
 import { dataJudService } from '../services/dataJudService';
+import { emailService } from '../services/emailService';
 import { Modal } from '../components/ui/Modal';
 import { OfficeEditModal } from '../components/OfficeEditModal';
-import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
-import { AppSettings, Office } from '../types';
+import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, XCircle, Mail, Clock, List, Send, Calendar, DollarSign } from 'lucide-react';
+import { AppSettings, Office, EmailLog } from '../types';
 
 export const Settings: React.FC = () => {
   const { logout, user, updateProfile } = useAuth();
@@ -25,9 +30,13 @@ export const Settings: React.FC = () => {
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingKey, setIsTestingKey] = useState(false);
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
   
   // State para Configurações
   const [settings, setSettings] = useState<AppSettings | null>(null);
+
+  // Email Logs
+  const [emailHistory, setEmailHistory] = useState<EmailLog[]>([]);
 
   // State para Escritório
   const [myOffice, setMyOffice] = useState<Office | null>(null);
@@ -46,6 +55,7 @@ export const Settings: React.FC = () => {
   useEffect(() => {
     setSettings(storageService.getSettings());
     loadOfficeData();
+    setEmailHistory(emailService.getEmailHistory());
   }, [user]);
 
   const loadOfficeData = async () => {
@@ -91,6 +101,20 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const handleSendTestEmail = async () => {
+    if (!user) return;
+    setIsSendingTestEmail(true);
+    try {
+      await emailService.sendTestEmail(user);
+      addToast('E-mail de teste enviado. Verifique seu inbox (ou console).', 'success');
+      setEmailHistory(emailService.getEmailHistory());
+    } catch (e) {
+      addToast('Falha ao enviar teste.', 'error');
+    } finally {
+      setIsSendingTestEmail(false);
+    }
+  };
+
   const toggleSetting = (section: keyof AppSettings, key: string) => {
     if (!settings) return;
     
@@ -108,6 +132,23 @@ export const Settings: React.FC = () => {
             [key]: newValue
         }
     });
+  };
+
+  const toggleEmailSetting = (key: string) => {
+      if (!settings?.emailPreferences) return;
+      setSettings({
+          ...settings,
+          emailPreferences: {
+              ...settings.emailPreferences,
+              enabled: key === 'enabled' ? !settings.emailPreferences.enabled : settings.emailPreferences.enabled,
+              categories: key.startsWith('cat_') 
+                ? { ...settings.emailPreferences.categories, [key.replace('cat_', '')]: !settings.emailPreferences.categories[key.replace('cat_', '') as keyof typeof settings.emailPreferences.categories] }
+                : settings.emailPreferences.categories,
+              deadlineAlerts: key.startsWith('alert_')
+                ? { ...settings.emailPreferences.deadlineAlerts, [key.replace('alert_', '')]: !settings.emailPreferences.deadlineAlerts[key.replace('alert_', '') as keyof typeof settings.emailPreferences.deadlineAlerts] }
+                : settings.emailPreferences.deadlineAlerts
+          }
+      });
   };
 
   const updateSetting = (section: keyof AppSettings, key: string, value: any) => {
@@ -217,12 +258,14 @@ export const Settings: React.FC = () => {
         <GlassCard className="p-2 h-fit">
           <nav className="space-y-1">
              <button onClick={() => setActiveTab('general')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${activeTab === 'general' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:bg-white/5'}`}><SettingsIcon size={18} /> Preferências</button>
+             <button onClick={() => setActiveTab('emails')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${activeTab === 'emails' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:bg-white/5'}`}><Mail size={18} /> Notificações E-mail</button>
              <button onClick={() => setActiveTab('office')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${activeTab === 'office' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:bg-white/5'}`}><Building size={18} /> Meu Escritório</button>
              <button onClick={() => setActiveTab('danger')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${activeTab === 'danger' ? 'bg-rose-600/20 text-rose-400' : 'text-slate-400 hover:bg-white/5'}`}><AlertTriangle size={18} /> Zona de Perigo</button>
           </nav>
         </GlassCard>
 
         <GlassCard className="lg:col-span-3 min-h-[400px]">
+           {/* --- GENERAL SETTINGS --- */}
            {activeTab === 'general' && (
              <div className="space-y-8 animate-fade-in">
                 {/* Interface */}
@@ -298,24 +341,12 @@ export const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Notifications */}
+                {/* Notifications (In-App) */}
                 <div className="space-y-4">
                     <h3 className="text-lg font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2">
-                        <Bell size={20} className="text-amber-400" /> Notificações
+                        <Bell size={20} className="text-amber-400" /> Alertas no Sistema
                     </h3>
                     <div className="space-y-3">
-                        <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors">
-                            <div>
-                                <span className="text-sm text-slate-300 block">Notificações por E-mail</span>
-                                <span className="text-xs text-slate-500">Receber alertas de prazos e tarefas.</span>
-                            </div>
-                            <button 
-                                onClick={() => toggleSetting('notifications', 'email')}
-                                className={`relative w-10 h-5 rounded-full transition-colors duration-300 ${settings.notifications.email ? 'bg-emerald-500' : 'bg-slate-700'}`}
-                            >
-                                <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow-md transform transition-transform duration-300 ${settings.notifications.email ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                            </button>
-                        </div>
                         <div className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors">
                             <div>
                                 <span className="text-sm text-slate-300 block">Notificações na Área de Trabalho</span>
@@ -343,40 +374,6 @@ export const Settings: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Automation */}
-                <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2">
-                        <Zap size={20} className="text-blue-400" /> Automação e Sistema
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <div className="bg-white/5 p-4 rounded-xl border border-white/10 flex items-start justify-between gap-4">
-                            <div>
-                                <h4 className="text-sm font-medium text-white flex items-center gap-2"><Archive size={14} /> Auto-Arquivar</h4>
-                                <p className="text-xs text-slate-500 mt-1">Arquivar processos "Ganhos" automaticamente após 30 dias.</p>
-                            </div>
-                            <button 
-                                onClick={() => toggleSetting('automation', 'autoArchiveWonCases')}
-                                className={`relative w-10 h-5 shrink-0 rounded-full transition-colors duration-300 ${settings.automation.autoArchiveWonCases ? 'bg-indigo-500' : 'bg-slate-700'}`}
-                            >
-                                <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow-md transform transition-transform duration-300 ${settings.automation.autoArchiveWonCases ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                            </button>
-                         </div>
-
-                         <div className="bg-white/5 p-4 rounded-xl border border-white/10 flex items-start justify-between gap-4">
-                            <div>
-                                <h4 className="text-sm font-medium text-white flex items-center gap-2"><Save size={14} /> Auto-Save</h4>
-                                <p className="text-xs text-slate-500 mt-1">Salvar rascunho de novos processos enquanto digita.</p>
-                            </div>
-                            <button 
-                                onClick={() => toggleSetting('automation', 'autoSaveDrafts')}
-                                className={`relative w-10 h-5 shrink-0 rounded-full transition-colors duration-300 ${settings.automation.autoSaveDrafts ? 'bg-indigo-500' : 'bg-slate-700'}`}
-                            >
-                                <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow-md transform transition-transform duration-300 ${settings.automation.autoSaveDrafts ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                            </button>
-                         </div>
-                    </div>
-                </div>
-
                 <div className="flex justify-end pt-6">
                     <button 
                         onClick={handleSaveSettings}
@@ -390,6 +387,159 @@ export const Settings: React.FC = () => {
              </div>
            )}
 
+           {/* --- EMAIL NOTIFICATIONS TAB --- */}
+           {activeTab === 'emails' && settings.emailPreferences && (
+             <div className="space-y-8 animate-fade-in">
+                <div className="flex items-center justify-between bg-white/5 p-6 rounded-xl border border-white/10">
+                    <div>
+                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                            <Mail size={20} className="text-blue-400" /> Notificações por E-mail
+                        </h3>
+                        <p className="text-sm text-slate-400 mt-1 max-w-md">
+                            Receba atualizações críticas, avisos de prazos e resumos semanais diretamente na sua caixa de entrada.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className={`text-xs font-bold uppercase ${settings.emailPreferences.enabled ? 'text-emerald-400' : 'text-slate-500'}`}>
+                            {settings.emailPreferences.enabled ? 'Ativado' : 'Desativado'}
+                        </span>
+                        <button 
+                            onClick={() => toggleEmailSetting('enabled')}
+                            className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${settings.emailPreferences.enabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                        >
+                            <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-300 ${settings.emailPreferences.enabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                        </button>
+                    </div>
+                </div>
+
+                {settings.emailPreferences.enabled && (
+                    <>
+                        <div className="space-y-4">
+                            <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2">O que você deseja receber?</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <label className="flex items-center justify-between p-3 bg-slate-900/50 border border-white/10 rounded-lg cursor-pointer hover:border-indigo-500/50 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <Clock size={18} className="text-rose-400" />
+                                        <span className="text-sm text-slate-200">Prazos Processuais</span>
+                                    </div>
+                                    <input type="checkbox" checked={settings.emailPreferences.categories.deadlines} onChange={() => toggleEmailSetting('cat_deadlines')} className="w-4 h-4 accent-indigo-500" />
+                                </label>
+                                <label className="flex items-center justify-between p-3 bg-slate-900/50 border border-white/10 rounded-lg cursor-pointer hover:border-indigo-500/50 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <List size={18} className="text-indigo-400" />
+                                        <span className="text-sm text-slate-200">Movimentações de Processos</span>
+                                    </div>
+                                    <input type="checkbox" checked={settings.emailPreferences.categories.processes} onChange={() => toggleEmailSetting('cat_processes')} className="w-4 h-4 accent-indigo-500" />
+                                </label>
+                                <label className="flex items-center justify-between p-3 bg-slate-900/50 border border-white/10 rounded-lg cursor-pointer hover:border-indigo-500/50 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <Calendar size={18} className="text-emerald-400" />
+                                        <span className="text-sm text-slate-200">Lembrete de Audiências</span>
+                                    </div>
+                                    <input type="checkbox" checked={settings.emailPreferences.categories.events} onChange={() => toggleEmailSetting('cat_events')} className="w-4 h-4 accent-indigo-500" />
+                                </label>
+                                <label className="flex items-center justify-between p-3 bg-slate-900/50 border border-white/10 rounded-lg cursor-pointer hover:border-indigo-500/50 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <DollarSign size={18} className="text-amber-400" />
+                                        <span className="text-sm text-slate-200">Financeiro (Vencimentos)</span>
+                                    </div>
+                                    <input type="checkbox" checked={settings.emailPreferences.categories.financial} onChange={() => toggleEmailSetting('cat_financial')} className="w-4 h-4 accent-indigo-500" />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2">Configuração de Prazos</h4>
+                            <p className="text-xs text-slate-500 mb-2">Escolha com quanta antecedência você quer ser avisado sobre prazos fatais.</p>
+                            <div className="flex flex-wrap gap-3">
+                                <button 
+                                    onClick={() => toggleEmailSetting('alert_sevenDays')}
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${settings.emailPreferences.deadlineAlerts.sevenDays ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-transparent border-white/10 text-slate-500 hover:text-white'}`}
+                                >
+                                    7 Dias Antes
+                                </button>
+                                <button 
+                                    onClick={() => toggleEmailSetting('alert_threeDays')}
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${settings.emailPreferences.deadlineAlerts.threeDays ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-transparent border-white/10 text-slate-500 hover:text-white'}`}
+                                >
+                                    3 Dias Antes
+                                </button>
+                                <button 
+                                    onClick={() => toggleEmailSetting('alert_oneDay')}
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${settings.emailPreferences.deadlineAlerts.oneDay ? 'bg-rose-600 border-rose-500 text-white' : 'bg-transparent border-white/10 text-slate-500 hover:text-white'}`}
+                                >
+                                    1 Dia Antes (24h)
+                                </button>
+                                <button 
+                                    onClick={() => toggleEmailSetting('alert_onDueDate')}
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${settings.emailPreferences.deadlineAlerts.onDueDate ? 'bg-rose-600 border-rose-500 text-white' : 'bg-transparent border-white/10 text-slate-500 hover:text-white'}`}
+                                >
+                                    No Dia do Vencimento
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="pt-6 border-t border-white/10 flex justify-between items-center">
+                            <div>
+                                <h4 className="text-sm font-bold text-white">Testar Configuração</h4>
+                                <p className="text-xs text-slate-500">Envia um e-mail de teste para {user?.email}</p>
+                            </div>
+                            <button 
+                                onClick={handleSendTestEmail}
+                                disabled={isSendingTestEmail}
+                                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-2"
+                            >
+                                {isSendingTestEmail ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                                Enviar Teste
+                            </button>
+                        </div>
+
+                        {emailHistory.length > 0 && (
+                            <div className="mt-8">
+                                <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Histórico de Envios (Recentes)</h4>
+                                <div className="bg-slate-900/30 border border-white/5 rounded-xl overflow-hidden">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-white/5 text-slate-400 font-medium border-b border-white/5">
+                                            <tr>
+                                                <th className="p-3">Assunto</th>
+                                                <th className="p-3">Tipo</th>
+                                                <th className="p-3">Data</th>
+                                                <th className="p-3 text-right">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {emailHistory.map(log => (
+                                                <tr key={log.id}>
+                                                    <td className="p-3 text-white truncate max-w-[200px]">{log.subject}</td>
+                                                    <td className="p-3 text-slate-400">{log.templateType}</td>
+                                                    <td className="p-3 text-slate-500">{log.sentAt}</td>
+                                                    <td className="p-3 text-right">
+                                                        <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">{log.status}</span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end pt-6 border-t border-white/10">
+                            <button 
+                                onClick={handleSaveSettings}
+                                disabled={isSaving}
+                                className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-70"
+                            >
+                                {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                {isSaving ? 'Salvando...' : 'Salvar Preferências'}
+                            </button>
+                        </div>
+                    </>
+                )}
+             </div>
+           )}
+
+           {/* --- OFFICE SETTINGS TAB --- */}
            {activeTab === 'office' && (
              <div className="space-y-8 animate-fade-in">
                <div className="border-b border-white/10 pb-4 mb-6">
@@ -593,6 +743,7 @@ export const Settings: React.FC = () => {
              </div>
            )}
 
+           {/* --- DANGER ZONE TAB --- */}
            {activeTab === 'danger' && (
              <div>
                 <div className="mb-6 border-b border-white/10 pb-4">
