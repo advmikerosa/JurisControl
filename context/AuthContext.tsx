@@ -1,5 +1,4 @@
-
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { User, AuthProvider as AuthProviderType } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
 import { authMockService } from '../services/authMockService';
@@ -144,7 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthenticated(true);
   };
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     if (isSupabaseConfigured && supabase) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message);
@@ -155,9 +154,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('@JurisControl:user', JSON.stringify(user));
       localStorage.setItem('@JurisControl:lastActivity', Date.now().toString());
     }
-  };
+  }, []);
 
-  const register = async (name: string, email: string, password: string, oab?: string): Promise<boolean> => {
+  const register = useCallback(async (name: string, email: string, password: string, oab?: string): Promise<boolean> => {
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -180,9 +179,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await authMockService.register(name, email, password, oab);
       return true; 
     }
-  };
+  }, []);
 
-  const recoverPassword = async (email: string): Promise<boolean> => {
+  const recoverPassword = useCallback(async (email: string): Promise<boolean> => {
     if (isSupabaseConfigured && supabase) {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: window.location.origin + '/#/reset-password',
@@ -192,9 +191,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       return authMockService.recoverPassword(email);
     }
-  };
+  }, []);
 
-  const socialLogin = async (provider: AuthProviderType) => {
+  const socialLogin = useCallback(async (provider: AuthProviderType) => {
     if (isSupabaseConfigured && supabase) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: provider as any,
@@ -207,9 +206,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('@JurisControl:user', JSON.stringify(user));
       localStorage.setItem('@JurisControl:lastActivity', Date.now().toString());
     }
-  };
+  }, []);
 
-  const updateProfile = async (data: Partial<User>) => {
+  const updateProfile = useCallback(async (data: Partial<User>) => {
     setUser(prev => {
         if (!prev) return null;
         const newUser = { ...prev, ...data };
@@ -232,10 +231,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { error } = await supabase.auth.updateUser({ data: updates });
         if (error) console.error("Error updating Supabase profile", error);
     }
-  };
+  }, []);
+
+  // Performance Optimization: Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
+    isAuthenticated,
+    user,
+    login,
+    register,
+    recoverPassword,
+    socialLogin,
+    updateProfile,
+    logout: () => logout(false),
+    isLoading
+  }), [isAuthenticated, user, login, register, recoverPassword, socialLogin, updateProfile, logout, isLoading]);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, register, recoverPassword, socialLogin, updateProfile, logout: () => logout(false), isLoading }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

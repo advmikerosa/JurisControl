@@ -1,4 +1,3 @@
-
 import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, ChangeLogEntry } from '../types';
 import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS } from './mockData';
 import { supabase, isSupabaseConfigured } from './supabase';
@@ -95,7 +94,7 @@ class StorageService {
       try {
         const { data, error } = await supabase
           .from(TABLE_NAMES.CLIENTS)
-          .select('id, name, type, status, email, phone, city, state, avatarUrl, cpf, cnpj, corporateName, createdAt')
+          .select('id, name, type, status, email, phone, city, state, avatarUrl, cpf, cnpj, corporateName, createdAt, tags')
           .order('name');
         
         if (error) throw error;
@@ -111,7 +110,6 @@ class StorageService {
   
   async saveClient(client: Client) {
     const userId = await this.getUserId();
-    const isNew = !client.id || client.id.startsWith('cli-');
 
     if (isSupabaseConfigured && supabase) {
       const { id, ...rest } = client;
@@ -132,6 +130,9 @@ class StorageService {
         if (idx >= 0) {
             list[idx] = client;
             this.logActivity(`Atualizou dados do cliente: ${client.name}`);
+        } else {
+            // Case: ID exists but not found in local storage (corruption?), treat as new or push
+            list.push({ ...client, userId });
         }
       } else {
         // Unique ID Gen
@@ -268,8 +269,10 @@ class StorageService {
 
       // Date Range Filter (using lastUpdate)
       if (dateRange && dateRange.start && dateRange.end) {
+        // Parse inputs as start of day and end of day UTC to ensure full coverage
         const startDate = new Date(dateRange.start).getTime();
-        const endDate = new Date(dateRange.end).getTime();
+        const endDate = new Date(dateRange.end).setHours(23, 59, 59, 999);
+        
         allCases = allCases.filter(c => {
            const cDate = new Date(c.lastUpdate || 0).getTime();
            return cDate >= startDate && cDate <= endDate;
@@ -380,9 +383,10 @@ class StorageService {
         if (idx >= 0) {
             list[idx] = legalCase;
             this.logActivity(`Atualizou processo: ${legalCase.title}`);
+        } else {
+            list.push({ ...legalCase, userId });
         }
       } else {
-        // Better ID generation
         const newId = legalCase.id || `case-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
         list.unshift({ ...legalCase, id: newId, userId });
         this.logActivity(`Criou novo processo: ${legalCase.title}`);

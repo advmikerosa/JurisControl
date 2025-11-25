@@ -3,10 +3,12 @@
 
 
 
+
+
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
 import { User, Search, CheckSquare, AlertCircle, Briefcase, ChevronRight, Info, Scale, Users, HelpCircle, ChevronLeft, Save, Loader2, CloudDownload, Check } from 'lucide-react';
-import { Client, LegalCase, LegalCategory, CasePhase, CaseStatus } from '../types';
+import { Client, LegalCase, LegalCategory, CasePhase, CaseStatus, CaseMovement } from '../types';
 import { storageService } from '../services/storageService';
 import { dataJudService } from '../services/dataJudService';
 import { useAuth } from '../context/AuthContext';
@@ -73,7 +75,7 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
     value: '',
     description: '',
     autoGenerateTasks: true,
-    importedMovements: [] as any[]
+    importedMovements: [] as CaseMovement[]
   });
 
   useEffect(() => {

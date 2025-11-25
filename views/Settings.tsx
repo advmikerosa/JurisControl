@@ -3,15 +3,18 @@
 
 
 
+
+
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { storageService } from '../services/storageService';
 import { notificationService } from '../services/notificationService';
+import { dataJudService } from '../services/dataJudService';
 import { Modal } from '../components/ui/Modal';
 import { OfficeEditModal } from '../components/OfficeEditModal';
-import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink } from 'lucide-react';
+import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
 import { AppSettings, Office } from '../types';
 
 export const Settings: React.FC = () => {
@@ -21,6 +24,7 @@ export const Settings: React.FC = () => {
   const [confirmModal, setConfirmModal] = useState({ open: false, action: () => {} });
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isTestingKey, setIsTestingKey] = useState(false);
   
   // State para Configurações
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -64,6 +68,26 @@ export const Settings: React.FC = () => {
               notificationService.notify('Configurações Salvas', 'Suas preferências de notificação estão ativas.', 'success');
             }
         }, 800);
+    }
+  };
+
+  const handleTestDataJud = async () => {
+    if (!settings?.general.dataJudApiKey) {
+      addToast('Insira uma chave para testar.', 'warning');
+      return;
+    }
+    setIsTestingKey(true);
+    try {
+      const isValid = await dataJudService.validateApiKey(settings.general.dataJudApiKey);
+      if (isValid) {
+        addToast('Conexão com DataJud estabelecida com sucesso!', 'success');
+      } else {
+        addToast('Chave inválida ou erro de conexão.', 'error');
+      }
+    } catch (e) {
+      addToast('Erro ao testar conexão.', 'error');
+    } finally {
+      setIsTestingKey(false);
     }
   };
 
@@ -251,15 +275,25 @@ export const Settings: React.FC = () => {
                             </a>
                         </div>
                         <p className="text-xs text-slate-400 mb-3">Insira sua chave de API pública do CNJ para habilitar a busca automática de processos e atualizações.</p>
-                        <div className="relative">
-                            <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                            <input 
-                                type="password" 
-                                value={settings.general.dataJudApiKey || ''}
-                                onChange={(e) => updateSetting('general', 'dataJudApiKey', e.target.value)}
-                                className="w-full bg-black/20 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-slate-200 focus:border-indigo-500 focus:outline-none placeholder:text-slate-600"
-                                placeholder="Cole sua API Key aqui..."
-                            />
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                <input 
+                                    type="password" 
+                                    value={settings.general.dataJudApiKey || ''}
+                                    onChange={(e) => updateSetting('general', 'dataJudApiKey', e.target.value)}
+                                    className="w-full bg-black/20 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-slate-200 focus:border-indigo-500 focus:outline-none placeholder:text-slate-600"
+                                    placeholder="Cole sua API Key aqui..."
+                                />
+                            </div>
+                            <button 
+                                onClick={handleTestDataJud}
+                                disabled={isTestingKey || !settings.general.dataJudApiKey}
+                                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white text-xs font-medium rounded-lg border border-white/10 transition-colors flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {isTestingKey ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                                Testar
+                            </button>
                         </div>
                     </div>
                 </div>

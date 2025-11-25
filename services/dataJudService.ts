@@ -40,6 +40,7 @@ const TRIBUNAL_ENDPOINTS: Record<string, string> = {
   '5.02': 'https://api-publica.datajud.cnj.jus.br/api_publica_trt2/_search', // TRT2 (SP)
   '5.15': 'https://api-publica.datajud.cnj.jus.br/api_publica_trt15/_search', // TRT15 (Campinas)
   '5.01': 'https://api-publica.datajud.cnj.jus.br/api_publica_trt1/_search', // TRT1 (RJ)
+  '5.00': 'https://api-publica.datajud.cnj.jus.br/api_publica_tst/_search', // TST (Fallback teste)
 };
 
 class DataJudService {
@@ -74,6 +75,38 @@ class DataJudService {
     if (lower.includes('consumidor')) return 'Consumidor';
     if (lower.includes('administrativo')) return 'Administrativo';
     return 'Outro';
+  }
+
+  /**
+   * Testa se a API Key é válida fazendo uma requisição dummy ao TST.
+   */
+  async validateApiKey(key: string): Promise<boolean> {
+    const endpoint = TRIBUNAL_ENDPOINTS['5.00']; // TST Endpoint
+    const queryBody = {
+      "query": {
+        "match": {
+          "numeroProcesso": "00000000000000000000" // Dummy CNJ
+        }
+      }
+    };
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `APIKey ${key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(queryBody)
+      });
+
+      // Se retornar 200 (mesmo sem resultados), a chave é válida.
+      // Se retornar 401 ou 403, a chave é inválida.
+      return response.status === 200;
+    } catch (error) {
+      console.error("Validation Error:", error);
+      return false;
+    }
   }
 
   async fetchProcessByCNJ(cnj: string): Promise<Partial<LegalCase> | null> {

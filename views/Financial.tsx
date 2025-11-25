@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { storageService } from '../services/storageService';
@@ -76,19 +75,19 @@ export const Financial: React.FC = () => {
     
     const revenue = currentMonthTrans
       .filter(t => t.type === 'Receita')
-      .reduce((acc, curr) => acc + curr.amount, 0);
+      .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
       
     const expenses = currentMonthTrans
       .filter(t => t.type === 'Despesa')
-      .reduce((acc, curr) => acc + curr.amount, 0);
+      .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
       
     const overdue = transactions
       .filter(t => t.status === 'Atrasado' && t.type === 'Receita')
-      .reduce((acc, curr) => acc + curr.amount, 0);
+      .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
       
     const pendingRevenue = currentMonthTrans
       .filter(t => t.status === 'Pendente' && t.type === 'Receita')
-      .reduce((acc, curr) => acc + curr.amount, 0);
+      .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
 
     return { revenue, expenses, balance: revenue - expenses, overdue, pendingRevenue };
   }, [transactions, filterMonth]);
@@ -102,8 +101,8 @@ export const Financial: React.FC = () => {
       const monthKey = d.toISOString().slice(0, 7);
       
       const monthTrans = transactions.filter(t => t.dueDate.startsWith(monthKey));
-      const inc = monthTrans.filter(t => t.type === 'Receita').reduce((acc, c) => acc + c.amount, 0);
-      const exp = monthTrans.filter(t => t.type === 'Despesa').reduce((acc, c) => acc + c.amount, 0);
+      const inc = monthTrans.filter(t => t.type === 'Receita').reduce((acc, c) => acc + (Number(c.amount) || 0), 0);
+      const exp = monthTrans.filter(t => t.type === 'Despesa').reduce((acc, c) => acc + (Number(c.amount) || 0), 0);
       
       data.push({
         name: d.toLocaleDateString('pt-BR', { month: 'short' }),
@@ -117,7 +116,7 @@ export const Financial: React.FC = () => {
   const chartDataCategories = useMemo(() => {
     const cats: Record<string, number> = {};
     const filtered = transactions.filter(t => t.dueDate.startsWith(filterMonth) && t.type === 'Despesa');
-    filtered.forEach(t => { cats[t.category] = (cats[t.category] || 0) + t.amount; });
+    filtered.forEach(t => { cats[t.category] = (cats[t.category] || 0) + (Number(t.amount) || 0); });
     return Object.keys(cats).map(k => ({ name: k, value: cats[k] }));
   }, [transactions, filterMonth]);
 
@@ -137,6 +136,11 @@ export const Financial: React.FC = () => {
     }
 
     const baseAmount = parseFloat(formData.amount.replace(',', '.'));
+    if (isNaN(baseAmount)) {
+      addToast('Valor inválido.', 'error');
+      return;
+    }
+
     const numInstallments = parseInt(formData.installments) || 1;
     const installmentValue = baseAmount / numInstallments;
     const selectedClient = clients.find(c => c.id === formData.clientId);
@@ -199,14 +203,14 @@ export const Financial: React.FC = () => {
 
     const headers = ['Data Vencimento', 'Descrição', 'Categoria', 'Tipo', 'Valor', 'Status', 'Cliente', 'Data Pagamento'];
     const csvRows = [
-        headers.join(';'), // CSV excel friendly uses semicolon in some regions, but standard is comma. Using comma and quoting strings.
+        headers.join(';'), 
         ...filteredList.map(row => {
             const values = [
                 row.dueDate,
-                `"${row.title}"`, // Quote strings to handle commas inside
+                `"${row.title}"`, 
                 `"${row.category}"`,
                 row.type,
-                row.amount.toFixed(2).replace('.', ','), // PT-BR format
+                row.amount.toFixed(2).replace('.', ','),
                 row.status,
                 `"${row.clientName || ''}"`,
                 row.paymentDate || ''
@@ -215,7 +219,7 @@ export const Financial: React.FC = () => {
         })
     ];
 
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + csvRows.join("\n"); // Add BOM for Excel
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + csvRows.join("\n"); 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -226,9 +230,7 @@ export const Financial: React.FC = () => {
     addToast('Relatório exportado com sucesso!', 'success');
   };
 
-  // --- Render Components ---
-
-  const SummaryCard = ({ title, value, color, icon: Icon }: any) => (
+  const SummaryCard = React.memo(({ title, value, color, icon: Icon }: any) => (
     <GlassCard className="p-6 flex items-center justify-between">
       <div>
         <p className="text-slate-400 text-sm font-medium mb-1">{title}</p>
@@ -238,7 +240,7 @@ export const Financial: React.FC = () => {
         <Icon size={24} />
       </div>
     </GlassCard>
-  );
+  ));
 
   return (
     <div className="space-y-6 pb-10">
@@ -363,12 +365,12 @@ export const Financial: React.FC = () => {
                     <Filter size={16} /> 
                     <span className="font-medium">Filtros:</span>
                  </div>
-                 <select value={filterType} onChange={(e) => setFilterType(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors">
+                 <select value={filterType} onChange={(e) => setFilterType(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors cursor-pointer">
                     <option className="bg-slate-800">Todos</option>
                     <option className="bg-slate-800">Receita</option>
                     <option className="bg-slate-800">Despesa</option>
                  </select>
-                 <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors">
+                 <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-lg py-1.5 px-3 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors cursor-pointer">
                     <option className="bg-slate-800">Todos</option>
                     <option className="bg-slate-800">Pago</option>
                     <option className="bg-slate-800">Pendente</option>
@@ -409,7 +411,7 @@ export const Financial: React.FC = () => {
                            </td>
                            <td className="py-3 px-4 text-slate-300 font-mono text-xs">{formatDate(t.dueDate)}</td>
                            <td className={`py-3 px-4 font-bold font-mono ${t.type === 'Receita' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {t.type === 'Receita' ? '+' : '-'}{formatCurrency(t.amount)}
+                              {t.type === 'Receita' ? '+' : '-'}{formatCurrency(Number(t.amount))}
                            </td>
                            <td className="py-3 px-4 text-center">
                               <span onClick={() => toggleStatus(t.id, t.status)} className={`cursor-pointer select-none inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:opacity-80 ${t.status === 'Pago' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : t.status === 'Atrasado' ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}`}>
