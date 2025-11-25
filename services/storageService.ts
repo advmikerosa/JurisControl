@@ -181,7 +181,7 @@ class StorageService {
             client:clients(id, name, type, avatarUrl)
           `);
         if (error) throw error;
-        return (data || []) as LegalCase[];
+        return (data || []) as unknown as LegalCase[];
       } catch { return []; }
     } else {
       return JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]');
@@ -201,7 +201,7 @@ class StorageService {
           .single();
         
         if (error) throw error;
-        return data as LegalCase;
+        return data as unknown as LegalCase;
       } catch (e) { 
         console.error("Error fetching case by id", e);
         return null; 
@@ -247,7 +247,7 @@ class StorageService {
       const { data, count, error } = await query.range(start, end).order('lastUpdate', { ascending: false });
       
       if (error) throw error;
-      return { data: (data || []) as LegalCase[], total: count || 0 };
+      return { data: (data || []) as unknown as LegalCase[], total: count || 0 };
     } else {
       let allCases = JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]') as LegalCase[];
       

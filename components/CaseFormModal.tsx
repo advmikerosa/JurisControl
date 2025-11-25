@@ -1,13 +1,6 @@
-
-
-
-
-
-
-
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
-import { User, Search, CheckSquare, AlertCircle, Briefcase, ChevronRight, Info, Scale, Users, HelpCircle, ChevronLeft, Save, Loader2, CloudDownload, Check } from 'lucide-react';
+import { User, Search, CheckSquare, AlertCircle, Briefcase, ChevronRight, Info, Scale, Users, HelpCircle, ChevronLeft, Save, Loader2, Download, Check } from 'lucide-react';
 import { Client, LegalCase, LegalCategory, CasePhase, CaseStatus, CaseMovement } from '../types';
 import { storageService } from '../services/storageService';
 import { dataJudService } from '../services/dataJudService';
@@ -68,7 +61,7 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
     court: '',
     judge: '',
     phase: 'Distributivo' as CasePhase,
-    status: 'Ativo' as CaseStatus,
+    status: CaseStatus.ACTIVE,
     distributionDate: new Date().toISOString().split('T')[0],
     nextHearing: '',
     opposingParty: '',
@@ -170,7 +163,7 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
   const resetForm = () => {
     setFormData({ 
         clientId: '', title: '', category: 'Cível', responsible: user?.name || '', 
-        cnj: '', court: '', judge: '', phase: 'Distributivo', status: 'Ativo',
+        cnj: '', court: '', judge: '', phase: 'Distributivo', status: CaseStatus.ACTIVE,
         distributionDate: new Date().toISOString().split('T')[0], nextHearing: '',
         opposingParty: '', value: '', description: '', autoGenerateTasks: true, importedMovements: []
     });
@@ -455,7 +448,7 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
                                 title="Buscar na base do CNJ"
                             >
-                                {importingDataJud ? <Loader2 size={18} className="animate-spin" /> : <CloudDownload size={18} />}
+                                {importingDataJud ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
                                 <span className="hidden sm:inline">Importar</span>
                             </button>
                         </div>
@@ -507,10 +500,10 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                                 onChange={(e) => setFormData({...formData, status: e.target.value as CaseStatus})}
                                 className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none appearance-none cursor-pointer"
                             >
-                                <option value="Ativo" className="bg-slate-800">Ativo</option>
-                                <option value="Pendente" className="bg-slate-800">Pendente</option>
-                                <option value="Arquivado" className="bg-slate-800">Arquivado</option>
-                                <option value="Ganho" className="bg-slate-800">Ganho</option>
+                                <option value={CaseStatus.ACTIVE} className="bg-slate-800">Ativo</option>
+                                <option value={CaseStatus.PENDING} className="bg-slate-800">Pendente</option>
+                                <option value={CaseStatus.ARCHIVED} className="bg-slate-800">Arquivado</option>
+                                <option value={CaseStatus.WON} className="bg-slate-800">Ganho</option>
                             </select>
                         </div>
                     </div>
