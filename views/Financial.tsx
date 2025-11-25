@@ -111,7 +111,7 @@ export const Financial: React.FC = () => {
       });
     }
     return data;
-  }, [transactions]);
+  }, [transactions]); // Dependencies ensured for useMemo
 
   const chartDataCategories = useMemo(() => {
     const cats: Record<string, number> = {};
@@ -135,9 +135,11 @@ export const Financial: React.FC = () => {
       return;
     }
 
-    const baseAmount = parseFloat(formData.amount.replace(',', '.'));
+    // Secure parsing for "1.000,00" format
+    const baseAmount = parseFloat(formData.amount.replace(/\./g, '').replace(',', '.'));
+    
     if (isNaN(baseAmount)) {
-      addToast('Valor inválido.', 'error');
+      addToast('Valor inválido. Use formato 0,00.', 'error');
       return;
     }
 
@@ -440,7 +442,7 @@ export const Financial: React.FC = () => {
            </div>
            <div className="space-y-1"><label className="text-xs text-slate-400">Descrição / Título</label><input type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-slate-200 focus:border-indigo-500 focus:outline-none" placeholder="Ex: Honorários Cliente X" autoFocus /></div>
            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1"><label className="text-xs text-slate-400">Valor Total (R$)</label><input type="number" step="0.01" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-slate-200 focus:border-indigo-500 focus:outline-none font-mono" placeholder="0,00" /></div>
+              <div className="space-y-1"><label className="text-xs text-slate-400">Valor Total (R$)</label><input type="text" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-slate-200 focus:border-indigo-500 focus:outline-none font-mono" placeholder="0,00" /></div>
               <div className="space-y-1"><label className="text-xs text-slate-400">Vencimento (1ª Parc.)</label><input type="date" value={formData.dueDate} onChange={(e) => setFormData({...formData, dueDate: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-slate-200 focus:border-indigo-500 focus:outline-none scheme-dark" /></div>
            </div>
            {formData.type === 'Receita' && (
@@ -450,7 +452,7 @@ export const Financial: React.FC = () => {
               <div className="space-y-1"><label className="text-xs text-slate-400">Categoria</label><select value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-slate-200 focus:border-indigo-500 focus:outline-none scheme-dark">{formData.type === 'Receita' ? (<><option className="bg-slate-800">Honorários</option><option className="bg-slate-800">Reembolso de Custas</option><option className="bg-slate-800">Sucumbência</option><option className="bg-slate-800">Consultoria</option><option className="bg-slate-800">Outros</option></>) : (<><option className="bg-slate-800">Custos Fixos</option><option className="bg-slate-800">Custas Processuais</option><option className="bg-slate-800">Software</option><option className="bg-slate-800">Marketing</option><option className="bg-slate-800">Impostos</option><option className="bg-slate-800">Pessoal</option><option className="bg-slate-800">Outros</option></>)}</select></div>
               <div className="space-y-1"><label className="text-xs text-slate-400">Status Inicial</label><select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value as any})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-slate-200 focus:border-indigo-500 focus:outline-none scheme-dark"><option className="bg-slate-800" value="Pendente">Pendente</option><option className="bg-slate-800" value="Pago">Pago</option><option className="bg-slate-800" value="Atrasado">Atrasado</option></select></div>
            </div>
-           <div className="space-y-1 pt-2 border-t border-white/5"><label className="text-xs text-slate-400 flex justify-between"><span>Repetir / Parcelar?</span>{parseInt(formData.installments) > 1 && <span className="text-indigo-400 font-bold">{formData.installments}x de {formatCurrency(parseFloat(formData.amount || '0') / parseInt(formData.installments))}</span>}</label><select value={formData.installments} onChange={(e) => setFormData({...formData, installments: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-slate-200 focus:border-indigo-500 focus:outline-none scheme-dark"><option value="1" className="bg-slate-800">Pagamento Único</option><option value="2" className="bg-slate-800">2x Parcelas Mensais</option><option value="3" className="bg-slate-800">3x Parcelas Mensais</option><option value="4" className="bg-slate-800">4x Parcelas Mensais</option><option value="6" className="bg-slate-800">6x Parcelas Mensais</option><option value="12" className="bg-slate-800">12x (Recorrente Anual)</option></select><p className="text-[10px] text-slate-500 mt-1">O sistema gerará automaticamente lançamentos futuros com vencimento mensal.</p></div>
+           <div className="space-y-1 pt-2 border-t border-white/5"><label className="text-xs text-slate-400 flex justify-between"><span>Repetir / Parcelar?</span>{parseInt(formData.installments) > 1 && <span className="text-indigo-400 font-bold">{formData.installments}x de {formatCurrency(parseFloat(formData.amount.replace(/\./g, '').replace(',', '.') || '0') / parseInt(formData.installments))}</span>}</label><select value={formData.installments} onChange={(e) => setFormData({...formData, installments: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-slate-200 focus:border-indigo-500 focus:outline-none scheme-dark"><option value="1" className="bg-slate-800">Pagamento Único</option><option value="2" className="bg-slate-800">2x Parcelas Mensais</option><option value="3" className="bg-slate-800">3x Parcelas Mensais</option><option value="4" className="bg-slate-800">4x Parcelas Mensais</option><option value="6" className="bg-slate-800">6x Parcelas Mensais</option><option value="12" className="bg-slate-800">12x (Recorrente Anual)</option></select><p className="text-[10px] text-slate-500 mt-1">O sistema gerará automaticamente lançamentos futuros com vencimento mensal.</p></div>
         </form>
       </Modal>
     </div>

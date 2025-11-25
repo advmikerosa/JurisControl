@@ -112,9 +112,8 @@ class StorageService {
     const userId = await this.getUserId();
 
     if (isSupabaseConfigured && supabase) {
-      const { id, ...rest } = client;
-      const { documents, history, alerts, ...payloadData } = rest as any;
-      const payload = { ...payloadData, user_id: userId };
+      const { id, documents, history, alerts, ...rest } = client;
+      const payload = { ...rest, user_id: userId };
       
       if (id && !id.startsWith('cli-')) {
         await supabase.from(TABLE_NAMES.CLIENTS).update(payload).eq('id', id);
@@ -131,11 +130,11 @@ class StorageService {
             list[idx] = client;
             this.logActivity(`Atualizou dados do cliente: ${client.name}`);
         } else {
-            // Case: ID exists but not found in local storage (corruption?), treat as new or push
+            // Safely push if ID exists but not found
             list.push({ ...client, userId });
         }
       } else {
-        // Unique ID Gen
+        // Consistent ID Generation
         const newId = client.id || `cli-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
         list.unshift({ ...client, id: newId, userId });
         this.logActivity(`Criou novo cliente: ${client.name}`);
@@ -150,7 +149,6 @@ class StorageService {
     const hasActiveCases = cases.some(c => c.client.id === id && c.status !== CaseStatus.ARCHIVED);
     
     if (hasActiveCases) {
-        // Retorna erro explícito para ser tratado na UI
         throw new Error("BLOQUEIO: Não é possível excluir este cliente pois ele possui processos ativos. Arquive ou exclua os processos primeiro.");
     }
 
@@ -212,8 +210,8 @@ class StorageService {
     limit: number = 20, 
     searchTerm: string = '', 
     statusFilter: string | null = null,
-    categoryFilter: string | null = null, // New Filter
-    dateRange: { start: string, end: string } | null = null // New Filter
+    categoryFilter: string | null = null, 
+    dateRange: { start: string, end: string } | null = null
   ): Promise<{ data: LegalCase[], total: number }> {
     const start = (page - 1) * limit;
     const end = start + limit - 1;
@@ -235,7 +233,6 @@ class StorageService {
       if (categoryFilter && categoryFilter !== 'Todos') {
         query = query.eq('category', categoryFilter);
       }
-      // Filtering by lastUpdate or distributionDate if available
       if (dateRange && dateRange.start && dateRange.end) {
          query = query.gte('lastUpdate', dateRange.start).lte('lastUpdate', dateRange.end);
       }
@@ -257,25 +254,20 @@ class StorageService {
         );
       }
       
-      // Status Filter
+      // Filters
       if (statusFilter && statusFilter !== 'Todos') {
         allCases = allCases.filter(c => c.status === statusFilter);
       }
-
-      // Category Filter
       if (categoryFilter && categoryFilter !== 'Todos') {
         allCases = allCases.filter(c => c.category === categoryFilter);
       }
 
-      // Date Range Filter (using lastUpdate)
+      // Safe Date Range Filter (Using String comparison for ISO dates)
       if (dateRange && dateRange.start && dateRange.end) {
-        // Parse inputs as start of day and end of day UTC to ensure full coverage
-        const startDate = new Date(dateRange.start).getTime();
-        const endDate = new Date(dateRange.end).setHours(23, 59, 59, 999);
-        
         allCases = allCases.filter(c => {
-           const cDate = new Date(c.lastUpdate || 0).getTime();
-           return cDate >= startDate && cDate <= endDate;
+           if (!c.lastUpdate) return false;
+           const dateStr = c.lastUpdate.split('T')[0];
+           return dateStr >= dateRange.start && dateStr <= dateRange.end;
         });
       }
 
@@ -297,7 +289,6 @@ class StorageService {
       const oldCase = await this.getCaseById(legalCase.id);
       if (oldCase) {
          const changes: ChangeLogEntry[] = [];
-         // Define readable labels for fields
          const fieldsMap: Record<string, string> = {
             'title': 'Título',
             'value': 'Valor da Causa',
@@ -333,7 +324,6 @@ class StorageService {
             legalCase.changeLog = oldCase.changeLog;
          }
 
-         // Auto Movement for Status Change
          if (oldCase.status !== legalCase.status) {
             const statusChangeMovement: CaseMovement = {
                 id: `mov-sys-${Date.now()}`,
@@ -347,7 +337,6 @@ class StorageService {
          }
       }
     } else {
-        // Init changelog for new case
         legalCase.changeLog = [{
             id: `log-init-${Date.now()}`,
             date: new Date().toLocaleString('pt-BR'),
@@ -357,7 +346,6 @@ class StorageService {
             newValue: 'Processo criado'
         }];
     }
-    // -----------------------
 
     if (isSupabaseConfigured && supabase) {
       const { id, client, ...rest } = legalCase;
@@ -405,7 +393,6 @@ class StorageService {
       
       this.logActivity(`Excluiu processo: ${caseTitle}`, 'Warning');
 
-      // Cascade Delete
       const tasks = await this.getTasks();
       localStorage.setItem(LOCAL_KEYS.TASKS, JSON.stringify(tasks.filter(t => t.caseId !== id)));
 
@@ -698,18 +685,26 @@ class StorageService {
       localStorage.setItem('@JurisControl:settings', JSON.stringify(settings));
   }
 
-  // --- Optimized Dashboard Data ---
+  // --- Optimized Dashboard Data (O(n) complexity) ---
   async getDashboardSummary(): Promise<DashboardData> {
     const [allCases, allTasks] = await Promise.all([
       this.getCases(),
       this.getTasks()
     ]);
 
-    const activeCases = allCases.filter(c => c.status === CaseStatus.ACTIVE).length;
-    const wonCases = allCases.filter(c => c.status === CaseStatus.WON).length;
-    const pendingCases = allCases.filter(c => c.status === CaseStatus.PENDING).length;
-    const archivedCases = allCases.filter(c => c.status === CaseStatus.ARCHIVED).length;
-    const hearings = allCases.filter(c => !!c.nextHearing).length;
+    // Optimization: Single pass iteration
+    let activeCases = 0, wonCases = 0, pendingCases = 0, archivedCases = 0, hearings = 0;
+    
+    for (const c of allCases) {
+        switch(c.status) {
+            case CaseStatus.ACTIVE: activeCases++; break;
+            case CaseStatus.WON: wonCases++; break;
+            case CaseStatus.PENDING: pendingCases++; break;
+            case CaseStatus.ARCHIVED: archivedCases++; break;
+        }
+        if (c.nextHearing) hearings++;
+    }
+
     const highPriorityTasks = allTasks.filter(t => t.priority === 'Alta' && t.status !== 'Concluído').length;
 
     const caseDistribution = [
@@ -725,6 +720,7 @@ class StorageService {
             if (!a.nextHearing || !b.nextHearing) return 0;
             const [dA, mA, yA] = a.nextHearing.split('/').map(Number);
             const [dB, mB, yB] = b.nextHearing.split('/').map(Number);
+            // Robust date comparison
             return new Date(yA, mA - 1, dA).getTime() - new Date(yB, mB - 1, dB).getTime();
         })
         .slice(0, 4); 
@@ -813,12 +809,12 @@ class StorageService {
                 type: 'task',
                 title: t.title,
                 subtitle: `Vence: ${t.dueDate} • ${t.status}`,
-                url: '/crm' // Tasks don't have detail pages, go to CRM
+                url: '/crm'
             });
         }
     });
 
-    return results.slice(0, 8); // Return top 8 matches
+    return results.slice(0, 8);
   }
 
   async seedDatabase() {

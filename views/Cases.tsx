@@ -126,16 +126,13 @@ export const Cases: React.FC = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showOnlyMyCases, setShowOnlyMyCases] = useState(false);
   
-  // Sorting
   const [sortBy, setSortBy] = useState<'updated' | 'created' | 'value'>('updated');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Advanced Filters
   const [showFilters, setShowFilters] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<'Todos' | LegalCategory>('Todos');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
-  // Modal & Actions
   const [isCaseModalOpen, setIsCaseModalOpen] = useState(false);
   const [caseToEdit, setCaseToEdit] = useState<LegalCase | null>(null);
   const [preSelectedClientId, setPreSelectedClientId] = useState<string | undefined>(undefined);
@@ -143,7 +140,6 @@ export const Cases: React.FC = () => {
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
   
-  // Quick Client
   const [isQuickClientModalOpen, setIsQuickClientModalOpen] = useState(false);
   const [quickClientData, setQuickClientData] = useState({ name: '', type: 'PF', doc: '', email: '', phone: '' });
   const [submittingClient, setSubmittingClient] = useState(false);
@@ -156,12 +152,11 @@ export const Cases: React.FC = () => {
   const fetchCases = useCallback(async (currentPage: number, isNewFilter: boolean = false) => {
     setLoading(true);
     try {
-      // Pass advanced filters to service
       const response = await storageService.getCasesPaginated(
           currentPage, 
           20, 
           debouncedSearch, 
-          null, // status handled in board or unified list
+          null, 
           categoryFilter,
           (dateRange.start && dateRange.end) ? dateRange : null
       );
@@ -171,13 +166,11 @@ export const Cases: React.FC = () => {
         fetchedData = fetchedData.filter(c => c.responsibleLawyer.toLowerCase().includes(user.name.toLowerCase()));
       }
 
-      // Client-side Sorting (Since mock service paginates but basic sort)
       fetchedData.sort((a, b) => {
           let valA, valB;
           if (sortBy === 'value') {
               valA = a.value; valB = b.value;
           } else if (sortBy === 'created') {
-              // Assuming distributionDate is creation for sort purpose if createdAt not available
               valA = new Date(a.distributionDate || 0).getTime();
               valB = new Date(b.distributionDate || 0).getTime();
           } else {
@@ -234,15 +227,28 @@ export const Cases: React.FC = () => {
       setIsCaseModalOpen(true);
   };
 
-  const handleEditCase = (id: string) => {
-      const c = cases.find(item => item.id === id);
-      if (c) {
-          setCaseToEdit(c);
-          setPreSelectedClientId(undefined);
-          setIsCaseModalOpen(true);
-          setOpenActionMenuId(null);
-      }
-  };
+  const handleEditCase = useCallback((id: string) => {
+      setCases(currentCases => {
+          const c = currentCases.find(item => item.id === id);
+          if (c) {
+              setCaseToEdit(c);
+              setPreSelectedClientId(undefined);
+              setIsCaseModalOpen(true);
+              setOpenActionMenuId(null);
+          }
+          return currentCases;
+      });
+  }, []);
+
+  // Memoized Handlers for List Items
+  const handleDeleteClick = useCallback((id: string) => {
+      setCaseToDelete(id); 
+      setOpenActionMenuId(null);
+  }, []);
+
+  const handleNavigateClick = useCallback((id: string) => {
+      navigate(`/cases/${id}`);
+  }, [navigate]);
 
   const handleCaseSaved = async () => {
       setPage(1);
@@ -432,9 +438,9 @@ export const Cases: React.FC = () => {
           <div className="space-y-4 min-h-[400px]">
             {cases.map((c, index) => {
                if (cases.length === index + 1) {
-                 return <div ref={lastCaseElementRef} key={c.id}><CaseListItem c={c} onDelete={(id: string) => { setCaseToDelete(id); setOpenActionMenuId(null); }} onEdit={handleEditCase} onNavigate={(id: string) => navigate(`/cases/${id}`)} openActionId={openActionMenuId} setOpenActionId={setOpenActionMenuId} /></div>;
+                 return <div ref={lastCaseElementRef} key={c.id}><CaseListItem c={c} onDelete={handleDeleteClick} onEdit={handleEditCase} onNavigate={handleNavigateClick} openActionId={openActionMenuId} setOpenActionId={setOpenActionMenuId} /></div>;
                }
-               return <CaseListItem key={c.id} c={c} onDelete={(id: string) => { setCaseToDelete(id); setOpenActionMenuId(null); }} onEdit={handleEditCase} onNavigate={(id: string) => navigate(`/cases/${id}`)} openActionId={openActionMenuId} setOpenActionId={setOpenActionMenuId} />;
+               return <CaseListItem key={c.id} c={c} onDelete={handleDeleteClick} onEdit={handleEditCase} onNavigate={handleNavigateClick} openActionId={openActionMenuId} setOpenActionId={setOpenActionMenuId} />;
             })}
             {loading && (<div className="flex justify-center py-4"><Loader2 className="animate-spin text-indigo-500" /></div>)}
             {!loading && cases.length === 0 && (<div className="flex flex-col items-center justify-center py-20 text-slate-500"><Briefcase size={32} className="opacity-50 mb-4" /><p className="text-lg font-medium text-slate-300">Nenhum processo encontrado</p></div>)}
@@ -449,7 +455,7 @@ export const Cases: React.FC = () => {
                               <span className="text-xs font-medium px-2 py-0.5 rounded bg-black/20">{cases.filter(c => c.status === status).length}{hasMore && "+"}</span>
                           </div>
                           <div className="space-y-3 overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
-                              {cases.filter(c => c.status === status).map(c => <CaseBoardCard key={c.id} c={c} onDelete={(id: string) => { setCaseToDelete(id); setOpenActionMenuId(null); }} onEdit={handleEditCase} onNavigate={(id: string) => navigate(`/cases/${id}`)} />)}
+                              {cases.filter(c => c.status === status).map(c => <CaseBoardCard key={c.id} c={c} onDelete={handleDeleteClick} onEdit={handleEditCase} onNavigate={handleNavigateClick} />)}
                           </div>
                       </div>
                   ))}

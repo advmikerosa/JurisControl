@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { User, AuthProvider as AuthProviderType } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
 import { authMockService } from '../services/authMockService';
@@ -20,12 +20,14 @@ const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
 // Tempo de inatividade em milissegundos (30 minutos)
 const INACTIVITY_LIMIT = 30 * 60 * 1000; 
+const ACTIVITY_THROTTLE = 5000; // Update activity timestamp at most every 5 seconds
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { addToast } = useToast();
+  const lastActivityUpdate = useRef<number>(Date.now());
 
   // Função de logout memorizada para uso no useEffect
   const logout = useCallback(async (isAutoLogout = false) => {
@@ -42,16 +44,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [addToast]);
 
-  // Monitoramento de Sessão e Inatividade
+  // Monitoramento de Sessão e Inatividade com Throttle
   useEffect(() => {
     let inactivityTimer: ReturnType<typeof setTimeout>;
 
     const resetInactivityTimer = () => {
       if (!isAuthenticated) return;
       
-      clearTimeout(inactivityTimer);
-      localStorage.setItem('@JurisControl:lastActivity', Date.now().toString());
+      const now = Date.now();
+      // Throttle updates to local storage to avoid performance hit
+      if (now - lastActivityUpdate.current > ACTIVITY_THROTTLE) {
+          localStorage.setItem('@JurisControl:lastActivity', now.toString());
+          lastActivityUpdate.current = now;
+      }
       
+      clearTimeout(inactivityTimer);
       inactivityTimer = setTimeout(() => {
         logout(true);
       }, INACTIVITY_LIMIT);
@@ -66,7 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (lastActivity > 0 && Date.now() - lastActivity > INACTIVITY_LIMIT) {
         logout(true);
       } else {
-        resetInactivityTimer();
+        resetInactivityTimer(); // Start timer
         events.forEach(event => window.addEventListener(event, resetInactivityTimer));
       }
     }
