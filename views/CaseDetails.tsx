@@ -1,11 +1,18 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storageService } from '../services/storageService';
 import { GlassCard } from '../components/ui/GlassCard';
-import { ArrowLeft, Calendar, User, DollarSign, Plus, Paperclip, Clock, CheckCircle, AlertTriangle, Send, Loader2, FileText } from 'lucide-react';
-import { LegalCase, Task, FinancialRecord, SystemDocument, CaseMovement } from '../types';
+import { ArrowLeft, Calendar, User, DollarSign, Plus, Paperclip, Clock, CheckCircle, AlertTriangle, Send, Loader2, FileText, Edit2, Check, History } from 'lucide-react';
+import { LegalCase, Task, FinancialRecord, SystemDocument, CaseMovement, CasePhase } from '../types';
 import { useToast } from '../context/ToastContext';
+import { CaseFormModal } from '../components/CaseFormModal';
+
+const CASE_PHASES: CasePhase[] = [
+  'Distributivo', 'Conhecimento', 'Instrução', 'Julgamento', 'Recurso', 'Execução', 'Encerrado'
+];
 
 export const CaseDetails: React.FC = () => {
   const { id } = useParams();
@@ -16,41 +23,44 @@ export const CaseDetails: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [financials, setFinancials] = useState<FinancialRecord[]>([]);
   const [documents, setDocuments] = useState<SystemDocument[]>([]);
-  const [activeTab, setActiveTab] = useState<'timeline' | 'tasks' | 'docs' | 'financial'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'tasks' | 'docs' | 'financial' | 'history'>('timeline');
   const [newMovement, setNewMovement] = useState('');
   const [loading, setLoading] = useState(true);
+  
+  // Edit State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      if (id) {
-        try {
-          // PERFORMANCE: Use specialized methods to fetch single record and related data
-          const [foundCase, caseTasks, caseFin, caseDocs] = await Promise.all([
-            storageService.getCaseById(id),
-            storageService.getTasksByCaseId(id),
-            storageService.getFinancialsByCaseId(id),
-            storageService.getDocumentsByCaseId(id)
-          ]);
-          
-          if (foundCase) {
-            setCaseData(foundCase);
-            setTasks(caseTasks); 
-            setFinancials(caseFin);
-            setDocuments(caseDocs);
-          } else {
-            addToast("Processo não encontrado.", "error");
-          }
-        } catch (error) {
-          console.error("Error loading case details:", error);
-          addToast("Erro ao carregar detalhes do processo", "error");
-        } finally {
-          setLoading(false);
+  const loadData = async () => {
+    if (id) {
+      try {
+        const [foundCase, caseTasks, caseFin, caseDocs] = await Promise.all([
+          storageService.getCaseById(id),
+          storageService.getTasksByCaseId(id),
+          storageService.getFinancialsByCaseId(id),
+          storageService.getDocumentsByCaseId(id)
+        ]);
+        
+        if (foundCase) {
+          setCaseData(foundCase);
+          setTasks(caseTasks); 
+          setFinancials(caseFin);
+          setDocuments(caseDocs);
+        } else {
+          addToast("Processo não encontrado.", "error");
         }
-      } else {
+      } catch (error) {
+        console.error("Error loading case details:", error);
+        addToast("Erro ao carregar detalhes do processo", "error");
+      } finally {
         setLoading(false);
       }
-    };
+    } else {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setLoading(true);
     loadData();
   }, [id, addToast]);
 
@@ -77,6 +87,11 @@ export const CaseDetails: React.FC = () => {
     addToast('Movimentação registrada.', 'success');
   };
 
+  const handleEditSuccess = async () => {
+      // Reload data to reflect changes
+      await loadData();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-slate-400">
@@ -86,6 +101,9 @@ export const CaseDetails: React.FC = () => {
   }
 
   if (!caseData) return <div className="p-8 text-white">Processo não encontrado.</div>;
+
+  // Calculate progress index
+  const currentPhaseIndex = CASE_PHASES.indexOf(caseData.phase || 'Distributivo');
 
   return (
     <div className="space-y-6 animate-fade-in pb-20">
@@ -97,8 +115,8 @@ export const CaseDetails: React.FC = () => {
       {/* Card Principal do Processo */}
       <GlassCard className="p-0 overflow-hidden relative">
         <div className="h-2 bg-gradient-to-r from-indigo-600 to-purple-600"></div>
-        <div className="p-6 md:p-8">
-            <div className="flex flex-col md:flex-row justify-between gap-6">
+        <div className="p-6 md:p-8 pb-4">
+            <div className="flex flex-col md:flex-row justify-between gap-6 mb-6">
                 <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                         <span className="bg-white/5 border border-white/10 px-2 py-1 rounded text-xs font-mono text-slate-300">
@@ -110,7 +128,12 @@ export const CaseDetails: React.FC = () => {
                             {caseData.status}
                         </span>
                     </div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">{caseData.title}</h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">{caseData.title}</h1>
+                        <button onClick={() => setIsEditModalOpen(true)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors" title="Editar Detalhes">
+                            <Edit2 size={18} />
+                        </button>
+                    </div>
                     <div className="flex flex-wrap gap-4 text-sm text-slate-400">
                         <span className="flex items-center gap-1 hover:text-indigo-400 cursor-pointer transition-colors" onClick={() => navigate(`/clients/${caseData.client.id}`)}>
                             <User size={14} /> {caseData.client.name}
@@ -131,6 +154,33 @@ export const CaseDetails: React.FC = () => {
                      </div>
                 </div>
             </div>
+
+            {/* Visual Phase Stepper */}
+            <div className="mt-8 mb-4 relative">
+                {/* Progress Line Background */}
+                <div className="hidden md:block absolute top-[14px] left-0 right-0 h-0.5 bg-slate-800 z-0 rounded-full mx-4"></div>
+                {/* Progress Line Active */}
+                <div className="hidden md:block absolute top-[14px] left-0 h-0.5 bg-indigo-600 z-0 rounded-full mx-4 transition-all duration-1000 ease-out" style={{ width: `${(currentPhaseIndex / (CASE_PHASES.length - 1)) * 100}%` }}></div>
+                
+                <div className="flex justify-between relative z-10 overflow-x-auto pb-2 md:pb-0 hide-scrollbar gap-4 md:gap-0 px-2">
+                    {CASE_PHASES.map((phase, idx) => {
+                        const isCompleted = idx <= currentPhaseIndex;
+                        const isCurrent = idx === currentPhaseIndex;
+                        return (
+                            <div key={phase} className="flex flex-col items-center gap-3 min-w-[80px] md:min-w-0">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-500 ${isCurrent ? 'bg-indigo-600 border-indigo-400 scale-110 shadow-[0_0_15px_rgba(99,102,241,0.6)] ring-2 ring-indigo-900' : isCompleted ? 'bg-slate-800 border-indigo-600 text-indigo-400' : 'bg-slate-900 border-slate-700 text-slate-600'}`}>
+                                    {isCompleted && !isCurrent && <Check size={14} />}
+                                    {isCurrent && <div className="w-2 h-2 rounded-full bg-white animate-pulse"></div>}
+                                    {!isCompleted && <span className="text-[10px]">{idx + 1}</span>}
+                                </div>
+                                <span className={`text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-colors duration-300 ${isCurrent ? 'text-indigo-300' : isCompleted ? 'text-slate-300' : 'text-slate-600'}`}>
+                                    {phase}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
         
         {/* Tabs */}
@@ -146,6 +196,9 @@ export const CaseDetails: React.FC = () => {
             </button>
             <button onClick={() => setActiveTab('financial')} className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'financial' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-white'}`}>
                 <DollarSign size={16} /> Financeiro
+            </button>
+            <button onClick={() => setActiveTab('history')} className={`px-4 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-2 ${activeTab === 'history' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                <History size={16} /> Histórico
             </button>
         </div>
       </GlassCard>
@@ -305,6 +358,48 @@ export const CaseDetails: React.FC = () => {
                     </div>
                  </div>
             )}
+
+            {activeTab === 'history' && (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-semibold text-white">Histórico de Alterações</h3>
+                        <span className="text-xs text-slate-500 bg-white/5 px-2 py-1 rounded-lg">Audit Trail (Log)</span>
+                    </div>
+                    <div className="rounded-xl border border-white/10 overflow-hidden bg-white/5">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-900/50 text-slate-400 border-b border-white/10">
+                                <tr>
+                                    <th className="py-3 px-4 font-medium">Data</th>
+                                    <th className="py-3 px-4 font-medium">Usuário</th>
+                                    <th className="py-3 px-4 font-medium">Campo</th>
+                                    <th className="py-3 px-4 font-medium">De</th>
+                                    <th className="py-3 px-4 font-medium">Para</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {caseData.changeLog && caseData.changeLog.length > 0 ? (
+                                    caseData.changeLog.map(log => (
+                                        <tr key={log.id} className="hover:bg-white/5 transition-colors">
+                                            <td className="py-3 px-4 text-slate-300 whitespace-nowrap">{log.date}</td>
+                                            <td className="py-3 px-4 text-slate-300">{log.author}</td>
+                                            <td className="py-3 px-4 font-medium text-indigo-300">{log.field}</td>
+                                            <td className="py-3 px-4 text-rose-400/80 font-mono text-xs line-through truncate max-w-[120px]" title={log.oldValue}>{log.oldValue}</td>
+                                            <td className="py-3 px-4 text-emerald-400 font-mono text-xs truncate max-w-[120px]" title={log.newValue}>{log.newValue}</td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan={5} className="py-12 text-center text-slate-500">
+                                            <History className="mx-auto mb-2 opacity-30" size={32} />
+                                            Nenhuma alteração registrada desde a criação.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
 
         {/* Sidebar Right */}
@@ -340,6 +435,16 @@ export const CaseDetails: React.FC = () => {
             </GlassCard>
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {caseData && (
+        <CaseFormModal
+            isOpen={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            onSave={handleEditSuccess}
+            initialData={caseData}
+        />
+      )}
     </div>
   );
 };

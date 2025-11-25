@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { storageService } from '../services/storageService';
 import { 
   User, 
   Camera, 
@@ -31,14 +32,7 @@ import {
 import { Link } from 'react-router-dom';
 import { ActivityLog, DataRequest } from '../types';
 
-// Mock Data for Security Log
-const MOCK_ACTIVITY_LOGS: ActivityLog[] = [
-  { id: '1', action: 'Login realizado', ip: '201.55.123.45', date: 'Hoje, 09:41', device: 'Chrome / Windows', status: 'Success' },
-  { id: '2', action: 'Alteração de Senha', ip: '201.55.123.45', date: 'Ontem, 14:20', device: 'Chrome / Windows', status: 'Success' },
-  { id: '3', action: 'Falha de Login', ip: '189.22.11.09', date: '22/10/2023, 03:15', device: 'Unknown / Linux', status: 'Failed' },
-];
-
-// Mock Data for Data Requests
+// Mock Data for Data Requests (Translated)
 const MOCK_DATA_REQUESTS: DataRequest[] = [
   { id: 'req-1', type: 'Access', status: 'Completed', dateRequested: '15/10/2023', completionDate: '16/10/2023' },
   { id: 'req-2', type: 'Portability', status: 'Processing', dateRequested: 'Hoje' },
@@ -52,6 +46,7 @@ export const UserProfile: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'personal' | 'security' | 'preferences' | 'privacy'>('personal');
   const [isSaving, setIsSaving] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -93,6 +88,8 @@ export const UserProfile: React.FC = () => {
       });
       setSecurityData(prev => ({ ...prev, twoFactor: user.twoFactorEnabled }));
     }
+    // Load Logs
+    setLogs(storageService.getLogs());
   }, [user]);
 
   // Masks and Validations
@@ -141,11 +138,7 @@ export const UserProfile: React.FC = () => {
     if (!formData.name.trim()) newErrors.name = 'Nome completo é obrigatório.';
     if (!formData.email.trim()) newErrors.email = 'E-mail é obrigatório.';
     if (formData.username && formData.username.length < 4) newErrors.username = 'Usuário muito curto.';
-    if (formData.oab && !/^[A-Z]{2}\/\d+$/.test(formData.oab) && !/^\d+$/.test(formData.oab)) {
-        // Validação branda para OAB, permitindo formatos variados mas alertando estrutura estranha
-        // newErrors.oab = 'Formato sugerido: UF/123456'; 
-    }
-
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -192,7 +185,7 @@ export const UserProfile: React.FC = () => {
         oab: formData.oab,
         avatar: formData.avatar
       });
-      
+      storageService.logActivity('Atualizou dados pessoais');
       addToast('Perfil atualizado com sucesso!', 'success');
     } catch (error) {
       addToast('Erro ao salvar alterações.', 'error');
@@ -213,6 +206,7 @@ export const UserProfile: React.FC = () => {
        // Opcional: Simular verificação imediata para demonstração
        if (window.confirm("Demo: Deseja simular que o link foi clicado e verificar a conta agora?")) {
            updateProfile({ emailVerified: true });
+           storageService.logActivity('Email verificado');
        }
     }, 2000);
   };
@@ -229,19 +223,25 @@ export const UserProfile: React.FC = () => {
              return;
           }
           addToast('Senha alterada com sucesso!', 'success');
+          storageService.logActivity('Alteração de senha');
       }
       updateProfile({ twoFactorEnabled: securityData.twoFactor });
+      if (securityData.twoFactor !== user?.twoFactorEnabled) {
+          storageService.logActivity(`${securityData.twoFactor ? 'Ativou' : 'Desativou'} 2FA`);
+      }
       setSecurityData(prev => ({ ...prev, currentPassword: '', newPassword: '' }));
       setIsSaving(false);
     }, 1000);
   };
 
   const handleExportData = () => {
+    storageService.logActivity('Solicitou exportação de dados (LGPD)');
     addToast('Solicitação de dados enviada. Você será notificado por e-mail.', 'info');
   };
 
   const handleDeleteAccount = () => {
     if (confirm('ATENÇÃO: Esta ação é irreversível e excluirá todos os seus processos e clientes. Para confirmar, digite sua senha na próxima etapa (não implementado na demo). Deseja continuar?')) {
+        storageService.logActivity('Solicitou exclusão de conta', 'Warning');
         addToast('Conta agendada para exclusão em 30 dias.', 'warning');
         setTimeout(() => logout(), 2000);
     }
@@ -260,7 +260,6 @@ export const UserProfile: React.FC = () => {
     { id: 'personal', label: 'Dados Pessoais', icon: User },
     { id: 'security', label: 'Segurança', icon: Shield },
     { id: 'privacy', label: 'Privacidade e LGPD', icon: FileCheck },
-    { id: 'preferences', label: 'Preferências', icon: Bell },
   ];
 
   return (
@@ -269,10 +268,6 @@ export const UserProfile: React.FC = () => {
       {/* Header Banner */}
       <GlassCard className="relative overflow-hidden p-0 border-0">
          <div className="absolute inset-0 bg-gradient-to-r from-indigo-900 via-[#1e1b4b] to-slate-900 z-0"></div>
-         {/* Decorative abstract shapes */}
-         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-         <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl -ml-10 -mb-10"></div>
-         
          <div className="relative z-10 px-6 py-8 md:px-10 md:py-10 flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-8">
              {/* Avatar Section */}
              <div className="relative group shrink-0">
@@ -282,7 +277,6 @@ export const UserProfile: React.FC = () => {
                   ) : (
                      <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-slate-500">{formData.name.charAt(0)}</div>
                   )}
-                  {/* Overlay on hover */}
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                      <Camera className="text-white" size={24} />
                   </div>
@@ -322,7 +316,6 @@ export const UserProfile: React.FC = () => {
                 </div>
              </div>
              
-             {/* Action */}
              <div className="hidden md:block">
                  <button onClick={() => setActiveTab('security')} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-lg border border-white/10 transition-colors">
                     Segurança
@@ -352,16 +345,6 @@ export const UserProfile: React.FC = () => {
                     </button>
                  ))}
                </nav>
-               
-               <div className="mt-6 pt-6 border-t border-white/5 px-4 pb-2">
-                   <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 rounded-xl p-4 border border-white/5">
-                       <h4 className="text-xs font-bold text-white mb-1">Plano Pro</h4>
-                       <p className="text-[10px] text-slate-400 mb-3">Sua assinatura está ativa e renova em 15/12.</p>
-                       <button className="w-full py-1.5 bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold rounded transition-colors">
-                           Gerenciar Assinatura
-                       </button>
-                   </div>
-               </div>
            </GlassCard>
         </div>
 
@@ -377,7 +360,6 @@ export const UserProfile: React.FC = () => {
                </div>
                
                <form onSubmit={handleSavePersonal} className="space-y-6">
-                  {/* Name & Username Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                          <label className="text-xs uppercase font-bold text-slate-500 ml-1">Nome Completo <span className="text-rose-400">*</span></label>
@@ -408,7 +390,6 @@ export const UserProfile: React.FC = () => {
                       </div>
                   </div>
 
-                  {/* Professional Info Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                          <label className="text-xs uppercase font-bold text-slate-500 ml-1">E-mail Profissional <span className="text-rose-400">*</span></label>
@@ -445,7 +426,6 @@ export const UserProfile: React.FC = () => {
                       </div>
                   </div>
 
-                  {/* Verification Alert Box */}
                   {!user.emailVerified && (
                       <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between animate-fade-in">
                           <div className="flex gap-3">
@@ -486,7 +466,6 @@ export const UserProfile: React.FC = () => {
                      </div>
                   </div>
 
-                  {/* Action Footer */}
                   <div className="flex justify-end pt-6 border-t border-white/10">
                      <button 
                        type="submit" 
@@ -574,7 +553,7 @@ export const UserProfile: React.FC = () => {
                {/* Activity Logs */}
                <div className="mt-10">
                  <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2 mb-4 flex items-center gap-2">
-                    <Activity size={16} /> Dispositivos e Atividade
+                    <Activity size={16} /> Dispositivos e Atividade (Audit Trail)
                  </h4>
                  <div className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/30">
                    <table className="w-full text-sm text-left">
@@ -587,7 +566,7 @@ export const UserProfile: React.FC = () => {
                        </tr>
                      </thead>
                      <tbody className="divide-y divide-white/5">
-                       {MOCK_ACTIVITY_LOGS.map((log) => (
+                       {logs.length > 0 ? logs.map((log) => (
                          <tr key={log.id} className="hover:bg-white/5 transition-colors">
                            <td className="px-4 py-3 font-medium text-white">{log.action}</td>
                            <td className="px-4 py-3 text-slate-400">{log.date}</td>
@@ -600,11 +579,13 @@ export const UserProfile: React.FC = () => {
                                log.status === 'Success' ? 'bg-emerald-500/20 text-emerald-400' : 
                                log.status === 'Failed' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'
                              }`}>
-                               {log.status === 'Success' ? 'Sucesso' : 'Falha'}
+                               {log.status === 'Success' ? 'Sucesso' : log.status === 'Failed' ? 'Falha' : 'Alerta'}
                              </span>
                            </td>
                          </tr>
-                       ))}
+                       )) : (
+                         <tr><td colSpan={4} className="text-center py-4 text-slate-500">Nenhuma atividade registrada.</td></tr>
+                       )}
                      </tbody>
                    </table>
                  </div>
@@ -695,21 +676,6 @@ export const UserProfile: React.FC = () => {
                      </div>
                  </div>
                </div>
-             </GlassCard>
-           )}
-
-           {activeTab === 'preferences' && (
-             <GlassCard className="min-h-[500px] flex flex-col items-center justify-center text-center">
-                 <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4 border border-white/10">
-                     <Bell size={40} className="text-slate-500 opacity-50" />
-                 </div>
-                 <h3 className="text-xl font-bold text-white mb-2">Preferências em Breve</h3>
-                 <p className="text-slate-400 max-w-sm mb-6">
-                     Estamos trabalhando em novos temas, configurações de notificação granulares e atalhos de teclado personalizados.
-                 </p>
-                 <button onClick={() => addToast('Obrigado pelo interesse! Notificaremos quando disponível.', 'info')} className="px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium text-slate-300 transition-colors">
-                     Notificar-me
-                 </button>
              </GlassCard>
            )}
         </div>

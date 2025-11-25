@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Modal } from './ui/Modal';
 import { Office, OfficeMember, MemberRole } from '../types';
@@ -226,12 +227,12 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                                          <select 
                                             value={member.role}
                                             onChange={(e) => updateMemberRole(member.userId, e.target.value as MemberRole)}
-                                            className="bg-black/20 border border-white/10 rounded-lg text-xs text-slate-300 py-1 px-2 outline-none"
+                                            className="bg-black/20 border border-white/10 rounded-lg text-xs text-white font-medium py-1 px-2 outline-none focus:border-indigo-500 cursor-pointer"
                                          >
-                                             <option value="Admin">Admin</option>
-                                             <option value="Advogado">Advogado</option>
-                                             <option value="Estagiário">Estagiário</option>
-                                             <option value="Financeiro">Financeiro</option>
+                                             <option value="Admin" className="bg-slate-800 text-white">Admin</option>
+                                             <option value="Advogado" className="bg-slate-800 text-white">Advogado</option>
+                                             <option value="Estagiário" className="bg-slate-800 text-white">Estagiário</option>
+                                             <option value="Financeiro" className="bg-slate-800 text-white">Financeiro</option>
                                          </select>
                                          <button onClick={() => removeMember(member.userId)} className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors" title="Remover Membro">
                                              <Trash2 size={14} />

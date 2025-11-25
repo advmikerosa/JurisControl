@@ -11,17 +11,14 @@ export const EmailConfirmation: React.FC = () => {
   const location = useLocation();
   const { addToast } = useToast();
   
-  // Recupera o email passado pelo navigate, ou usa um placeholder
   const email = location.state?.email || 'seu e-mail';
 
   const handleResend = () => {
-    // Lógica simulada de reenvio
     addToast('E-mail de confirmação reenviado!', 'success');
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0f172a] relative overflow-hidden px-4">
-      {/* Background Effects (Consistente com Login) */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-600/20 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-600/20 rounded-full blur-[120px]" />
 

@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { storageService } from '../services/storageService';
-import { Search, UserPlus, Filter, Building, User, MapPin, Phone, Mail, ChevronRight, X, Users, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { Search, UserPlus, Filter, Building, User, MapPin, Phone, Mail, ChevronRight, X, Users, CheckCircle2, AlertCircle, Clock, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Modal } from '../components/ui/Modal';
@@ -23,6 +22,70 @@ const masks = {
   cep: (v: string) => v.replace(/\D/g, '').replace(/(\d{5})(\d)/, '$1-$2').substring(0, 9)
 };
 
+// Strict Algorithmic Validation (Mod 11)
+const isValidCPF = (cpf: string) => {
+  if (!cpf) return false;
+  cpf = cpf.replace(/[^\d]+/g, '');
+  if (cpf.length !== 11 || !!cpf.match(/(\d)\1{10}/)) return false;
+  
+  let sum = 0;
+  let remainder;
+  
+  for (let i = 1; i <= 9; i++) sum = sum + parseInt(cpf.substring(i - 1, i)) * (11 - i);
+  remainder = (sum * 10) % 11;
+  
+  if ((remainder === 10) || (remainder === 11)) remainder = 0;
+  if (remainder !== parseInt(cpf.substring(9, 10))) return false;
+  
+  sum = 0;
+  for (let i = 1; i <= 10; i++) sum = sum + parseInt(cpf.substring(i - 1, i)) * (12 - i);
+  remainder = (sum * 10) % 11;
+  
+  if ((remainder === 10) || (remainder === 11)) remainder = 0;
+  if (remainder !== parseInt(cpf.substring(10, 11))) return false;
+  
+  return true;
+};
+
+const isValidCNPJ = (cnpj: string) => {
+  if (!cnpj) return false;
+  cnpj = cnpj.replace(/[^\d]+/g, '');
+  
+  if (cnpj.length !== 14) return false;
+  // Elimina CNPJs invalidos conhecidos
+  if (!!cnpj.match(/(\d)\1{13}/)) return false;
+
+  // Valida DVs
+  let tamanho = cnpj.length - 2;
+  let numeros = cnpj.substring(0, tamanho);
+  let digitos = cnpj.substring(tamanho);
+  let soma = 0;
+  let pos = tamanho - 7;
+  
+  for (let i = tamanho; i >= 1; i--) {
+    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  
+  let resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
+  if (resultado !== parseInt(digitos.charAt(0))) return false;
+  
+  tamanho = tamanho + 1;
+  numeros = cnpj.substring(0, tamanho);
+  soma = 0;
+  pos = tamanho - 7;
+  
+  for (let i = tamanho; i >= 1; i--) {
+    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  
+  resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
+  if (resultado !== parseInt(digitos.charAt(1))) return false;
+  
+  return true;
+};
+
 export const Clients: React.FC = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
@@ -40,8 +103,10 @@ export const Clients: React.FC = () => {
   
   // Form Data State
   const [formData, setFormData] = useState({
-    cpf: '', cnpj: '', phone: '', cep: '', rg: '', name: '', corporateName: '', email: '', city: '', state: ''
+    cpf: '', cnpj: '', phone: '', cep: '', rg: '', name: '', corporateName: '', email: '', city: '', state: '',
+    tagsInput: ''
   });
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
     const loadClients = async () => {
@@ -65,6 +130,13 @@ export const Clients: React.FC = () => {
     if (field === 'cnpj') maskedValue = masks.cnpj(value);
     if (field === 'phone') maskedValue = masks.phone(value);
     setFormData(prev => ({ ...prev, [field]: maskedValue }));
+    
+    // Clear error on type
+    if (formErrors[field]) setFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+    });
   };
 
   const filteredClients = clients.filter(client => {
@@ -81,11 +153,27 @@ export const Clients: React.FC = () => {
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name && !formData.corporateName) {
-      addToast('Nome/Razão Social obrigatório.', 'error');
-      return;
+    const errors: any = {};
+
+    if (newClientType === 'PF') {
+        if (!formData.name) errors.name = 'Nome obrigatório';
+        if (!formData.cpf) errors.cpf = 'CPF obrigatório';
+        else if (!isValidCPF(formData.cpf)) errors.cpf = 'CPF Inválido (Dígitos incorretos)';
+    } else {
+        if (!formData.corporateName) errors.corporateName = 'Razão Social obrigatória';
+        if (!formData.cnpj) errors.cnpj = 'CNPJ obrigatório';
+        else if (!isValidCNPJ(formData.cnpj)) errors.cnpj = 'CNPJ Inválido (Dígitos incorretos)';
+    }
+
+    if (Object.keys(errors).length > 0) {
+        setFormErrors(errors);
+        // Visual feedback handled by rendering error messages
+        addToast('Corrija os campos destacados em vermelho.', 'error');
+        return;
     }
     
+    const tags = formData.tagsInput.split(',').map(t => t.trim()).filter(t => t !== '');
+
     const newClient: Client = {
       id: `cli-${Date.now()}`,
       name: newClientType === 'PF' ? formData.name : formData.corporateName,
@@ -99,6 +187,7 @@ export const Clients: React.FC = () => {
       state: formData.state || '',
       createdAt: new Date().toLocaleDateString('pt-BR'),
       documents: [], history: [], alerts: [],
+      tags: tags,
       cpf: newClientType === 'PF' ? formData.cpf : undefined,
       cnpj: newClientType === 'PJ' ? formData.cnpj : undefined,
       corporateName: newClientType === 'PJ' ? formData.corporateName : undefined
@@ -110,7 +199,8 @@ export const Clients: React.FC = () => {
     
     addToast('Cliente cadastrado com sucesso!', 'success');
     setIsModalOpen(false);
-    setFormData({ cpf: '', cnpj: '', phone: '', cep: '', rg: '', name: '', corporateName: '', email: '', city: '', state: '' });
+    setFormData({ cpf: '', cnpj: '', phone: '', cep: '', rg: '', name: '', corporateName: '', email: '', city: '', state: '', tagsInput: '' });
+    setFormErrors({});
   };
 
   const getStatusColor = (status: ClientStatus) => {
@@ -196,7 +286,7 @@ export const Clients: React.FC = () => {
                     <select
                         value={filterStatus}
                         onChange={(e) => setFilterStatus(e.target.value as any)}
-                        className="w-full h-full bg-slate-900/50 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer appearance-none"
+                        className={`w-full h-full bg-slate-900/50 border rounded-xl py-2.5 pl-10 pr-4 text-slate-200 focus:outline-none focus:border-indigo-500 cursor-pointer appearance-none transition-all ${filterStatus !== 'Todos' ? 'border-indigo-500/50 ring-2 ring-indigo-500/10' : 'border-white/10'}`}
                     >
                         <option value="Todos" className="bg-slate-900 text-slate-300">Todos os Status</option>
                         <option value="Ativo" className="bg-slate-900 text-emerald-400">Ativo</option>
@@ -220,6 +310,7 @@ export const Clients: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.05 }}
               onClick={() => navigate(`/clients/${client.id}`)}
+              className="h-full"
             >
               <GlassCard className="h-full hover:border-indigo-500/40 cursor-pointer transition-all group relative p-6 flex flex-col" hoverEffect>
                 <div className="flex justify-between items-start mb-4">
@@ -258,7 +349,20 @@ export const Clients: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-white/5 flex justify-between items-center text-xs">
+                {client.tags && client.tags.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-1 pt-3 border-t border-white/5">
+                        {client.tags.slice(0, 3).map((tag, i) => (
+                            <span key={i} className="text-[10px] bg-indigo-500/10 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/20 font-medium">
+                                {tag}
+                            </span>
+                        ))}
+                        {client.tags.length > 3 && (
+                            <span className="text-[10px] text-slate-500 bg-white/5 px-1.5 py-0.5 rounded">+{client.tags.length - 3}</span>
+                        )}
+                    </div>
+                )}
+
+                <div className={`flex justify-between items-center text-xs ${client.tags && client.tags.length > 0 ? 'mt-3' : 'mt-6 pt-4 border-t border-white/5'}`}>
                    <div className="flex items-center gap-1.5 text-slate-500">
                       <Clock size={12} />
                       <span>Cadastrado em {client.createdAt}</span>
@@ -279,14 +383,22 @@ export const Clients: React.FC = () => {
             </div>
             <h3 className="text-xl font-medium text-slate-200 mb-2">Nenhum cliente encontrado</h3>
             <p className="text-sm text-slate-400 max-w-md text-center mb-6">
-              Não encontramos clientes correspondentes aos seus filtros de busca. Tente limpar os filtros ou cadastre um novo cliente.
+              Não encontramos clientes correspondentes aos seus filtros de busca. Tente limpar os filtros ou cadastre um novo cliente para começar.
             </p>
-            <button 
-                onClick={() => { setSearchTerm(''); setFilterType('Todos'); setFilterStatus('Todos'); }} 
-                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors"
-            >
-              Limpar Todos os Filtros
-            </button>
+            <div className="flex gap-3">
+                <button 
+                    onClick={() => { setSearchTerm(''); setFilterType('Todos'); setFilterStatus('Todos'); }} 
+                    className="px-6 py-2 bg-white/10 hover:bg-white/15 text-white rounded-lg font-medium transition-colors"
+                >
+                  Limpar Filtros
+                </button>
+                <button 
+                    onClick={() => setIsModalOpen(true)} 
+                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20"
+                >
+                  Novo Cliente
+                </button>
+            </div>
         </div>
       )}
 
@@ -297,37 +409,63 @@ export const Clients: React.FC = () => {
         title="Cadastrar Novo Cliente"
         footer={
           <>
-            <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">Cancelar</button>
-            <button onClick={handleCreateClient} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors">Salvar Cliente</button>
+            <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors">Cancelar</button>
+            <button onClick={handleCreateClient} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors shadow-lg shadow-indigo-500/20">Salvar Cliente</button>
           </>
         }
       >
         <div className="space-y-6">
           <div className="flex p-1 bg-black/20 rounded-xl">
-            <button onClick={() => setNewClientType('PF')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${newClientType === 'PF' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Pessoa Física</button>
-            <button onClick={() => setNewClientType('PJ')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${newClientType === 'PJ' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Pessoa Jurídica</button>
+            <button onClick={() => { setNewClientType('PF'); setFormErrors({}); }} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${newClientType === 'PF' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Pessoa Física</button>
+            <button onClick={() => { setNewClientType('PJ'); setFormErrors({}); }} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${newClientType === 'PJ' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Pessoa Jurídica</button>
           </div>
 
           {newClientType === 'PF' ? (
-             <div className="space-y-4">
+             <div className="space-y-4 animate-fade-in">
                <div>
-                   <label className="text-xs text-slate-400 mb-1 block ml-1">Nome Completo</label>
-                   <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                   <label className="text-xs text-slate-400 mb-1 block ml-1">Nome Completo <span className="text-rose-400">*</span></label>
+                   <input 
+                     type="text" 
+                     className={`w-full bg-white/5 p-3 rounded-lg text-white border ${formErrors.name ? 'border-rose-500 bg-rose-500/10 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'} outline-none transition-colors`}
+                     value={formData.name} 
+                     onChange={e => setFormData({...formData, name: e.target.value})} 
+                   />
+                   {formErrors.name && <span className="text-[10px] text-rose-400 ml-1 flex items-center gap-1 mt-1"><AlertCircle size={10} /> {formErrors.name}</span>}
                </div>
                <div>
-                   <label className="text-xs text-slate-400 mb-1 block ml-1">CPF</label>
-                   <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.cpf} onChange={e => handleInputChange('cpf', e.target.value)} placeholder="000.000.000-00" />
+                   <label className="text-xs text-slate-400 mb-1 block ml-1">CPF <span className="text-rose-400">*</span></label>
+                   <input 
+                     type="text" 
+                     className={`w-full bg-white/5 p-3 rounded-lg text-white border ${formErrors.cpf ? 'border-rose-500 bg-rose-500/10 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'} outline-none transition-colors`}
+                     value={formData.cpf} 
+                     onChange={e => handleInputChange('cpf', e.target.value)} 
+                     placeholder="000.000.000-00" 
+                   />
+                   {formErrors.cpf && <span className="text-[10px] text-rose-400 ml-1 flex items-center gap-1 mt-1"><AlertCircle size={10} /> {formErrors.cpf}</span>}
                </div>
              </div>
           ) : (
-             <div className="space-y-4">
+             <div className="space-y-4 animate-fade-in">
                <div>
-                   <label className="text-xs text-slate-400 mb-1 block ml-1">Razão Social</label>
-                   <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.corporateName} onChange={e => setFormData({...formData, corporateName: e.target.value})} />
+                   <label className="text-xs text-slate-400 mb-1 block ml-1">Razão Social <span className="text-rose-400">*</span></label>
+                   <input 
+                     type="text" 
+                     className={`w-full bg-white/5 p-3 rounded-lg text-white border ${formErrors.corporateName ? 'border-rose-500 bg-rose-500/10 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'} outline-none transition-colors`}
+                     value={formData.corporateName} 
+                     onChange={e => setFormData({...formData, corporateName: e.target.value})} 
+                   />
+                   {formErrors.corporateName && <span className="text-[10px] text-rose-400 ml-1">{formErrors.corporateName}</span>}
                </div>
                <div>
-                   <label className="text-xs text-slate-400 mb-1 block ml-1">CNPJ</label>
-                   <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.cnpj} onChange={e => handleInputChange('cnpj', e.target.value)} placeholder="00.000.000/0000-00" />
+                   <label className="text-xs text-slate-400 mb-1 block ml-1">CNPJ <span className="text-rose-400">*</span></label>
+                   <input 
+                     type="text" 
+                     className={`w-full bg-white/5 p-3 rounded-lg text-white border ${formErrors.cnpj ? 'border-rose-500 bg-rose-500/10 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'} outline-none transition-colors`}
+                     value={formData.cnpj} 
+                     onChange={e => handleInputChange('cnpj', e.target.value)} 
+                     placeholder="00.000.000/0000-00" 
+                   />
+                   {formErrors.cnpj && <span className="text-[10px] text-rose-400 ml-1 flex items-center gap-1 mt-1"><AlertCircle size={10} /> {formErrors.cnpj}</span>}
                </div>
              </div>
           )}
@@ -351,6 +489,17 @@ export const Clients: React.FC = () => {
                  <label className="text-xs text-slate-400 mb-1 block ml-1">Estado (UF)</label>
                  <input type="text" className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none" value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} maxLength={2} style={{ textTransform: 'uppercase' }} />
              </div>
+          </div>
+          <div className="pt-2 border-t border-white/5">
+             <label className="text-xs text-indigo-300 font-bold mb-2 block ml-1 flex items-center gap-1"><Tag size={12} /> Etiquetas (Tags)</label>
+             <input 
+               type="text" 
+               className="w-full bg-white/5 p-3 rounded-lg text-white border border-white/10 focus:border-indigo-500 focus:outline-none text-sm" 
+               placeholder="Separe por vírgula (Ex: VIP, Indicação, Trabalhista)"
+               value={formData.tagsInput} 
+               onChange={e => setFormData({...formData, tagsInput: e.target.value})} 
+             />
+             <p className="text-[10px] text-slate-500 mt-1 ml-1">As tags ajudam a categorizar e filtrar clientes rapidamente.</p>
           </div>
         </div>
       </Modal>

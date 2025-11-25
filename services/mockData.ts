@@ -1,4 +1,5 @@
 
+
 import { CaseStatus, Client, FinancialRecord, LegalCase, Office, Priority, Task, Lead } from '../types';
 
 export const MOCK_OFFICES: Office[] = [
@@ -97,7 +98,8 @@ export const MOCK_CASES: LegalCase[] = [
     lastUpdate: new Date().toISOString(),
     movements: [
       { id: 'm1', date: formatDate(yesterday), title: 'Despacho', description: 'Designada audiência de instrução.', type: 'Despacho', author: 'Sistema' }
-    ]
+    ],
+    changeLog: []
   },
   {
     id: 'case2',
@@ -109,7 +111,8 @@ export const MOCK_CASES: LegalCase[] = [
     value: 120000.00,
     responsibleLawyer: 'Dr. Usuário',
     court: 'Vara da Fazenda Pública',
-    lastUpdate: new Date().toISOString()
+    lastUpdate: new Date().toISOString(),
+    changeLog: []
   },
   {
     id: 'case3',
@@ -120,18 +123,20 @@ export const MOCK_CASES: LegalCase[] = [
     value: 15000.00,
     responsibleLawyer: 'Dra. Parceira',
     court: 'Vara de Família RJ',
-    lastUpdate: new Date().toISOString()
+    lastUpdate: new Date().toISOString(),
+    changeLog: []
   },
   {
     id: 'case4',
     cnj: '0099999-00.2021.8.26.0100',
-    title: 'Indenização por Danos Morais',
+    title: 'Ação de Cobrança de Valores Indevidos', // Corrected Accents
     client: MOCK_CLIENTS[0],
     status: CaseStatus.WON,
     value: 8500.00,
     responsibleLawyer: 'Dr. Usuário',
     court: 'JEC Central',
-    lastUpdate: lastMonth.toISOString()
+    lastUpdate: lastMonth.toISOString(),
+    changeLog: []
   }
 ];
 

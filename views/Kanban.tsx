@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
-import { Plus, MoreVertical, Calendar, Trash2, Loader2, Briefcase, AlignLeft, Flag, CheckCircle2, User, Link as LinkIcon, Building, Search } from 'lucide-react';
+import { Plus, MoreVertical, Calendar, Trash2, Loader2, Briefcase, AlignLeft, Flag, CheckCircle2, User, Link as LinkIcon, Search, GripVertical } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
 import { storageService } from '../services/storageService';
@@ -9,15 +10,18 @@ import { Task, Priority, LegalCase, Client, CaseStatus } from '../types';
 
 interface ColumnProps {
   title: string;
+  statusKey: Task['status'];
   color: string;
   tasks: Task[];
   availableCases: LegalCase[];
   onAddTask: () => void;
   onEditTask: (task: Task) => void;
+  onDropTask: (taskId: string, newStatus: Task['status']) => void;
 }
 
-const Column = ({ title, color, tasks, availableCases, onAddTask, onEditTask }: ColumnProps) => {
+const Column = ({ title, statusKey, color, tasks, availableCases, onAddTask, onEditTask, onDropTask }: ColumnProps) => {
   const [visibleCount, setVisibleCount] = useState(10);
+  const [isOver, setIsOver] = useState(false);
   const loaderRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,9 +52,33 @@ const Column = ({ title, color, tasks, availableCases, onAddTask, onEditTask }: 
     return availableCases.find(c => c.id === caseId)?.title;
   };
 
+  // Drag and Drop Handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsOver(false);
+    const taskId = e.dataTransfer.getData("text/plain");
+    if (taskId) {
+      onDropTask(taskId, statusKey);
+    }
+  };
+
   return (
-    <div className="flex-1 min-w-[320px] flex flex-col h-full">
-      <div className="flex justify-between items-center mb-4 px-2 shrink-0">
+    <div 
+      className={`flex-1 min-w-[320px] flex flex-col h-full rounded-2xl transition-all duration-200 border border-white/5 bg-slate-900/20 ${isOver ? 'bg-white/10 ring-2 ring-indigo-500/50 scale-[1.01]' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div className="flex justify-between items-center mb-2 px-4 pt-4 shrink-0">
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${color} shadow-[0_0_8px_rgba(255,255,255,0.3)]`}></div>
           <h3 className="font-semibold text-slate-200 tracking-wide">{title}</h3>
@@ -59,56 +87,75 @@ const Column = ({ title, color, tasks, availableCases, onAddTask, onEditTask }: 
         <button onClick={onAddTask} className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"><Plus size={18} /></button>
       </div>
       
-      <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pb-4 px-1">
+      <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar p-3">
         {displayedTasks.map(task => {
           const linkedCaseTitle = getCaseTitle(task.caseId);
           return (
-            <GlassCard 
-              key={task.id} 
-              className="p-4 cursor-pointer hover:border-indigo-500/40 group relative transition-all hover:-translate-y-1 active:scale-[0.98]" 
-              hoverEffect
+            <div
+              key={task.id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("text/plain", task.id);
+                e.dataTransfer.effectAllowed = "move";
+                // Set a ghost styling
+                (e.target as HTMLDivElement).style.opacity = '0.5';
+              }}
+              onDragEnd={(e) => {
+                (e.target as HTMLDivElement).style.opacity = '1';
+              }}
+              className="cursor-grab active:cursor-grabbing group"
             >
-              <div className="absolute inset-0 z-10" onClick={() => onEditTask(task)}></div>
-              
-              <div className="flex justify-between items-start mb-2 relative z-20 pointer-events-none">
-                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider border ${
-                   task.priority === 'Alta' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 
-                   task.priority === 'Média' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
-                   'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                 }`}>
-                   {task.priority}
-                 </span>
-                 <button className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-white transition-opacity pointer-events-auto p-1 rounded hover:bg-white/10">
-                   <MoreVertical size={14} />
-                 </button>
-              </div>
-
-              {linkedCaseTitle ? (
-                <div className="mb-2 flex items-center gap-1.5 text-[10px] text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded w-fit max-w-full">
-                   <Briefcase size={10} className="shrink-0" />
-                   <span className="truncate">{linkedCaseTitle}</span>
+              <GlassCard 
+                className="p-4 hover:border-indigo-500/40 relative transition-all hover:-translate-y-1 active:scale-[0.98]" 
+                hoverEffect
+                onClick={() => onEditTask(task)}
+              >
+                <div className="absolute top-2 left-1 text-slate-600 opacity-0 group-hover:opacity-50 hover:!opacity-100 cursor-grab">
+                    <GripVertical size={14} />
                 </div>
-              ) : task.clientName ? (
-                <div className="mb-2 flex items-center gap-1.5 text-[10px] text-emerald-300 bg-emerald-500/10 px-2 py-1 rounded w-fit max-w-full">
-                   <User size={10} className="shrink-0" />
-                   <span className="truncate">{task.clientName}</span>
-                </div>
-              ) : null}
 
-              <p className="text-sm font-bold text-slate-100 mb-3 leading-snug line-clamp-2">{task.title}</p>
-              
-              <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
-                 <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                   <Calendar size={12} />
-                   <span className={new Date(task.dueDate.split('/').reverse().join('-')) < new Date() && task.status !== 'Concluído' ? 'text-rose-400 font-medium' : ''}>
-                     {task.dueDate}
+                <div className="flex justify-between items-start mb-2 relative z-20 pointer-events-none pl-3">
+                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider border ${
+                     task.priority === 'Alta' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 
+                     task.priority === 'Média' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 
+                     'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                   }`}>
+                     {task.priority}
                    </span>
-                 </div>
-                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-[10px] font-bold border border-white/10 shadow-md text-white">
-                   {task.assignedTo.substring(0,2).toUpperCase()}
-                 </div>
-              </div>
-            </GlassCard>
+                   <button className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-white transition-opacity pointer-events-auto p-1 rounded hover:bg-white/10">
+                     <MoreVertical size={14} />
+                   </button>
+                </div>
+
+                <div className="pl-1">
+                    {linkedCaseTitle ? (
+                      <div className="mb-2 flex items-center gap-1.5 text-[10px] text-indigo-300 bg-indigo-500/10 px-2 py-1 rounded w-fit max-w-full">
+                         <Briefcase size={10} className="shrink-0" />
+                         <span className="truncate">{linkedCaseTitle}</span>
+                      </div>
+                    ) : task.clientName ? (
+                      <div className="mb-2 flex items-center gap-1.5 text-[10px] text-emerald-300 bg-emerald-500/10 px-2 py-1 rounded w-fit max-w-full">
+                         <User size={10} className="shrink-0" />
+                         <span className="truncate">{task.clientName}</span>
+                      </div>
+                    ) : null}
+
+                    <p className="text-sm font-bold text-slate-100 mb-3 leading-snug line-clamp-2">{task.title}</p>
+                    
+                    <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
+                       <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                         <Calendar size={12} />
+                         <span className={new Date(task.dueDate.split('/').reverse().join('-')) < new Date() && task.status !== 'Concluído' ? 'text-rose-400 font-medium' : ''}>
+                           {task.dueDate}
+                         </span>
+                       </div>
+                       <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center text-[10px] font-bold border border-white/10 shadow-md text-white" title={task.assignedTo}>
+                         {task.assignedTo.substring(0,2).toUpperCase()}
+                       </div>
+                    </div>
+                </div>
+              </GlassCard>
+            </div>
           );
         })}
         
@@ -148,17 +195,12 @@ export const Kanban: React.FC = () => {
     status: Task['status'];
     description: string;
     assignedTo: string;
-    // Vínculo Fields
     linkType: 'none' | 'case' | 'client';
     creationMode: 'existing' | 'new';
-    
-    // Existing IDs
     selectedCaseId: string;
     selectedClientId: string;
-
-    // New Entity Fields
-    newEntityName: string; // Título do Processo ou Nome do Cliente
-    newEntityAux: string; // ID do Cliente (para processo) ou Email/Phone (para cliente)
+    newEntityName: string;
+    newEntityAux: string;
   }>({
     title: '',
     dueDate: '',
@@ -192,6 +234,29 @@ export const Kanban: React.FC = () => {
     setTasks(await storageService.getTasks());
     setAvailableCases(await storageService.getCases());
     setAvailableClients(await storageService.getClients());
+  };
+
+  const handleTaskDrop = async (taskId: string, newStatus: Task['status']) => {
+    const taskIndex = tasks.findIndex(t => t.id === taskId);
+    if (taskIndex === -1) return;
+    
+    const task = tasks[taskIndex];
+    if (task.status === newStatus) return;
+
+    // Optimistic Update
+    const updatedTasks = [...tasks];
+    updatedTasks[taskIndex] = { ...task, status: newStatus };
+    setTasks(updatedTasks);
+
+    try {
+      const taskToSave = { ...task, status: newStatus };
+      await storageService.saveTask(taskToSave);
+      addToast(`Tarefa movida para ${newStatus}`, 'info');
+    } catch (error) {
+      console.error("Failed to update task status", error);
+      addToast("Erro ao mover tarefa", "error");
+      updateData(); // Revert on error
+    }
   };
 
   const handleSaveTask = async (e: React.FormEvent) => {
@@ -348,7 +413,7 @@ export const Kanban: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-2">
         <div>
           <h1 className="text-3xl font-bold text-white">Pipeline CRM</h1>
-          <p className="text-slate-400 mt-1">Gestão visual de tarefas e compromissos.</p>
+          <p className="text-slate-400 mt-1">Gestão visual de tarefas e compromissos. Arraste para atualizar o status.</p>
         </div>
         <button 
           onClick={openNewTask} 
@@ -362,9 +427,9 @@ export const Kanban: React.FC = () => {
       {/* BOARD */}
       <div className="flex-1 overflow-x-auto">
         <div className="flex gap-6 pb-6 h-full min-h-[500px]">
-          <Column title="A Fazer" color="bg-slate-400" tasks={todo} availableCases={availableCases} onAddTask={openNewTask} onEditTask={openEditTask} />
-          <Column title="Em Andamento" color="bg-indigo-400" tasks={inProgress} availableCases={availableCases} onAddTask={openNewTask} onEditTask={openEditTask} />
-          <Column title="Concluído" color="bg-emerald-400" tasks={done} availableCases={availableCases} onAddTask={openNewTask} onEditTask={openEditTask} />
+          <Column title="A Fazer" statusKey="A Fazer" color="bg-slate-400" tasks={todo} availableCases={availableCases} onAddTask={openNewTask} onEditTask={openEditTask} onDropTask={handleTaskDrop} />
+          <Column title="Em Andamento" statusKey="Em Andamento" color="bg-indigo-400" tasks={inProgress} availableCases={availableCases} onAddTask={openNewTask} onEditTask={openEditTask} onDropTask={handleTaskDrop} />
+          <Column title="Concluído" statusKey="Concluído" color="bg-emerald-400" tasks={done} availableCases={availableCases} onAddTask={openNewTask} onEditTask={openEditTask} onDropTask={handleTaskDrop} />
         </div>
       </div>
 
@@ -451,7 +516,7 @@ export const Kanban: React.FC = () => {
                </div>
            </div>
 
-           {/* Seção de Vínculo - Centralizado e Moderno */}
+           {/* Seção de Vínculo */}
            <div className="bg-slate-900/50 border border-white/10 rounded-xl p-5 space-y-4">
                <div className="flex items-center justify-between">
                    <label className="text-sm font-semibold text-slate-200 flex items-center gap-2">

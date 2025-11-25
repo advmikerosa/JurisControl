@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, ReactNode, ErrorInfo, Component } from 'react';
+import React, { Component, Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Layout } from './components/Layout';
@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { storageService } from './services/storageService';
 import { Logo } from './components/Logo';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 
 // Lazy Loading dos Componentes das Views
 const Dashboard = React.lazy(() => import('./views/Dashboard').then(module => ({ default: module.Dashboard })));
@@ -36,41 +36,68 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null
+  };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
+    console.error("CRITICAL: Uncaught error in application root:", error, errorInfo);
   }
+
+  handleFactoryReset = () => {
+    if (window.confirm("ATENÇÃO: Isso apagará todos os dados locais e reiniciará o sistema para o estado original. Útil se o app estiver travado devido a dados corrompidos. Continuar?")) {
+      localStorage.clear();
+      window.location.reload();
+    }
+  };
+
+  handleReload = () => {
+    this.setState({ hasError: false, error: null });
+    window.location.reload();
+  };
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white p-6">
-          <div className="max-w-md w-full bg-white/5 border border-white/10 rounded-2xl p-8 text-center backdrop-blur-xl">
-            <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle className="text-rose-500" size={32} />
+        <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-slate-200 p-6">
+          <div className="max-w-md w-full bg-white/5 border border-white/10 rounded-3xl p-8 text-center backdrop-blur-2xl shadow-glass relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500 to-orange-500"></div>
+            
+            <div className="w-20 h-20 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-6 ring-1 ring-rose-500/30 animate-pulse">
+              <AlertTriangle className="text-rose-500" size={40} />
             </div>
-            <h2 className="text-2xl font-bold mb-2">Algo deu errado</h2>
-            <p className="text-slate-400 mb-6">
-              O sistema encontrou um erro inesperado. Tente recarregar a página.
+            
+            <h2 className="text-2xl font-bold mb-2 text-white">Erro Crítico</h2>
+            <p className="text-slate-400 mb-6 text-sm leading-relaxed">
+              O sistema encontrou uma inconsistência. Tente recarregar ou restaurar os dados.
             </p>
-            <div className="bg-black/20 p-4 rounded-lg text-left mb-6 overflow-hidden max-h-40 overflow-y-auto">
-               <p className="text-xs font-mono text-rose-300 break-words">{this.state.error?.message}</p>
+            
+            <div className="bg-black/20 p-4 rounded-xl text-left mb-6 overflow-hidden max-h-32 overflow-y-auto border border-white/5 group">
+               <p className="text-[10px] font-mono text-rose-400 break-words font-bold mb-1">ERROR LOG:</p>
+               <p className="text-[10px] font-mono text-slate-500 break-words">{this.state.error?.message}</p>
             </div>
-            <button 
-              onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }} 
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
-            >
-              <RefreshCw size={18} /> Recarregar Aplicação
-            </button>
+
+            <div className="space-y-3">
+              <button 
+                onClick={this.handleReload} 
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
+              >
+                <RefreshCw size={16} /> Recarregar
+              </button>
+              
+              <button 
+                onClick={this.handleFactoryReset}
+                className="w-full py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2"
+              >
+                <Trash2 size={16} /> Restaurar Dados
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -82,9 +109,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
 const LoadingScreen = () => (
   <div className="flex flex-col items-center justify-center h-screen w-full bg-[#0f172a] text-white relative overflow-hidden">
-    <div className="absolute inset-0 opacity-30">
-       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/40 rounded-full blur-[120px]" />
-       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-600/40 rounded-full blur-[120px]" />
+    <div className="absolute inset-0 opacity-30 pointer-events-none">
+       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/20 rounded-full blur-[120px]" />
+       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-600/20 rounded-full blur-[120px]" />
     </div>
     <div className="relative z-10 flex flex-col items-center gap-6">
       <div className="relative">
@@ -95,7 +122,7 @@ const LoadingScreen = () => (
         <div className="h-1 w-32 bg-slate-800 rounded-full overflow-hidden">
             <div className="h-full bg-indigo-500 animate-progress origin-left w-full"></div>
         </div>
-        <p className="text-xs font-medium text-indigo-300 tracking-widest uppercase">Carregando Sistema</p>
+        <p className="text-xs font-bold text-slate-500 tracking-widest uppercase">Carregando</p>
       </div>
     </div>
     <style>{`
@@ -120,7 +147,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <Layout children={children} />;
 };
 
-// Componente separado para usar useLocation dentro do Router
 const AnimatedRoutes: React.FC = () => {
   const location = useLocation();
   
@@ -149,24 +175,28 @@ const AnimatedRoutes: React.FC = () => {
 
 const App: React.FC = () => {
   useEffect(() => {
-    storageService.seedDatabase();
-    storageService.runAutomations();
+    try {
+      storageService.seedDatabase();
+      storageService.runAutomations();
+    } catch (e) {
+      console.error("Failed to initialize app services:", e);
+    }
   }, []);
 
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <NotificationProvider>
-          <ToastProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <NotificationProvider>
             <Router>
               <Suspense fallback={<LoadingScreen />}>
                  <AnimatedRoutes />
                  <CookieConsent />
               </Suspense>
             </Router>
-          </ToastProvider>
-        </NotificationProvider>
-      </AuthProvider>
+          </NotificationProvider>
+        </AuthProvider>
+      </ToastProvider>
     </ErrorBoundary>
   );
 };

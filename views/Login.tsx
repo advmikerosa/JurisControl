@@ -1,19 +1,22 @@
-
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase } from 'lucide-react';
+import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase, X, Loader2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { Logo } from '../components/Logo';
+import { Modal } from '../components/ui/Modal';
 
 export const Login: React.FC = () => {
-  const { login, register } = useAuth();
+  const { login, register, recoverPassword } = useAuth();
   const navigate = useNavigate();
   const { addToast } = useToast();
   
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [recoverEmail, setRecoverEmail] = useState('');
+  const [isRecovering, setIsRecovering] = useState(false);
 
   // Form States
   const [email, setEmail] = useState('');
@@ -40,7 +43,6 @@ export const Login: React.FC = () => {
         const needsVerification = await register(name, email, password, oab);
         
         if (needsVerification) {
-           // Redireciona para a página de confirmação passando o e-mail
            navigate('/confirm-email', { state: { email } });
         } else {
            addToast('Conta criada e logada!', 'success');
@@ -54,44 +56,63 @@ export const Login: React.FC = () => {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoverEmail) {
+        addToast('Digite seu e-mail para continuar.', 'error');
+        return;
+    }
+    setIsRecovering(true);
+    try {
+        await recoverPassword(recoverEmail);
+        addToast('Se o e-mail existir, você receberá um link de recuperação.', 'success');
+        setShowForgotModal(false);
+        setRecoverEmail('');
+    } catch (error: any) {
+        addToast(error.message, 'error');
+    } finally {
+        setIsRecovering(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0f172a] relative overflow-hidden px-4">
-      {/* Background Effects */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/20 rounded-full blur-[120px]" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-violet-600/20 rounded-full blur-[120px]" />
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden px-4 bg-[#0f172a]">
+      {/* Dark Mode Background Effects */}
+      <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-indigo-900/30 rounded-full blur-[120px]" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-violet-900/30 rounded-full blur-[120px]" />
 
       <motion.div 
         layout
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
-        className="w-full max-w-md p-8 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl z-10 relative overflow-hidden"
+        transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+        className="w-full max-w-md p-10 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl z-10 relative overflow-hidden"
       >
         {/* Header & Toggle */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="shadow-lg shadow-indigo-500/30 rounded-xl">
-              <Logo size={56} />
+        <div className="text-center mb-10">
+          <div className="flex justify-center mb-6">
+            <div className="shadow-[0_0_30px_rgba(99,102,241,0.3)] rounded-2xl bg-indigo-950/50 p-1 border border-white/10">
+              <Logo size={64} />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-white mb-6">JurisControl</h1>
+          <h1 className="text-3xl font-bold text-white mb-8 tracking-tight">JurisControl</h1>
           
           {/* Toggle Switch */}
-          <div className="bg-black/20 p-1 rounded-xl flex relative">
+          <div className="bg-black/30 p-1.5 rounded-xl flex relative border border-white/5">
             <motion.div 
               layoutId="tab-bg"
-              className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white/10 rounded-lg shadow-sm ${mode === 'login' ? 'left-1' : 'left-[calc(50%+2px)]'}`}
+              className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-white/10 rounded-lg border border-white/10 ${mode === 'login' ? 'left-1.5' : 'left-[calc(50%+3px)]'}`}
               transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
             />
             <button 
               onClick={() => setMode('login')}
-              className={`flex-1 py-2 text-sm font-medium relative z-10 transition-colors ${mode === 'login' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`flex-1 py-2.5 text-sm font-bold relative z-10 transition-colors ${mode === 'login' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
               Entrar
             </button>
             <button 
               onClick={() => setMode('register')}
-              className={`flex-1 py-2 text-sm font-medium relative z-10 transition-colors ${mode === 'register' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
+              className={`flex-1 py-2.5 text-sm font-bold relative z-10 transition-colors ${mode === 'register' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
             >
               Criar Conta
             </button>
@@ -99,7 +120,7 @@ export const Login: React.FC = () => {
         </div>
 
         {/* Forms */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <AnimatePresence mode="wait">
             {mode === 'register' && (
               <>
@@ -110,14 +131,14 @@ export const Login: React.FC = () => {
                   exit={{ opacity: 0, height: 0 }}
                   className="space-y-2 overflow-hidden"
                 >
-                  <label className="text-xs font-medium text-slate-300 ml-1">Nome Completo</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">Nome Completo</label>
                   <div className="relative">
-                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                     <input 
                       type="text" 
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-colors"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all"
                       placeholder="Dr. João Silva"
                     />
                   </div>
@@ -130,14 +151,14 @@ export const Login: React.FC = () => {
                   exit={{ opacity: 0, height: 0 }}
                   className="space-y-2 overflow-hidden"
                 >
-                  <label className="text-xs font-medium text-slate-300 ml-1">Número OAB (Opcional)</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">Número OAB (Opcional)</label>
                   <div className="relative">
-                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                     <input 
                       type="text" 
                       value={oab}
                       onChange={(e) => setOab(e.target.value.toUpperCase())}
-                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-colors"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all"
                       placeholder="UF/000.000"
                     />
                   </div>
@@ -147,28 +168,28 @@ export const Login: React.FC = () => {
           </AnimatePresence>
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-300 ml-1">E-mail</label>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">E-mail</label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input 
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-colors"
+                className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all"
                 placeholder="nome@escritorio.com"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-300 ml-1">Senha</label>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">Senha</label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input 
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-colors"
+                className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all"
                 placeholder="••••••••"
               />
             </div>
@@ -183,20 +204,20 @@ export const Login: React.FC = () => {
                 exit={{ opacity: 0, height: 0 }}
                 className="space-y-2 overflow-hidden"
               >
-                <label className="text-xs font-medium text-slate-300 ml-1">Confirmar Senha</label>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">Confirmar Senha</label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                   <input 
                     type="password" 
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className={`w-full bg-black/20 border rounded-xl py-3 pl-10 pr-4 text-slate-200 placeholder:text-slate-600 focus:outline-none transition-colors ${
-                       confirmPassword && confirmPassword !== password ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'
+                    className={`w-full bg-black/20 border rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:outline-none transition-all ${
+                       confirmPassword && confirmPassword !== password ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'
                     }`}
                     placeholder="••••••••"
                   />
                   {confirmPassword && confirmPassword === password && (
-                    <Check className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-400" size={18} />
+                    <Check className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500" size={18} />
                   )}
                 </div>
               </motion.div>
@@ -206,25 +227,56 @@ export const Login: React.FC = () => {
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-3 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed mt-4"
+            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed mt-6 hover:scale-[1.02] active:scale-[0.98]"
           >
             {loading ? (
               <span className="animate-pulse">Processando...</span>
             ) : (
               <>
                 {mode === 'login' ? 'Entrar no Sistema' : 'Criar Minha Conta'}
-                <ArrowRight size={18} />
+                <ArrowRight size={20} />
               </>
             )}
           </button>
         </form>
 
         {mode === 'login' && (
-          <div className="mt-6 text-center">
-            <button className="text-xs text-slate-500 hover:text-indigo-400 transition-colors">Esqueceu sua senha?</button>
+          <div className="mt-8 text-center">
+            <button 
+              type="button"
+              onClick={() => setShowForgotModal(true)}
+              className="text-xs font-medium text-slate-500 hover:text-indigo-400 transition-colors"
+            >
+              Esqueceu sua senha?
+            </button>
           </div>
         )}
       </motion.div>
+
+      {/* Forgot Password Modal */}
+      <Modal isOpen={showForgotModal} onClose={() => setShowForgotModal(false)} title="Recuperar Senha" maxWidth="max-w-sm">
+         <form onSubmit={handleForgotPassword} className="space-y-4">
+            <p className="text-sm text-slate-400">Digite seu e-mail para receber as instruções de redefinição de senha.</p>
+            <div className="relative">
+               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+               <input 
+                 type="email" 
+                 required
+                 value={recoverEmail}
+                 onChange={(e) => setRecoverEmail(e.target.value)}
+                 className="w-full bg-black/20 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white focus:border-indigo-500 focus:outline-none"
+                 placeholder="seu@email.com"
+               />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+               <button type="button" onClick={() => setShowForgotModal(false)} className="px-4 py-2 text-slate-400 hover:text-white rounded-lg transition-colors text-sm font-medium">Cancelar</button>
+               <button type="submit" disabled={isRecovering} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-70">
+                  {isRecovering ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+                  {isRecovering ? 'Enviando...' : 'Enviar Link'}
+               </button>
+            </div>
+         </form>
+      </Modal>
     </div>
   );
 };

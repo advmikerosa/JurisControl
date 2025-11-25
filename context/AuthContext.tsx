@@ -1,14 +1,16 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, AuthProvider as AuthProviderType } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
 import { authMockService } from '../services/authMockService';
+import { useToast } from './ToastContext';
 
 interface AuthContextData {
   isAuthenticated: boolean;
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, oab?: string) => Promise<boolean>; // Retorna true se precisar de verificação de email
+  register: (name: string, email: string, password: string, oab?: string) => Promise<boolean>;
+  recoverPassword: (email: string) => Promise<boolean>;
   socialLogin: (provider: AuthProviderType) => Promise<void>;
   updateProfile: (data: Partial<User>) => void;
   logout: () => void;
@@ -17,10 +19,64 @@ interface AuthContextData {
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
+// Tempo de inatividade em milissegundos (30 minutos)
+const INACTIVITY_LIMIT = 30 * 60 * 1000; 
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { addToast } = useToast();
+
+  // Função de logout memorizada para uso no useEffect
+  const logout = useCallback(async (isAutoLogout = false) => {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.auth.signOut();
+    }
+    setUser(null);
+    setIsAuthenticated(false);
+    localStorage.removeItem('@JurisControl:user');
+    localStorage.removeItem('@JurisControl:lastActivity');
+    
+    if (isAutoLogout) {
+      addToast('Sessão expirada por inatividade.', 'warning');
+    }
+  }, [addToast]);
+
+  // Monitoramento de Sessão e Inatividade
+  useEffect(() => {
+    let inactivityTimer: ReturnType<typeof setTimeout>;
+
+    const resetInactivityTimer = () => {
+      if (!isAuthenticated) return;
+      
+      clearTimeout(inactivityTimer);
+      localStorage.setItem('@JurisControl:lastActivity', Date.now().toString());
+      
+      inactivityTimer = setTimeout(() => {
+        logout(true);
+      }, INACTIVITY_LIMIT);
+    };
+
+    // Eventos que indicam atividade
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    
+    if (isAuthenticated) {
+      // Verificar se já expirou ao carregar/focar
+      const lastActivity = parseInt(localStorage.getItem('@JurisControl:lastActivity') || '0');
+      if (lastActivity > 0 && Date.now() - lastActivity > INACTIVITY_LIMIT) {
+        logout(true);
+      } else {
+        resetInactivityTimer();
+        events.forEach(event => window.addEventListener(event, resetInactivityTimer));
+      }
+    }
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      events.forEach(event => window.removeEventListener(event, resetInactivityTimer));
+    };
+  }, [isAuthenticated, logout]);
 
   useEffect(() => {
     // Check current session
@@ -28,8 +84,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const checkSession = async () => {
       if (isSupabaseConfigured && supabase) {
-        // PERFORMANCE: Use getUser() instead of getSession() for stricter security,
-        // but getSession is faster for checking local state initially.
         const { data: { session } } = await supabase.auth.getSession();
         
         if (mounted) {
@@ -42,7 +96,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsLoading(false);
         }
         
-        // Listen for changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
           if (!mounted) return;
           if (session?.user) {
@@ -100,6 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(user);
       setIsAuthenticated(true);
       localStorage.setItem('@JurisControl:user', JSON.stringify(user));
+      localStorage.setItem('@JurisControl:lastActivity', Date.now().toString());
     }
   };
 
@@ -113,36 +167,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             full_name: name,
             role: 'Advogado',
             oab: oab || '',
-            username: '@' + name.toLowerCase().replace(/\s+/g, '') // Basic generation for supabase
+            username: '@' + name.toLowerCase().replace(/\s+/g, '')
           }
         }
       });
       if (error) throw new Error(error.message);
-      
-      // Se o Supabase estiver configurado para confirmar email, a sessão pode vir nula ou usuário identities vazio
       if (data.user && data.user.identities && data.user.identities.length === 0) {
          throw new Error('Este email já está cadastrado.');
       }
-      
-      // Se não tem sessão ativa logo após o cadastro, significa que precisa confirmar email
       return !data.session;
     } else {
-      const user = await authMockService.register(name, email, password, oab);
-      // Em modo mock, NÃO loga automaticamente para simular confirmação de e-mail (ou apenas retorna true)
-      
-      // Armazenamos o usuário "pendente" ou apenas simulamos que foi criado no "backend"
-      // Para fins de demo, vamos assumir que o login subsequente funcionará com as credenciais criadas.
-      
-      // IMPORTANTE: Para o fluxo de "novo usuário sem escritório", o authMockService.register
-      // já retorna um usuário com offices: [] e username gerado.
+      await authMockService.register(name, email, password, oab);
       return true; 
+    }
+  };
+
+  const recoverPassword = async (email: string): Promise<boolean> => {
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/#/reset-password',
+      });
+      if (error) throw new Error(error.message);
+      return true;
+    } else {
+      return authMockService.recoverPassword(email);
     }
   };
 
   const socialLogin = async (provider: AuthProviderType) => {
     if (isSupabaseConfigured && supabase) {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: provider as any, // 'google', 'apple', 'azure' (microsoft)
+        provider: provider as any,
       });
       if (error) throw new Error(error.message);
     } else {
@@ -150,53 +205,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(user);
       setIsAuthenticated(true);
       localStorage.setItem('@JurisControl:user', JSON.stringify(user));
+      localStorage.setItem('@JurisControl:lastActivity', Date.now().toString());
     }
   };
 
   const updateProfile = async (data: Partial<User>) => {
-    // Atualiza estado local para UI instantânea
     setUser(prev => {
         if (!prev) return null;
         const newUser = { ...prev, ...data };
-        
         if (!isSupabaseConfigured) {
-            // Em modo demo, persista no localStorage para que o reload não perca os dados
             localStorage.setItem('@JurisControl:user', JSON.stringify(newUser));
         }
         return newUser;
     });
 
     if (isSupabaseConfigured && supabase) {
-        // Mapear campos para metadata do Supabase
         const updates: any = {};
         if (data.name) updates.full_name = data.name;
         if (data.avatar) updates.avatar_url = data.avatar;
         if (data.phone) updates.phone = data.phone;
         if (data.oab) updates.oab = data.oab;
         if (data.username) updates.username = data.username;
-        
-        // Escritório
         if (data.offices) updates.offices = data.offices;
         if (data.currentOfficeId) updates.currentOfficeId = data.currentOfficeId;
 
-        const { error } = await supabase.auth.updateUser({
-            data: updates
-        });
+        const { error } = await supabase.auth.updateUser({ data: updates });
         if (error) console.error("Error updating Supabase profile", error);
     }
   };
 
-  const logout = async () => {
-    if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut();
-    }
-    setUser(null);
-    setIsAuthenticated(false);
-    localStorage.removeItem('@JurisControl:user');
-  };
-
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, register, socialLogin, updateProfile, logout, isLoading }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, register, recoverPassword, socialLogin, updateProfile, logout: () => logout(false), isLoading }}>
       {children}
     </AuthContext.Provider>
   );

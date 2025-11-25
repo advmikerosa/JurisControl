@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
@@ -8,7 +7,7 @@ import { storageService } from '../services/storageService';
 import { notificationService } from '../services/notificationService';
 import { Modal } from '../components/ui/Modal';
 import { OfficeEditModal } from '../components/OfficeEditModal';
-import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus } from 'lucide-react';
+import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2 } from 'lucide-react';
 import { AppSettings, Office } from '../types';
 
 export const Settings: React.FC = () => {
@@ -17,6 +16,7 @@ export const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [confirmModal, setConfirmModal] = useState({ open: false, action: () => {} });
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   
   // State para Configurações
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -49,13 +49,17 @@ export const Settings: React.FC = () => {
 
   const handleSaveSettings = () => {
     if (settings) {
-        storageService.saveSettings(settings);
-        addToast('Preferências salvas com sucesso!', 'success');
-        
-        // Test Notification if enabled
-        if (settings.notifications.sound || settings.notifications.desktop) {
-          notificationService.notify('Configurações Salvas', 'Suas preferências de notificação estão ativas.', 'success');
-        }
+        setIsSaving(true);
+        setTimeout(() => {
+            storageService.saveSettings(settings);
+            addToast('Preferências salvas com sucesso!', 'success');
+            setIsSaving(false);
+            
+            // Test Notification if enabled
+            if (settings.notifications.sound || settings.notifications.desktop) {
+              notificationService.notify('Configurações Salvas', 'Suas preferências de notificação estão ativas.', 'success');
+            }
+        }, 800);
     }
   };
 
@@ -218,7 +222,7 @@ export const Settings: React.FC = () => {
                         <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
                             <div>
                                 <p className="text-sm font-medium text-white flex items-center gap-2"><Moon size={16} /> Modo Compacto</p>
-                                <p className="text-xs text-slate-500">Reduz o espaçamento das listas.</p>
+                                <p className="text-xs text-slate-500">Reduz o espaçamento das listas para exibir mais itens na tela.</p>
                             </div>
                             <button 
                                 onClick={() => toggleSetting('general', 'compactMode')}
@@ -312,9 +316,11 @@ export const Settings: React.FC = () => {
                 <div className="flex justify-end pt-6">
                     <button 
                         onClick={handleSaveSettings}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/20"
+                        disabled={isSaving}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-70 disabled:cursor-not-allowed"
                     >
-                        <Save size={18} /> Salvar Preferências
+                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                        {isSaving ? 'Salvando...' : 'Salvar Preferências'}
                     </button>
                 </div>
              </div>
@@ -483,7 +489,7 @@ export const Settings: React.FC = () => {
                                       </div>
                                       <div>
                                           <p className="text-sm text-white font-medium">{member.name} {user?.id === member.userId && '(Você)'}</p>
-                                          <p className="text-xs text-slate-500">{member.role}</p>
+                                          <p className="text-xs text-slate-300">{member.role}</p>
                                       </div>
                                   </div>
                                   <div className="flex items-center gap-2">

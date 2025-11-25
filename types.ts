@@ -89,6 +89,7 @@ export interface Client {
   city: string;
   state: string;
   notes?: string;
+  tags?: string[]; // New field for categorization
   createdAt: string;
   
   // Dados PF
@@ -117,8 +118,17 @@ export interface CaseMovement {
   date: string;
   title: string;
   description: string;
-  type: 'Andamento' | 'Despacho' | 'Petição' | 'Audiência' | 'Nota';
+  type: 'Andamento' | 'Despacho' | 'Petição' | 'Audiência' | 'Nota' | 'Sistema';
   author: string;
+}
+
+export interface ChangeLogEntry {
+  id: string;
+  date: string;
+  author: string;
+  field: string;
+  oldValue: string;
+  newValue: string;
 }
 
 export interface LegalCase {
@@ -143,6 +153,7 @@ export interface LegalCase {
   description?: string; // Observações iniciais
   lastUpdate?: string; // Para automação de arquivamento
   movements?: CaseMovement[]; // Histórico do processo
+  changeLog?: ChangeLogEntry[]; // Histórico de alterações de campos
   userId?: string;
 }
 
@@ -328,6 +339,15 @@ export interface Lead {
   tasks: SalesTask[];
 }
 
+// Search Result Type
+export interface SearchResult {
+  id: string;
+  type: 'client' | 'case' | 'task';
+  title: string;
+  subtitle?: string;
+  url: string;
+}
+
 // Dashboard Aggregated Data
 export interface DashboardData {
   counts: {
@@ -343,6 +363,6 @@ export interface DashboardData {
   lists: {
     upcomingHearings: LegalCase[];
     todaysAgenda: { type: 'task' | 'hearing'; title: string; sub: string; id: string }[];
-    recentMovements: { id: string; caseId: string; caseTitle: string; description: string; date: string; type: string }[];
+    recentMovements: { id: string; caseId: string; caseTitle: string; description: string; date: string; type: string; sortTime?: number }[];
   };
 }

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { FileText, ArrowLeft, CheckCircle } from 'lucide-react';
@@ -63,14 +64,6 @@ export const TermsOfUse: React.FC = () => {
           <p>
             O JurisControl não se responsabiliza por perdas indiretas, lucros cessantes ou falhas decorrentes de má utilização 
             do sistema, problemas de conectividade do usuário ou eventos de força maior.
-          </p>
-        </section>
-
-        <section>
-          <h2 className="text-xl font-semibold text-white mb-3">6. Alterações nos Termos</h2>
-          <p>
-            Reservamo-nos o direito de alterar estes termos a qualquer momento. Notificaremos os usuários sobre alterações 
-            significativas através do sistema ou e-mail cadastrado.
           </p>
         </section>
 
