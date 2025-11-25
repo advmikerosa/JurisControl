@@ -18,9 +18,9 @@ interface AuthContextData {
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
-// Tempo de inatividade em milissegundos (30 minutos)
+// Time in milliseconds (30 minutes)
 const INACTIVITY_LIMIT = 30 * 60 * 1000; 
-const ACTIVITY_THROTTLE = 5000; // Update activity timestamp at most every 5 seconds
+const ACTIVITY_THROTTLE = 5000; // Only update activity timestamp at most every 5 seconds
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -29,10 +29,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { addToast } = useToast();
   const lastActivityUpdate = useRef<number>(Date.now());
 
-  // Função de logout memorizada para uso no useEffect
+  // Memoized logout function
   const logout = useCallback(async (isAutoLogout = false) => {
-    if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut();
+    try {
+      if (isSupabaseConfigured && supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (e) {
+      console.error("Logout error", e);
     }
     setUser(null);
     setIsAuthenticated(false);
@@ -44,15 +48,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [addToast]);
 
-  // Monitoramento de Sessão e Inatividade com Throttle
+  // Activity Monitoring with Throttling
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     let inactivityTimer: ReturnType<typeof setTimeout>;
 
     const resetInactivityTimer = () => {
-      if (!isAuthenticated) return;
-      
       const now = Date.now();
-      // Throttle updates to local storage to avoid performance hit
+      // Optimization: Throttle updates to local storage
       if (now - lastActivityUpdate.current > ACTIVITY_THROTTLE) {
           localStorage.setItem('@JurisControl:lastActivity', now.toString());
           lastActivityUpdate.current = now;
@@ -64,18 +68,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }, INACTIVITY_LIMIT);
     };
 
-    // Eventos que indicam atividade
     const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
     
-    if (isAuthenticated) {
-      // Verificar se já expirou ao carregar/focar
-      const lastActivity = parseInt(localStorage.getItem('@JurisControl:lastActivity') || '0');
-      if (lastActivity > 0 && Date.now() - lastActivity > INACTIVITY_LIMIT) {
-        logout(true);
-      } else {
-        resetInactivityTimer(); // Start timer
-        events.forEach(event => window.addEventListener(event, resetInactivityTimer));
-      }
+    // Check immediate expiration on load
+    const lastActivity = parseInt(localStorage.getItem('@JurisControl:lastActivity') || '0');
+    if (lastActivity > 0 && Date.now() - lastActivity > INACTIVITY_LIMIT) {
+      logout(true);
+    } else {
+      resetInactivityTimer(); // Start timer
+      events.forEach(event => window.addEventListener(event, resetInactivityTimer));
     }
 
     return () => {
@@ -85,7 +86,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [isAuthenticated, logout]);
 
   useEffect(() => {
-    // Check current session
     let mounted = true;
 
     const checkSession = async () => {
@@ -118,8 +118,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Fallback LocalStorage (Demo Mode)
         const storedUser = localStorage.getItem('@JurisControl:user');
         if (storedUser && mounted) {
-          setUser(JSON.parse(storedUser));
-          setIsAuthenticated(true);
+          try {
+            setUser(JSON.parse(storedUser));
+            setIsAuthenticated(true);
+          } catch {
+            localStorage.removeItem('@JurisControl:user');
+          }
         }
         if (mounted) setIsLoading(false);
       }

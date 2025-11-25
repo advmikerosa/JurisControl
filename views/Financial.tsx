@@ -111,7 +111,7 @@ export const Financial: React.FC = () => {
       });
     }
     return data;
-  }, [transactions]); // Dependencies ensured for useMemo
+  }, [transactions]); 
 
   const chartDataCategories = useMemo(() => {
     const cats: Record<string, number> = {};
@@ -135,7 +135,7 @@ export const Financial: React.FC = () => {
       return;
     }
 
-    // Secure parsing for "1.000,00" format
+    // Secure parsing for "1.000,00" format (Remove dots, replace comma with dot)
     const baseAmount = parseFloat(formData.amount.replace(/\./g, '').replace(',', '.'));
     
     if (isNaN(baseAmount)) {
@@ -434,7 +434,7 @@ export const Financial: React.FC = () => {
         </motion.div>
       )}
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Novo Lançamento Financeiro" footer={<><button onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">Cancelar</button><button onClick={handleSaveTransaction} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors">Salvar Lançamento</button></>}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Novo Lançamento Financeiro" footer={<><button onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors">Cancelar</button><button onClick={handleSaveTransaction} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors">Salvar Lançamento</button></>}>
         <form className="space-y-4">
            <div className="flex bg-black/20 rounded-lg p-1 mb-2">
               <button type="button" onClick={() => setFormData({...formData, type: 'Receita', category: 'Honorários'})} className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${formData.type === 'Receita' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400'}`}>Receita</button>

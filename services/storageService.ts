@@ -113,6 +113,7 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
       const { id, documents, history, alerts, ...rest } = client;
+      // Ensure fields match DB schema types
       const payload = { ...rest, user_id: userId };
       
       if (id && !id.startsWith('cli-')) {
@@ -130,11 +131,9 @@ class StorageService {
             list[idx] = client;
             this.logActivity(`Atualizou dados do cliente: ${client.name}`);
         } else {
-            // Safely push if ID exists but not found
             list.push({ ...client, userId });
         }
       } else {
-        // Consistent ID Generation
         const newId = client.id || `cli-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
         list.unshift({ ...client, id: newId, userId });
         this.logActivity(`Criou novo cliente: ${client.name}`);
@@ -266,6 +265,7 @@ class StorageService {
       if (dateRange && dateRange.start && dateRange.end) {
         allCases = allCases.filter(c => {
            if (!c.lastUpdate) return false;
+           // Handle ISO dates safely
            const dateStr = c.lastUpdate.split('T')[0];
            return dateStr >= dateRange.start && dateStr <= dateRange.end;
         });
@@ -349,12 +349,13 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
       const { id, client, ...rest } = legalCase;
+      // Clean payload for Supabase
       const payload: any = {
         ...rest,
         user_id: userId,
         client_id: client.id, 
-        responsibleLawyer: rest.responsibleLawyer
       };
+      // Remove undefined fields
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
       if (id && !id.startsWith('case-')) {
@@ -696,12 +697,11 @@ class StorageService {
     let activeCases = 0, wonCases = 0, pendingCases = 0, archivedCases = 0, hearings = 0;
     
     for (const c of allCases) {
-        switch(c.status) {
-            case CaseStatus.ACTIVE: activeCases++; break;
-            case CaseStatus.WON: wonCases++; break;
-            case CaseStatus.PENDING: pendingCases++; break;
-            case CaseStatus.ARCHIVED: archivedCases++; break;
-        }
+        if (c.status === CaseStatus.ACTIVE) activeCases++;
+        else if (c.status === CaseStatus.WON) wonCases++;
+        else if (c.status === CaseStatus.PENDING) pendingCases++;
+        else if (c.status === CaseStatus.ARCHIVED) archivedCases++;
+        
         if (c.nextHearing) hearings++;
     }
 
@@ -771,7 +771,7 @@ class StorageService {
     const results: SearchResult[] = [];
 
     // Filter Clients
-    clients.forEach(c => {
+    for (const c of clients) {
         if (c.name.toLowerCase().includes(lowerQuery) || 
             c.email.toLowerCase().includes(lowerQuery) || 
             (c.cpf && c.cpf.includes(lowerQuery)) || 
@@ -784,10 +784,10 @@ class StorageService {
                 url: `/clients/${c.id}`
             });
         }
-    });
+    }
 
     // Filter Cases
-    cases.forEach(c => {
+    for (const c of cases) {
         if (c.title.toLowerCase().includes(lowerQuery) || 
             c.cnj.includes(lowerQuery) || 
             c.client.name.toLowerCase().includes(lowerQuery)) {
@@ -799,10 +799,10 @@ class StorageService {
                 url: `/cases/${c.id}`
             });
         }
-    });
+    }
 
     // Filter Tasks
-    tasks.forEach(t => {
+    for (const t of tasks) {
         if (t.title.toLowerCase().includes(lowerQuery)) {
             results.push({
                 id: t.id,
@@ -812,7 +812,7 @@ class StorageService {
                 url: '/crm'
             });
         }
-    });
+    }
 
     return results.slice(0, 8);
   }

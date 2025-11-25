@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { storageService } from '../services/storageService';
@@ -333,6 +332,8 @@ export const Cases: React.FC = () => {
       setCategoryFilter('Todos');
       setDateRange({ start: '', end: '' });
       setSearchTerm('');
+      setDebouncedSearch('');
+      setPage(1);
   };
 
   return (
