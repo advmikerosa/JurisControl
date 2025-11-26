@@ -2,13 +2,20 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { User, AuthProvider as AuthProviderType } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
 import { authMockService } from '../services/authMockService';
+import { storageService } from '../services/storageService';
 import { useToast } from './ToastContext';
+
+interface OfficeRegistrationData {
+  mode: 'create' | 'join';
+  name?: string; // Required if create
+  handle: string; // Required for both
+}
 
 interface AuthContextData {
   isAuthenticated: boolean;
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, oab?: string) => Promise<boolean>;
+  register: (name: string, email: string, password: string, oab?: string, officeData?: OfficeRegistrationData) => Promise<boolean>;
   recoverPassword: (email: string) => Promise<boolean>;
   socialLogin: (provider: AuthProviderType) => Promise<void>;
   updateProfile: (data: Partial<User>) => void;
@@ -174,8 +181,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string, oab?: string): Promise<boolean> => {
+  const register = useCallback(async (name: string, email: string, password: string, oab?: string, officeData?: OfficeRegistrationData): Promise<boolean> => {
     if (isSupabaseConfigured && supabase) {
+      // 1. Create User
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -188,14 +196,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       });
+      
       if (error) throw new Error(error.message);
       if (data.user && data.user.identities && data.user.identities.length === 0) {
          throw new Error('Este email já está cadastrado.');
       }
+
+      // If session is created (auto-confirm enabled or mock), we can proceed to create/join office
+      if (data.session && officeData) {
+          try {
+              // We need to login implicitly by setting the context user temporarily if strictly needed, 
+              // but Supabase client handles session automatically after signUp if auto-confirm is on.
+              
+              // Handle Office Logic
+              if (officeData.mode === 'create' && officeData.name) {
+                  // Storage service uses the current authenticated user from supabase client
+                  const newOffice = await storageService.createOffice({
+                      name: officeData.name,
+                      handle: officeData.handle,
+                      location: 'Brasil'
+                  });
+                  // Update user metadata with the new office
+                  await supabase.auth.updateUser({
+                      data: { 
+                          offices: [newOffice.id],
+                          currentOfficeId: newOffice.id
+                      }
+                  });
+              } else if (officeData.mode === 'join') {
+                  const joinedOffice = await storageService.joinOffice(officeData.handle);
+                  await supabase.auth.updateUser({
+                      data: { 
+                          offices: [joinedOffice.id],
+                          currentOfficeId: joinedOffice.id
+                      }
+                  });
+              }
+          } catch (officeError) {
+              console.error("Office registration failed:", officeError);
+              // Don't fail the whole registration, but maybe warn user
+          }
+      }
+
       return !data.session;
     } else {
-      await authMockService.register(name, email, password, oab);
-      return true; 
+      // Mock Service
+      const user = await authMockService.register(name, email, password, oab, officeData);
+      
+      // If using Mock service, we auto-login
+      setUser(user);
+      setIsAuthenticated(true);
+      localStorage.setItem('@JurisControl:user', JSON.stringify(user));
+      localStorage.setItem('@JurisControl:lastActivity', Date.now().toString());
+      
+      return false; // No verification needed in mock
     }
   }, []);
 

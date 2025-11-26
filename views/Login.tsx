@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase, X, Loader2 } from 'lucide-react';
+import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase, X, Loader2, Building, AtSign, Users } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { Logo } from '../components/Logo';
 import { Modal } from '../components/ui/Modal';
@@ -25,6 +25,11 @@ export const Login: React.FC = () => {
   const [oab, setOab] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Office States
+  const [officeMode, setOfficeMode] = useState<'create' | 'join'>('create');
+  const [officeName, setOfficeName] = useState('');
+  const [officeHandle, setOfficeHandle] = useState('');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -36,16 +41,27 @@ export const Login: React.FC = () => {
         addToast('Login realizado com sucesso!', 'success');
         navigate('/');
       } else {
-        if (!name || !email || !password) throw new Error('Preencha todos os campos.');
+        if (!name || !email || !password) throw new Error('Preencha todos os campos pessoais.');
         if (password !== confirmPassword) throw new Error('As senhas não coincidem.');
         if (password.length < 6) throw new Error('A senha deve ter no mínimo 6 caracteres.');
         
-        const needsVerification = await register(name, email, password, oab);
+        // Validate Office Fields
+        if (officeMode === 'create') {
+            if (!officeName) throw new Error('Digite o nome do seu escritório.');
+            if (!officeHandle) throw new Error('Crie um identificador (@handle) para o escritório.');
+        }
+        if (!officeHandle.startsWith('@')) throw new Error('O identificador do escritório deve começar com @.');
+
+        const needsVerification = await register(name, email, password, oab, {
+            mode: officeMode,
+            name: officeMode === 'create' ? officeName : undefined,
+            handle: officeHandle
+        });
         
         if (needsVerification) {
            navigate('/confirm-email', { state: { email } });
         } else {
-           addToast('Conta criada e logada!', 'success');
+           addToast(`Bem-vindo ao ${officeMode === 'create' ? officeName : 'escritório'}!`, 'success');
            navigate('/');
         }
       }
@@ -76,20 +92,22 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden px-4 bg-[#0f172a]">
+    <div className="min-h-screen flex items-center justify-center relative overflow-y-auto py-10 px-4 bg-[#0f172a]">
       {/* Dark Mode Background Effects */}
-      <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-indigo-900/30 rounded-full blur-[120px]" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-violet-900/30 rounded-full blur-[120px]" />
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-indigo-900/30 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-violet-900/30 rounded-full blur-[120px]" />
+      </div>
 
       <motion.div 
         layout
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
-        className="w-full max-w-md p-10 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl z-10 relative overflow-hidden"
+        className="w-full max-w-md p-8 md:p-10 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl z-10 relative overflow-hidden my-auto"
       >
         {/* Header & Toggle */}
-        <div className="text-center mb-10">
+        <div className="text-center mb-8">
           <div className="flex justify-center mb-6">
             <div className="shadow-[0_0_30px_rgba(99,102,241,0.3)] rounded-2xl bg-indigo-950/50 p-1 border border-white/10">
               <Logo size={64} />
@@ -197,30 +215,124 @@ export const Login: React.FC = () => {
 
           <AnimatePresence mode="wait">
             {mode === 'register' && (
-              <motion.div
-                key="confirm-pass-field"
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-2 overflow-hidden"
-              >
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">Confirmar Senha</label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                  <input 
-                    type="password" 
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className={`w-full bg-black/20 border rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:outline-none transition-all ${
-                       confirmPassword && confirmPassword !== password ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'
-                    }`}
-                    placeholder="••••••••"
-                  />
-                  {confirmPassword && confirmPassword === password && (
-                    <Check className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500" size={18} />
-                  )}
-                </div>
-              </motion.div>
+              <>
+                <motion.div
+                  key="confirm-pass-field"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2 overflow-hidden"
+                >
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">Confirmar Senha</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                    <input 
+                      type="password" 
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className={`w-full bg-black/20 border rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:outline-none transition-all ${
+                        confirmPassword && confirmPassword !== password ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'
+                      }`}
+                      placeholder="••••••••"
+                    />
+                    {confirmPassword && confirmPassword === password && (
+                      <Check className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500" size={18} />
+                    )}
+                  </div>
+                </motion.div>
+
+                {/* --- Office Registration Section --- */}
+                <motion.div
+                  key="office-section"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-4 pt-2 border-t border-white/10 mt-4"
+                >
+                   <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-2">
+                      <Building size={16} className="text-indigo-400" /> Informações do Escritório
+                   </h3>
+                   
+                   <div className="flex p-1 bg-black/20 rounded-lg border border-white/5">
+                      <button 
+                        type="button"
+                        onClick={() => setOfficeMode('create')}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${officeMode === 'create' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Criar Novo
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setOfficeMode('join')}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${officeMode === 'join' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Entrar em Existente
+                      </button>
+                   </div>
+
+                   {officeMode === 'create' ? (
+                      <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }}
+                        className="space-y-3"
+                      >
+                          <div className="space-y-1">
+                             <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome do Escritório</label>
+                             <input 
+                                type="text" 
+                                value={officeName}
+                                onChange={(e) => setOfficeName(e.target.value)}
+                                placeholder="Ex: Silva Advogados Associados"
+                                className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                             />
+                          </div>
+                          <div className="space-y-1">
+                             <label className="text-xs font-bold text-slate-400 uppercase ml-1">Identificador Único (@handle)</label>
+                             <div className="relative">
+                                <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                                <input 
+                                    type="text" 
+                                    value={officeHandle}
+                                    onChange={(e) => {
+                                      let val = e.target.value.toLowerCase();
+                                      if (!val.startsWith('@') && val.length > 0) val = '@' + val;
+                                      setOfficeHandle(val);
+                                    }}
+                                    placeholder="@silva_adv"
+                                    className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-9 pr-4 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                />
+                             </div>
+                             <p className="text-[10px] text-slate-500 ml-1">Seus sócios usarão isso para entrar.</p>
+                          </div>
+                      </motion.div>
+                   ) : (
+                      <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }}
+                        className="space-y-3"
+                      >
+                          <div className="space-y-1">
+                             <label className="text-xs font-bold text-slate-400 uppercase ml-1">Identificador do Escritório</label>
+                             <div className="relative">
+                                <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                                <input 
+                                    type="text" 
+                                    value={officeHandle}
+                                    onChange={(e) => {
+                                      let val = e.target.value.toLowerCase();
+                                      if (!val.startsWith('@') && val.length > 0) val = '@' + val;
+                                      setOfficeHandle(val);
+                                    }}
+                                    placeholder="@exemplo_adv"
+                                    className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-9 pr-4 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                />
+                             </div>
+                             <p className="text-[10px] text-slate-500 ml-1">Peça o handle ao administrador do escritório.</p>
+                          </div>
+                      </motion.div>
+                   )}
+                </motion.div>
+              </>
             )}
           </AnimatePresence>
 

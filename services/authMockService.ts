@@ -1,6 +1,7 @@
 
 
-import { User, AuthProvider } from '../types';
+import { User, AuthProvider, Office } from '../types';
+import { storageService } from './storageService';
 
 // Simula atraso de rede
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -31,7 +32,7 @@ export const authMockService = {
     };
   },
 
-  async register(name: string, email: string, password: string, oab?: string): Promise<User> {
+  async register(name: string, email: string, password: string, oab?: string, officeData?: { mode: 'create' | 'join', name?: string, handle: string }): Promise<User> {
     await delay(1500);
 
     // Simula validação de email existente
@@ -41,22 +42,50 @@ export const authMockService = {
 
     // Gerar username automático
     const username = '@' + name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '').substring(0, 15);
+    const userId = 'u_new_' + Date.now();
 
-    return {
-      id: 'u_new_' + Date.now(),
+    // Setup initial user object without office
+    let user: User = {
+      id: userId,
       name: name,
       username: username,
       email: email,
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=10b981&color=fff`,
       provider: 'email',
-      offices: [], // Usuário novo SEM escritório (deve criar ou entrar em um)
+      offices: [], 
       currentOfficeId: undefined,
       twoFactorEnabled: false,
-      emailVerified: false, // Precisa verificar
+      emailVerified: false,
       phone: '',
       oab: oab || '',
       role: 'Advogado'
     };
+
+    // Store user temporarily to simulate authenticated state for storage service
+    localStorage.setItem('@JurisControl:user', JSON.stringify(user));
+
+    try {
+      if (officeData) {
+        let office: Office;
+        if (officeData.mode === 'create' && officeData.name) {
+           office = await storageService.createOffice({
+             name: officeData.name,
+             handle: officeData.handle,
+             location: 'Brasil'
+           });
+        } else {
+           office = await storageService.joinOffice(officeData.handle);
+        }
+        
+        user.offices = [office.id];
+        user.currentOfficeId = office.id;
+      }
+    } catch (e) {
+      console.error("Mock register office error", e);
+      // If office creation fails in mock, we still return the user but maybe warn
+    }
+
+    return user;
   },
 
   async loginSocial(provider: AuthProvider): Promise<User> {
