@@ -502,12 +502,10 @@ class StorageService {
     }
   }
 
-  585
-  (officeData: Partial<Office>): Promise<Office> {
+  async createOffice(officeData: Partial<Office>): Promise<Office> {
     const userId = await this.getUserId();
     // Fallback if user is null in localStorage (prevents crash)
     const userStr = localStorage.getItem('@JurisControl:user');
-    // FIX: Check if userStr exists before parsing, and use defensive optional chaining later
     const user = userStr ? JSON.parse(userStr) : { name: 'Admin', email: 'admin@email.com', avatar: '' };
 
     let handle = officeData.handle || `@office${Date.now()}`;
@@ -525,7 +523,7 @@ class StorageService {
             created_at: new Date().toISOString(),
             members: [{
                 userId: userId,
-                name: user?.name || 'User', // FIX: Optional chaining
+                name: user?.name || 'User',
                 email: user?.email || '',
                 avatarUrl: user?.avatar || '',
                 role: 'Admin',
@@ -559,7 +557,7 @@ class StorageService {
           members: [
             {
               userId: userId,
-              name: user?.name || 'User', // FIX: Optional chaining
+              name: user?.name || 'User',
               email: user?.email || '',
               avatarUrl: user?.avatar || '',
               role: 'Admin',
@@ -628,12 +626,12 @@ class StorageService {
 
         const userId = await this.getUserId();
         const userStr = localStorage.getItem('@JurisControl:user');
-        const user = userStr ? JSON.parse(userStr) : { name: 'Novo Membro', email: '', avatar: '', id: 'temp-id', username: '', provider: 'email', offices: [], twoFactorEnabled: false, emailVerified: false, phone: '', oab: '', role: 'Advogado' };
+        const user = userStr ? JSON.parse(userStr) : { name: 'Novo Membro', email: '', avatar: '' };
         
         if (!targetOffice.members.some(m => m.userId === userId)) {
            targetOffice.members.push({
              userId: userId,
-             name: user?.name || 'Novo Membro', // FIX: Optional chaining
+             name: user?.name || 'Novo Membro',
              email: user?.email || '',
              avatarUrl: user?.avatar || '',
              role: 'Advogado',
@@ -692,7 +690,7 @@ class StorageService {
           const parsed = s ? JSON.parse(s) : {};
           
           return {
-            general: parsed.general || { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false },
+            general: parsed.general || { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' },
             notifications: parsed.notifications || { email: true, desktop: true, sound: false, dailyDigest: false },
             emailPreferences: parsed.emailPreferences || {
                 enabled: false,
