@@ -30,6 +30,30 @@ export const Login: React.FC = () => {
   const [officeName, setOfficeName] = useState('');
   const [officeHandle, setOfficeHandle] = useState('');
 
+  const handleOabChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let v = e.target.value.toUpperCase();
+    // Remove tudo que não for letra ou número
+    v = v.replace(/[^A-Z0-9]/g, '');
+    
+    // Máscara UF/000.000
+    if (v.length > 2) {
+      v = v.substring(0, 2) + '/' + v.substring(2);
+    }
+    if (v.length > 6) {
+      // UF/000.000
+      // v[2] é a barra
+      // Se tiver mais que 3 numeros depois da barra, colocar ponto
+      // Ex: SP/123.456
+      const uf = v.substring(0, 2);
+      const num = v.substring(3);
+      if (num.length > 3) {
+         v = `${uf}/${num.substring(0, 3)}.${num.substring(3)}`;
+      }
+    }
+    // Limitar tamanho
+    setOab(v.substring(0, 10));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -175,7 +199,7 @@ export const Login: React.FC = () => {
                     <input 
                       type="text" 
                       value={oab}
-                      onChange={(e) => setOab(e.target.value.toUpperCase())}
+                      onChange={handleOabChange}
                       className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all"
                       placeholder="UF/000.000"
                     />

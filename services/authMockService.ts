@@ -79,6 +79,8 @@ export const authMockService = {
         
         user.offices = [office.id];
         user.currentOfficeId = office.id;
+        // Update user in storage with new office linkage
+        localStorage.setItem('@JurisControl:user', JSON.stringify(user));
       }
     } catch (e) {
       console.error("Mock register office error", e);

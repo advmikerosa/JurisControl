@@ -205,9 +205,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // If session is created (auto-confirm enabled or mock), we can proceed to create/join office
       if (data.session && officeData) {
           try {
-              // We need to login implicitly by setting the context user temporarily if strictly needed, 
-              // but Supabase client handles session automatically after signUp if auto-confirm is on.
-              
               // Handle Office Logic
               if (officeData.mode === 'create' && officeData.name) {
                   // Storage service uses the current authenticated user from supabase client
