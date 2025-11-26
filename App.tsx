@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
+import React, { Component, Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Layout } from './components/Layout';
@@ -36,7 +36,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = {
     hasError: false,
     error: null
