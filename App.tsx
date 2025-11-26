@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
+import React, { Component, Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Layout } from './components/Layout';
@@ -179,7 +179,7 @@ const AnimatedRoutes: React.FC = () => {
 const App: React.FC = () => {
   useEffect(() => {
     try {
-      storageService.seedDatabase();
+      // Seed removido para limpeza total
       storageService.runAutomations();
     } catch (e) {
       console.error("Failed to initialize app services:", e);

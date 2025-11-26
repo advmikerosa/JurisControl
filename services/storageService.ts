@@ -1,9 +1,6 @@
-
-import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, ChangeLogEntry } from '../types';
-import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS } from './mockData';
+import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { notificationService } from './notificationService';
-import { emailService } from './emailService';
 
 const TABLE_NAMES = {
   CLIENTS: 'clients',
@@ -13,6 +10,7 @@ const TABLE_NAMES = {
   DOCUMENTS: 'documents',
   OFFICES: 'offices',
   PROFILES: 'profiles',
+  LOGS: 'activity_logs',
 };
 
 const LOCAL_KEYS = {
@@ -24,54 +22,11 @@ const LOCAL_KEYS = {
   OFFICES: '@JurisControl:offices',
   LAST_CHECK: '@JurisControl:lastCheck',
   SETTINGS: '@JurisControl:settings',
+  LOGS: '@JurisControl:logs',
 };
 
-export const MOCK_OFFICES: Office[] = [
-  { 
-    id: '1', 
-    name: 'Advocacia Silva & Associados', 
-    handle: '@silvaassociados',
-    ownerId: 'u1',
-    location: 'São Paulo - SP',
-    logoUrl: undefined,
-    cnpj: '12.345.678/0001-90',
-    email: 'contato@silvaassociados.com.br',
-    phone: '(11) 3322-1100',
-    website: 'www.silvaassociados.adv.br',
-    description: 'Escritório especializado em direito empresarial e tributário com mais de 20 anos de tradição.',
-    areaOfActivity: 'Full Service',
-    members: [
-      {
-        userId: 'u1',
-        name: 'Dr. Usuário',
-        role: 'Admin',
-        permissions: { financial: true, cases: true, documents: true, settings: true },
-        email: 'admin@silva.com',
-        avatarUrl: 'https://ui-avatars.com/api/?name=Dr+Usuario&background=6366f1&color=fff'
-      },
-      {
-        userId: 'lawyer-2',
-        name: 'Dra. Amanda (Sócia)',
-        role: 'Advogado',
-        permissions: { financial: false, cases: true, documents: true, settings: false },
-        email: 'amanda@silva.com',
-        avatarUrl: 'https://ui-avatars.com/api/?name=Amanda&background=random'
-      },
-      {
-        userId: 'lawyer-3',
-        name: 'Dr. Roberto (Júnior)',
-        role: 'Advogado',
-        permissions: { financial: false, cases: true, documents: true, settings: false },
-        email: 'roberto@silva.com',
-        avatarUrl: 'https://ui-avatars.com/api/?name=Roberto&background=random'
-      }
-    ],
-    social: {
-      linkedin: 'linkedin.com/company/silva-associados',
-      instagram: '@silva.adv'
-    }
-  },
-];
+// Configuração Inicial Vazia
+export const MOCK_OFFICES: Office[] = [];
 
 class StorageService {
   
@@ -81,14 +36,7 @@ class StorageService {
       return data.session?.user?.id || 'anon';
     }
     const stored = localStorage.getItem('@JurisControl:user');
-    return stored ? JSON.parse(stored).id : 'demo-user';
-  }
-
-  private getUserName(): string {
-    try {
-      const stored = localStorage.getItem('@JurisControl:user');
-      return stored ? JSON.parse(stored).name : 'Usuário';
-    } catch { return 'Usuário'; }
+    return stored ? JSON.parse(stored).id : 'local-user';
   }
 
   private getCurrentUser(): User | null {
@@ -105,7 +53,7 @@ class StorageService {
         const userId = await this.getUserId();
         const { data, error } = await supabase
           .from(TABLE_NAMES.CLIENTS)
-          .select('id, name, type, status, email, phone, city, state, avatarUrl, cpf, cnpj, corporateName, createdAt, tags')
+          .select('id, name, type, status, email, phone, city, state, avatarUrl, cpf, cnpj, corporateName, createdAt, tags, alerts, notes, documents, history')
           .eq('user_id', userId)
           .order('name');
         
@@ -124,32 +72,26 @@ class StorageService {
     const userId = await this.getUserId();
 
     if (isSupabaseConfigured && supabase) {
-      const { id, documents, history, alerts, ...rest } = client;
-      const payload = { ...rest, user_id: userId };
+      const payload = { ...client, user_id: userId };
+      const { id, ...insertPayload } = payload;
       
       if (id && !id.startsWith('cli-')) {
-        await supabase.from(TABLE_NAMES.CLIENTS).update(payload).eq('id', id).eq('user_id', userId);
-        this.logActivity(`Atualizou dados do cliente: ${client.name}`);
+        await supabase.from(TABLE_NAMES.CLIENTS).upsert(payload);
       } else {
-        await supabase.from(TABLE_NAMES.CLIENTS).insert([{ id, ...payload }]);
-        this.logActivity(`Criou novo cliente: ${client.name}`);
+        await supabase.from(TABLE_NAMES.CLIENTS).insert([insertPayload]);
       }
+      this.logActivity(`Salvou cliente: ${client.name}`);
     } else {
       const list = await this.getClients();
-      if (client.id && !client.id.startsWith('cli-')) {
-        const idx = list.findIndex(i => i.id === client.id);
-        if (idx >= 0) {
-            list[idx] = client;
-            this.logActivity(`Atualizou dados do cliente: ${client.name}`);
-        } else {
-            list.push({ ...client, userId });
-        }
+      const idx = list.findIndex(i => i.id === client.id);
+      if (idx >= 0) {
+          list[idx] = client;
       } else {
-        const newId = client.id || `cli-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-        list.unshift({ ...client, id: newId, userId });
-        this.logActivity(`Criou novo cliente: ${client.name}`);
+          if (!client.id) client.id = `cli-${Date.now()}`;
+          list.unshift({ ...client, userId });
       }
       localStorage.setItem(LOCAL_KEYS.CLIENTS, JSON.stringify(list));
+      this.logActivity(`Salvou cliente: ${client.name}`);
     }
   }
 
@@ -158,7 +100,7 @@ class StorageService {
     const hasActiveCases = cases.some(c => c.client.id === id && c.status !== CaseStatus.ARCHIVED);
     
     if (hasActiveCases) {
-        throw new Error("BLOQUEIO: Não é possível excluir este cliente pois ele possui processos ativos. Arquive ou exclua os processos primeiro.");
+        throw new Error("BLOQUEIO: Não é possível excluir este cliente pois ele possui processos ativos.");
     }
 
     if (isSupabaseConfigured && supabase) {
@@ -166,24 +108,19 @@ class StorageService {
       await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id).eq('user_id', userId);
     } else {
       const list = await this.getClients();
-      const clientName = list.find(c => c.id === id)?.name || 'Desconhecido';
       localStorage.setItem(LOCAL_KEYS.CLIENTS, JSON.stringify(list.filter(i => i.id !== id)));
-      this.logActivity(`Excluiu cliente: ${clientName}`, 'Warning');
     }
+    this.logActivity(`Excluiu cliente ID: ${id}`, 'Warning');
   }
 
   // --- Processos (Cases) ---
-  
   async getCases(): Promise<LegalCase[]> {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
-          .select(`
-            id, cnj, title, status, category, phase, value, responsibleLawyer, nextHearing, lastUpdate, movements, changeLog,
-            client:clients(id, name, type, avatarUrl)
-          `)
+          .select(`*, client:clients(*)`)
           .eq('user_id', userId);
         if (error) throw error;
         
@@ -211,10 +148,7 @@ class StorageService {
         const userId = await this.getUserId();
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
-          .select(`
-            *,
-            client:clients(*)
-          `)
+          .select(`*, client:clients(*)`)
           .eq('id', id)
           .eq('user_id', userId)
           .single();
@@ -228,7 +162,6 @@ class StorageService {
 
         return mappedItem as unknown as LegalCase;
       } catch (e) { 
-        console.error("Error fetching case by id", e);
         return null; 
       }
     } else {
@@ -253,14 +186,11 @@ class StorageService {
         const userId = await this.getUserId();
         let query = supabase
           .from(TABLE_NAMES.CASES)
-          .select(`
-            id, cnj, title, status, category, phase, value, responsibleLawyer, nextHearing, lastUpdate,
-            client:clients(id, name, type, avatarUrl)
-          `, { count: 'exact' })
+          .select(`*, client:clients!inner(id, name, type, avatarUrl)`, { count: 'exact' })
           .eq('user_id', userId);
 
         if (searchTerm) {
-          query = query.or(`title.ilike.%${searchTerm}%,cnj.ilike.%${searchTerm}%`);
+          query = query.or(`title.ilike.%${searchTerm}%,cnj.ilike.%${searchTerm}%,client.name.ilike.%${searchTerm}%`);
         }
         if (statusFilter && statusFilter !== 'Todos') {
           query = query.eq('status', statusFilter);
@@ -272,12 +202,9 @@ class StorageService {
            query = query.gte('lastUpdate', dateRange.start).lte('lastUpdate', dateRange.end);
         }
 
-        const { data, count, error } = await query.range(start, end);
+        const { data, count, error } = await query.range(start, end).order('lastUpdate', { ascending: false });
         
-        if (error) {
-          console.error("Supabase Query Error:", error);
-          return { data: [], total: 0 };
-        }
+        if (error) return { data: [], total: 0 };
         
         const mappedData = (data || []).map((item: any) => {
             const c = Array.isArray(item.client) ? item.client[0] : item.client;
@@ -288,14 +215,12 @@ class StorageService {
         });
 
         return { data: mappedData as unknown as LegalCase[], total: count || 0 };
-      } catch (error) {
-        console.error("Supabase Exception in getCasesPaginated:", error);
+      } catch {
         return { data: [], total: 0 };
       }
     } else {
       try {
         let allCases = JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]') as LegalCase[];
-        
         if (searchTerm) {
           const lowerSearch = searchTerm.toLowerCase();
           allCases = allCases.filter(c => 
@@ -304,14 +229,8 @@ class StorageService {
             c.client.name.toLowerCase().includes(lowerSearch)
           );
         }
-        
-        if (statusFilter && statusFilter !== 'Todos') {
-          allCases = allCases.filter(c => c.status === statusFilter);
-        }
-        if (categoryFilter && categoryFilter !== 'Todos') {
-          allCases = allCases.filter(c => c.category === categoryFilter);
-        }
-
+        if (statusFilter && statusFilter !== 'Todos') allCases = allCases.filter(c => c.status === statusFilter);
+        if (categoryFilter && categoryFilter !== 'Todos') allCases = allCases.filter(c => c.category === categoryFilter);
         if (dateRange && dateRange.start && dateRange.end) {
           allCases = allCases.filter(c => {
              if (!c.lastUpdate) return false;
@@ -319,118 +238,43 @@ class StorageService {
              return dateStr >= dateRange.start && dateStr <= dateRange.end;
           });
         }
-
         allCases.sort((a, b) => new Date(b.lastUpdate || 0).getTime() - new Date(a.lastUpdate || 0).getTime());
-
-        const paginatedData = allCases.slice(start, end + 1);
-        return { data: paginatedData, total: allCases.length };
-      } catch (error) {
-        console.error("LocalStorage Error in getCasesPaginated:", error);
-        return { data: [], total: 0 };
-      }
+        return { data: allCases.slice(start, end + 1), total: allCases.length };
+      } catch { return { data: [], total: 0 }; }
     }
   }
 
   async saveCase(legalCase: LegalCase) {
     const userId = await this.getUserId();
-    const userName = this.getUserName();
     legalCase.lastUpdate = new Date().toISOString();
-    const isNew = !legalCase.id || legalCase.id.startsWith('case-');
     
-    if (!isNew) {
-      const oldCase = await this.getCaseById(legalCase.id);
-      if (oldCase) {
-         const changes: ChangeLogEntry[] = [];
-         const fieldsMap: Record<string, string> = {
-            'title': 'Título',
-            'value': 'Valor da Causa',
-            'status': 'Status',
-            'phase': 'Fase Processual',
-            'court': 'Tribunal/Vara',
-            'judge': 'Juiz',
-            'responsibleLawyer': 'Advogado Resp.',
-            'nextHearing': 'Próx. Audiência'
-         };
-         
-         Object.keys(fieldsMap).forEach(key => {
-            // @ts-ignore
-            const oldVal = String(oldCase[key] || '');
-            // @ts-ignore
-            const newVal = String(legalCase[key] || '');
-            
-            if (oldVal !== newVal) {
-               changes.push({
-                  id: `log-${Date.now()}-${Math.random()}`,
-                  date: new Date().toLocaleString('pt-BR'),
-                  author: userName,
-                  field: fieldsMap[key],
-                  oldValue: oldVal || '(vazio)',
-                  newValue: newVal || '(vazio)'
-               });
-            }
-         });
-         
-         if (changes.length > 0) {
-            legalCase.changeLog = [...(changes), ...(oldCase.changeLog || [])];
-         } else {
-            legalCase.changeLog = oldCase.changeLog;
-         }
-
-         if (oldCase.status !== legalCase.status) {
-            const statusChangeMovement: CaseMovement = {
-                id: `mov-sys-${Date.now()}`,
-                date: new Date().toLocaleString('pt-BR'),
-                title: 'Alteração de Status',
-                description: `O status do processo foi alterado de "${oldCase.status}" para "${legalCase.status}".`,
-                type: 'Sistema',
-                author: 'Sistema'
-            };
-            legalCase.movements = [statusChangeMovement, ...(legalCase.movements || [])];
-         }
-      }
-    } else {
-        legalCase.changeLog = [{
-            id: `log-init-${Date.now()}`,
-            date: new Date().toLocaleString('pt-BR'),
-            author: userName,
-            field: 'Criação',
-            oldValue: '-',
-            newValue: 'Processo criado'
-        }];
-    }
-
     if (isSupabaseConfigured && supabase) {
       const { id, client, ...rest } = legalCase;
       const payload: any = {
         ...rest,
         user_id: userId,
-        client_id: client.id, 
+        client_id: client.id,
       };
-      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
-
+      
       if (id && !id.startsWith('case-')) {
-        await supabase.from(TABLE_NAMES.CASES).update(payload).eq('id', id).eq('user_id', userId);
-        this.logActivity(`Atualizou processo: ${legalCase.title}`);
+        await supabase.from(TABLE_NAMES.CASES).upsert({ id, ...payload });
       } else {
-        await supabase.from(TABLE_NAMES.CASES).insert([{ id, ...payload }]);
-        this.logActivity(`Criou novo processo: ${legalCase.title}`);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id: tempId, ...insertPayload } = payload;
+        await supabase.from(TABLE_NAMES.CASES).insert([insertPayload]);
       }
+      this.logActivity(`Salvou processo: ${legalCase.title}`);
     } else {
       const list = await this.getCases();
-      if (legalCase.id && !legalCase.id.startsWith('case-')) {
-        const idx = list.findIndex(i => i.id === legalCase.id);
-        if (idx >= 0) {
-            list[idx] = legalCase;
-            this.logActivity(`Atualizou processo: ${legalCase.title}`);
-        } else {
-            list.push({ ...legalCase, userId });
-        }
+      const idx = list.findIndex(i => i.id === legalCase.id);
+      if (idx >= 0) {
+          list[idx] = legalCase;
       } else {
-        const newId = legalCase.id || `case-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-        list.unshift({ ...legalCase, id: newId, userId });
-        this.logActivity(`Criou novo processo: ${legalCase.title}`);
+          if (!legalCase.id) legalCase.id = `case-${Date.now()}`;
+          list.push({ ...legalCase, userId });
       }
       localStorage.setItem(LOCAL_KEYS.CASES, JSON.stringify(list));
+      this.logActivity(`Salvou processo: ${legalCase.title}`);
     }
   }
 
@@ -440,20 +284,9 @@ class StorageService {
       await supabase.from(TABLE_NAMES.CASES).delete().eq('id', id).eq('user_id', userId);
     } else {
       const list = await this.getCases();
-      const caseTitle = list.find(c => c.id === id)?.title || 'Processo';
       localStorage.setItem(LOCAL_KEYS.CASES, JSON.stringify(list.filter(i => i.id !== id)));
-      
-      this.logActivity(`Excluiu processo: ${caseTitle}`, 'Warning');
-
-      const tasks = await this.getTasks();
-      localStorage.setItem(LOCAL_KEYS.TASKS, JSON.stringify(tasks.filter(t => t.caseId !== id)));
-
-      const financials = await this.getFinancials();
-      localStorage.setItem(LOCAL_KEYS.FINANCIAL, JSON.stringify(financials.filter(f => f.caseId !== id)));
-
-      const documents = await this.getDocuments();
-      localStorage.setItem(LOCAL_KEYS.DOCUMENTS, JSON.stringify(documents.filter(d => d.caseId !== id)));
     }
+    this.logActivity(`Excluiu processo ID: ${id}`, 'Warning');
   }
 
   // --- Tarefas ---
@@ -461,10 +294,7 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
-        const { data } = await supabase
-          .from(TABLE_NAMES.TASKS)
-          .select('id, title, dueDate, priority, status, assignedTo, caseId, clientId, clientName, description')
-          .eq('user_id', userId);
+        const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('user_id', userId);
         return (data || []) as Task[];
       } catch { return []; }
     } else {
@@ -489,18 +319,17 @@ class StorageService {
       const { id, ...rest } = task;
       const payload = { ...rest, user_id: userId };
       if (id && !id.startsWith('task-')) {
-        await supabase.from(TABLE_NAMES.TASKS).update(payload).eq('id', id).eq('user_id', userId);
+        await supabase.from(TABLE_NAMES.TASKS).upsert({ id, ...payload });
       } else {
-        await supabase.from(TABLE_NAMES.TASKS).insert([{ id, ...payload }]);
+        await supabase.from(TABLE_NAMES.TASKS).insert([payload]);
       }
     } else {
       const list = await this.getTasks();
-      if (task.id && !task.id.startsWith('task-')) {
-        const idx = list.findIndex(i => i.id === task.id);
-        if (idx >= 0) list[idx] = task;
-      } else {
-        const newId = task.id || `task-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-        list.unshift({ ...task, id: newId, userId });
+      const idx = list.findIndex(i => i.id === task.id);
+      if (idx >= 0) list[idx] = task;
+      else {
+          if(!task.id) task.id = `task-${Date.now()}`;
+          list.push(task);
       }
       localStorage.setItem(LOCAL_KEYS.TASKS, JSON.stringify(list));
     }
@@ -521,7 +350,7 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
-        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('id, title, amount, type, category, status, dueDate, paymentDate, clientId, clientName, installment').eq('user_id', userId);
+        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('user_id', userId);
         return (data || []) as FinancialRecord[];
       } catch { return []; }
     } else {
@@ -546,18 +375,17 @@ class StorageService {
       const { id, ...rest } = record;
       const payload = { ...rest, user_id: userId };
       if (id && !id.startsWith('trans-')) {
-        await supabase.from(TABLE_NAMES.FINANCIAL).update(payload).eq('id', id).eq('user_id', userId);
+        await supabase.from(TABLE_NAMES.FINANCIAL).upsert({ id, ...payload });
       } else {
-        await supabase.from(TABLE_NAMES.FINANCIAL).insert([{ id, ...payload }]);
+        await supabase.from(TABLE_NAMES.FINANCIAL).insert([payload]);
       }
     } else {
       const list = await this.getFinancials();
-      if (record.id && !record.id.startsWith('trans-')) {
-        const idx = list.findIndex(i => i.id === record.id);
-        if (idx >= 0) list[idx] = record;
-      } else {
-        const newId = record.id || `trans-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-        list.unshift({ ...record, id: newId, userId });
+      const idx = list.findIndex(i => i.id === record.id);
+      if (idx >= 0) list[idx] = record;
+      else {
+          if(!record.id) record.id = `trans-${Date.now()}`;
+          list.push(record);
       }
       localStorage.setItem(LOCAL_KEYS.FINANCIAL, JSON.stringify(list));
     }
@@ -597,8 +425,8 @@ class StorageService {
       const list = await this.getDocuments();
       list.unshift({ ...docData, userId });
       localStorage.setItem(LOCAL_KEYS.DOCUMENTS, JSON.stringify(list));
-      this.logActivity(`Upload de documento: ${docData.name}`);
     }
+    this.logActivity(`Upload de documento: ${docData.name}`);
   }
 
   async deleteDocument(id: string) {
@@ -613,34 +441,64 @@ class StorageService {
 
   // --- Escritórios (Office Management) ---
   async getOffices(): Promise<Office[]> {
-    return JSON.parse(localStorage.getItem(LOCAL_KEYS.OFFICES) || JSON.stringify(MOCK_OFFICES));
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
+      if (error) return [];
+
+      return (data || []).map((o: any) => ({
+          ...o,
+          ownerId: o.owner_id,
+          logoUrl: o.logo_url,
+          createdAt: o.created_at,
+          areaOfActivity: o.area_of_activity,
+          members: o.members || []
+      }));
+    } else {
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.OFFICES) || '[]');
+    }
   }
 
   async getOfficeById(id: string): Promise<Office | undefined> {
+    if (isSupabaseConfigured && supabase) {
+       const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', id).single();
+       if (error || !data) return undefined;
+       return {
+          ...data,
+          ownerId: data.owner_id,
+          logoUrl: data.logo_url,
+          createdAt: data.created_at,
+          areaOfActivity: data.area_of_activity,
+          members: data.members || []
+       };
+    }
     const offices = await this.getOffices();
     return offices.find(o => o.id === id);
   }
   
   async saveOffice(office: Office): Promise<void> {
-    const offices = await this.getOffices();
-    const index = offices.findIndex(o => o.id === office.id);
-    if (index >= 0) {
-      offices[index] = office;
-      localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
-      this.logActivity(`Atualizou dados do escritório: ${office.name}`);
+    if (isSupabaseConfigured && supabase) {
+        const { id, ownerId, logoUrl, createdAt, areaOfActivity, members, ...rest } = office;
+        const payload = {
+            ...rest,
+            id,
+            owner_id: ownerId,
+            logo_url: logoUrl,
+            created_at: createdAt,
+            area_of_activity: areaOfActivity,
+            members: members
+        };
+        
+        await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
+        this.logActivity(`Atualizou escritório: ${office.name}`);
+    } else {
+        const offices = await this.getOffices();
+        const index = offices.findIndex(o => o.id === office.id);
+        if (index >= 0) {
+          offices[index] = office;
+          localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
+          this.logActivity(`Atualizou dados do escritório: ${office.name}`);
+        }
     }
-  }
-
-  async getOfficeMembers(officeId?: string): Promise<{id: string, name: string}[]> {
-    const offices = await this.getOffices();
-    const office = offices.find(o => o.id === officeId);
-    if (office && office.members) {
-      return office.members.map(m => ({ id: m.userId, name: m.name }));
-    }
-    return [
-        { id: 'lawyer-1', name: 'Dra. Amanda (Sócia)' },
-        { id: 'lawyer-2', name: 'Dr. Roberto (Júnior)' }
-    ];
   }
 
   async createOffice(officeData: Partial<Office>): Promise<Office> {
@@ -648,62 +506,141 @@ class StorageService {
     const userStr = localStorage.getItem('@JurisControl:user');
     const user = userStr ? JSON.parse(userStr) : { name: 'Admin', email: 'admin@email.com', avatar: '' };
 
-    const offices = await this.getOffices();
     let handle = officeData.handle || `@office${Date.now()}`;
     if (!handle.startsWith('@')) handle = '@' + handle;
 
-    if (offices.some(o => o.handle.toLowerCase() === handle.toLowerCase())) {
-      throw new Error("Este identificador de escritório (@handle) já está em uso.");
-    }
+    if (isSupabaseConfigured && supabase) {
+        const { count } = await supabase.from(TABLE_NAMES.OFFICES).select('id', { count: 'exact', head: true }).eq('handle', handle);
+        if (count && count > 0) throw new Error("Este identificador (@handle) já está em uso.");
 
-    const newOffice: Office = {
-      id: `office-${Date.now()}`,
-      name: officeData.name || 'Novo Escritório',
-      handle: handle,
-      location: officeData.location || 'Brasil',
-      ownerId: userId,
-      members: [
-        {
-          userId: userId,
-          name: user.name,
-          email: user.email,
-          avatarUrl: user.avatar,
-          role: 'Admin',
-          permissions: { financial: true, cases: true, documents: true, settings: true }
+        const newOffice = {
+            name: officeData.name || 'Novo Escritório',
+            handle: handle,
+            location: officeData.location || 'Brasil',
+            owner_id: userId,
+            created_at: new Date().toISOString(),
+            members: [{
+                userId: userId,
+                name: user.name || 'User',
+                email: user.email || '',
+                avatarUrl: user.avatar || '',
+                role: 'Admin',
+                permissions: { financial: true, cases: true, documents: true, settings: true }
+            }]
+        };
+
+        const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
+        if (error) throw new Error(error.message);
+        
+        this.logActivity(`Criou novo escritório (Supabase): ${newOffice.name}`);
+        return {
+            ...data,
+            ownerId: data.owner_id,
+            createdAt: data.created_at,
+            members: data.members
+        } as Office;
+
+    } else {
+        const offices = await this.getOffices();
+        if (offices.some(o => o.handle.toLowerCase() === handle.toLowerCase())) {
+          throw new Error("Este identificador de escritório (@handle) já está em uso.");
         }
-      ],
-      createdAt: new Date().toISOString()
-    };
 
-    const updatedOffices = [...offices, newOffice];
-    localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(updatedOffices));
-    this.logActivity(`Criou novo escritório: ${newOffice.name}`);
-    return newOffice;
+        const newOffice: Office = {
+          id: `office-${Date.now()}`,
+          name: officeData.name || 'Novo Escritório',
+          handle: handle,
+          location: officeData.location || 'Brasil',
+          ownerId: userId,
+          members: [
+            {
+              userId: userId,
+              name: user.name,
+              email: user.email,
+              avatarUrl: user.avatar,
+              role: 'Admin',
+              permissions: { financial: true, cases: true, documents: true, settings: true }
+            }
+          ],
+          createdAt: new Date().toISOString()
+        };
+
+        const updatedOffices = [...offices, newOffice];
+        localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(updatedOffices));
+        this.logActivity(`Criou novo escritório: ${newOffice.name}`);
+        return newOffice;
+    }
   }
 
   async joinOffice(officeHandle: string): Promise<Office> {
-    const offices = await this.getOffices();
-    const targetOffice = offices.find(o => o.handle.toLowerCase() === officeHandle.toLowerCase());
-    if (!targetOffice) throw new Error("Escritório não encontrado com este identificador.");
+    if (isSupabaseConfigured && supabase) {
+        const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', officeHandle).single();
+        if (error || !office) throw new Error("Escritório não encontrado.");
 
-    const userId = await this.getUserId();
-    const userStr = localStorage.getItem('@JurisControl:user');
-    const user = userStr ? JSON.parse(userStr) : { name: 'Novo Membro', email: '', avatar: '' };
-    
-    if (!targetOffice.members.some(m => m.userId === userId)) {
-       targetOffice.members.push({
-         userId: userId,
-         name: user.name,
-         email: user.email,
-         avatarUrl: user.avatar,
-         role: 'Advogado',
-         permissions: { financial: false, cases: true, documents: true, settings: false }
-       });
-       const updatedOffices = offices.map(o => o.id === targetOffice.id ? targetOffice : o);
-       localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(updatedOffices));
-       this.logActivity(`Entrou no escritório: ${targetOffice.name}`);
+        const userId = await this.getUserId();
+        const { data: { session } } = await supabase.auth.getSession();
+        const u = session?.user?.user_metadata || {};
+
+        const members = office.members || [];
+        if (members.some((m: any) => m.userId === userId)) {
+            return {
+                ...office,
+                ownerId: office.owner_id,
+                createdAt: office.created_at,
+                members
+            };
+        }
+
+        const newMember: OfficeMember = {
+             userId: userId,
+             name: u.full_name || 'Novo Membro',
+             email: session?.user?.email || '',
+             avatarUrl: u.avatar_url || '',
+             role: 'Advogado',
+             permissions: { financial: false, cases: true, documents: true, settings: false }
+        };
+        
+        const updatedMembers = [...members, newMember];
+        
+        const { error: updateError } = await supabase
+            .from(TABLE_NAMES.OFFICES)
+            .update({ members: updatedMembers })
+            .eq('id', office.id);
+            
+        if (updateError) throw updateError;
+
+        this.logActivity(`Entrou no escritório: ${office.name}`);
+        return {
+            ...office,
+            ownerId: office.owner_id,
+            createdAt: office.created_at,
+            members: updatedMembers
+        };
+
+    } else {
+        const offices = await this.getOffices();
+        const targetOffice = offices.find(o => o.handle.toLowerCase() === officeHandle.toLowerCase());
+        if (!targetOffice) throw new Error("Escritório não encontrado com este identificador.");
+
+        const userId = await this.getUserId();
+        const userStr = localStorage.getItem('@JurisControl:user');
+        const user = userStr ? JSON.parse(userStr) : { name: 'Novo Membro', email: '', avatar: '' };
+        
+        if (!targetOffice.members.some(m => m.userId === userId)) {
+           targetOffice.members.push({
+             userId: userId,
+             name: user.name,
+             email: user.email,
+             avatarUrl: user.avatar,
+             role: 'Advogado',
+             permissions: { financial: false, cases: true, documents: true, settings: false }
+           });
+           const updatedOffices = offices.map(o => o.id === targetOffice.id ? targetOffice : o);
+           localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(updatedOffices));
+           this.logActivity(`Entrou no escritório: ${targetOffice.name}`);
+        }
+        return targetOffice;
     }
-    return targetOffice;
   }
 
   async inviteUserToOffice(officeId: string, userHandle: string): Promise<boolean> {
@@ -714,21 +651,35 @@ class StorageService {
 
   // --- Utils & Logs ---
   getLogs(): ActivityLog[] { 
-    try { return JSON.parse(localStorage.getItem('@JurisControl:logs') || '[]'); } catch { return []; }
+    try { return JSON.parse(localStorage.getItem(LOCAL_KEYS.LOGS) || '[]'); } catch { return []; }
   }
   
   logActivity(action: string, status: 'Success' | 'Failed' | 'Warning' = 'Success') {
-    const logs = this.getLogs();
-    const newLog: ActivityLog = {
-      id: Date.now().toString(),
-      action,
-      date: new Date().toLocaleString('pt-BR'),
-      device: navigator.userAgent.split(')')[0] + ')',
-      ip: '127.0.0.1', // Simulated IP
-      status
-    };
-    logs.unshift(newLog);
-    localStorage.setItem('@JurisControl:logs', JSON.stringify(logs.slice(0, 50)));
+    if (isSupabaseConfigured && supabase) {
+        this.getUserId().then(uid => {
+            supabase!.from(TABLE_NAMES.LOGS).insert([{
+                user_id: uid,
+                action,
+                status,
+                device: navigator.userAgent,
+                ip: 'IP_PLACEHOLDER'
+            }]).then(({ error }) => {
+                if(error) console.warn("Failed to log to Supabase", error);
+            });
+        });
+    } else {
+        const logs = this.getLogs();
+        const newLog: ActivityLog = {
+          id: Date.now().toString(),
+          action,
+          date: new Date().toLocaleString('pt-BR'),
+          device: navigator.userAgent.split(')')[0] + ')',
+          ip: '127.0.0.1', 
+          status
+        };
+        logs.unshift(newLog);
+        localStorage.setItem(LOCAL_KEYS.LOGS, JSON.stringify(logs.slice(0, 50)));
+    }
   }
 
   getSettings(): AppSettings {
@@ -752,16 +703,19 @@ class StorageService {
 
   saveSettings(settings: AppSettings) {
       localStorage.setItem(LOCAL_KEYS.SETTINGS, JSON.stringify(settings));
+      if (isSupabaseConfigured && supabase) {
+          this.getUserId().then(uid => {
+              supabase!.from(TABLE_NAMES.PROFILES).update({ settings }).eq('id', uid);
+          });
+      }
   }
 
-  // --- Optimized Dashboard Data (O(n) complexity) ---
   async getDashboardSummary(): Promise<DashboardData> {
     const [allCases, allTasks] = await Promise.all([
       this.getCases(),
       this.getTasks()
     ]);
 
-    // Optimization: Single pass iteration
     let activeCases = 0, wonCases = 0, pendingCases = 0, archivedCases = 0, hearings = 0;
     
     for (const c of allCases) {
@@ -788,7 +742,6 @@ class StorageService {
             if (!a.nextHearing || !b.nextHearing) return 0;
             const [dA, mA, yA] = a.nextHearing.split('/').map(Number);
             const [dB, mB, yB] = b.nextHearing.split('/').map(Number);
-            // Robust date comparison
             return new Date(yA, mA - 1, dA).getTime() - new Date(yB, mB - 1, dB).getTime();
         })
         .slice(0, 4); 
@@ -825,7 +778,6 @@ class StorageService {
     };
   }
 
-  // --- Global Search ---
   async searchGlobal(query: string): Promise<SearchResult[]> {
     if (!query || query.length < 2) return [];
     
@@ -882,20 +834,9 @@ class StorageService {
     return results.slice(0, 8);
   }
 
+  // Não preenche mais o banco com dados de teste
   async seedDatabase() {
-    const clients = await this.getClients();
-    if (clients.length > 0) return;
-    if (isSupabaseConfigured) return; 
-
-    const userId = await this.getUserId();
-    
-    localStorage.setItem(LOCAL_KEYS.CLIENTS, JSON.stringify(MOCK_CLIENTS.map(c => ({...c, userId}))));
-    localStorage.setItem(LOCAL_KEYS.CASES, JSON.stringify(MOCK_CASES.map(c => ({...c, userId}))));
-    localStorage.setItem(LOCAL_KEYS.TASKS, JSON.stringify(MOCK_TASKS.map(c => ({...c, userId}))));
-    localStorage.setItem(LOCAL_KEYS.FINANCIAL, JSON.stringify(MOCK_FINANCIALS.map(c => ({...c, userId}))));
-    if (!localStorage.getItem(LOCAL_KEYS.OFFICES)) {
-      localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(MOCK_OFFICES));
-    }
+    // void intentionally
   }
 
   async runAutomations() {
@@ -906,22 +847,18 @@ class StorageService {
     const lastCheck = localStorage.getItem(LOCAL_KEYS.LAST_CHECK);
     const today = new Date();
     const todayStr = today.toDateString();
-    const currentUser = this.getCurrentUser();
-    const settings = this.getSettings();
 
-    // Prevent multiple checks per day (Simulating Cron Job frequency)
     if (lastCheck === todayStr) return;
 
     const tasks = await this.getTasks();
     const cases = await this.getCases();
 
-    // --- In-App Notifications ---
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     const isDate = (dateStr: string, targetDate: Date) => {
        if (!dateStr) return false;
-       const [d, m, y] = dateStr.split('/').map(Number); // Assumes PT-BR format from mock
+       const [d, m, y] = dateStr.split('/').map(Number);
        if (!d || !m || !y) return false;
        return d === targetDate.getDate() && m === targetDate.getMonth() + 1 && y === targetDate.getFullYear();
     };
@@ -938,53 +875,13 @@ class StorageService {
         }
     }
 
-    // --- Email Notifications System ---
-    if (currentUser && settings.emailPreferences?.enabled) {
-       const prefs = settings.emailPreferences;
-       
-       if (prefs.categories.deadlines) {
-          for (const task of tasks) {
-             if (task.status === 'Concluído') continue;
-             
-             const [d, m, y] = task.dueDate.split('/').map(Number);
-             const taskDate = new Date(y, m - 1, d);
-             const diffTime = taskDate.getTime() - today.setHours(0,0,0,0); // Normalized today
-             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-
-             let shouldSend = false;
-             if (diffDays === 7 && prefs.deadlineAlerts.sevenDays) shouldSend = true;
-             if (diffDays === 3 && prefs.deadlineAlerts.threeDays) shouldSend = true;
-             if (diffDays === 1 && prefs.deadlineAlerts.oneDay) shouldSend = true;
-             if (diffDays === 0 && prefs.deadlineAlerts.onDueDate) shouldSend = true;
-
-             if (shouldSend) {
-                // Send simulated email
-                await emailService.sendDeadlineAlert(currentUser, task, diffDays);
-             }
-          }
-       }
-
-       if (prefs.categories.events) {
-          for (const c of cases) {
-             if (!c.nextHearing) continue;
-             const [d, m, y] = c.nextHearing.split('/').map(Number);
-             const hearingDate = new Date(y, m - 1, d);
-             const diffTime = hearingDate.getTime() - today.setHours(0,0,0,0);
-             const diffHours = diffTime / (1000 * 60 * 60);
-
-             // Check 48h and 24h
-             if ((diffHours <= 48 && diffHours > 24) || (diffHours <= 24 && diffHours > 0)) {
-                await emailService.sendHearingReminder(currentUser, c, Math.ceil(diffHours));
-             }
-          }
-       }
-    }
-
     localStorage.setItem(LOCAL_KEYS.LAST_CHECK, todayStr);
   }
   
   factoryReset() {
     localStorage.clear();
+    // Se houver supabase, a lógica seria diferente, mas o cliente web não tem permissão para limpar o DB de produção.
+    // Isso é apenas para limpar o estado local do app.
     window.location.reload();
   }
 }
