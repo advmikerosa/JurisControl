@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles } from 'lucide-react';
@@ -82,27 +81,35 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
             style={style}
-            className={`w-64 bg-white/90 dark:bg-[#1e293b]/95 backdrop-blur-xl border border-white/20 shadow-2xl rounded-xl overflow-hidden flex flex-col origin-${menuState.origin}`}
+            className={`
+              w-64 
+              bg-white dark:bg-slate-900 
+              border border-slate-200 dark:border-slate-700 
+              shadow-xl dark:shadow-2xl shadow-slate-200/50 dark:shadow-black/50
+              rounded-xl overflow-hidden flex flex-col 
+              origin-${menuState.origin}
+            `}
           >
             {title && (
-              <div className="px-4 py-3 border-b border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/5 flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{title}</span>
-                <button onClick={onClose} className="text-slate-400 hover:text-rose-500 transition-colors">
+              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/30 flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">{title}</span>
+                <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                   <X size={14} />
                 </button>
               </div>
             )}
 
+            {/* AI Suggestion - High Contrast */}
             {aiSuggestion && (
-              <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 border-b border-indigo-100 dark:border-indigo-500/20">
+              <div className="p-2 bg-indigo-50/60 dark:bg-indigo-950/30 border-b border-indigo-100 dark:border-indigo-500/20">
                 <button 
                   onClick={() => { aiSuggestion.action(); onClose(); }}
-                  className="w-full text-left p-2 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors group"
+                  className="w-full text-left p-2 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors group"
                 >
-                  <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-300 font-bold text-xs mb-1">
+                  <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-bold text-xs mb-1">
                     <Sparkles size={12} className="animate-pulse" /> IA Sugere:
                   </div>
-                  <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2 leading-tight">
+                  <p className="text-xs text-indigo-900 dark:text-indigo-100 font-medium line-clamp-2 leading-tight">
                     {aiSuggestion.title}
                   </p>
                 </button>
@@ -114,20 +121,24 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                 <button
                   key={idx}
                   onClick={() => { item.action(); onClose(); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group text-left
+                  className={`
+                    w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group text-left
                     ${item.variant === 'danger' 
-                      ? 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/20' 
+                      ? 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20' 
                       : item.variant === 'success'
-                      ? 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10'
-                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-indigo-600 dark:hover:text-white'
-                    }`}
+                      ? 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                    }
+                  `}
                 >
                   <item.icon size={16} className={`shrink-0 ${
-                    item.variant === 'danger' ? 'text-rose-500' : 'text-slate-400 group-hover:text-indigo-500 dark:group-hover:text-white'
+                    item.variant === 'danger' ? 'text-rose-500 dark:text-rose-400' : 
+                    item.variant === 'success' ? 'text-emerald-500 dark:text-emerald-400' :
+                    'text-slate-400 dark:text-slate-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400'
                   }`} />
                   <div className="flex-1">
                     <span>{item.label}</span>
-                    {item.description && <p className="text-[10px] text-slate-400 font-normal mt-0.5">{item.description}</p>}
+                    {item.description && <p className="text-[10px] text-slate-500 dark:text-slate-500 font-normal mt-0.5 opacity-90 group-hover:text-slate-600 dark:group-hover:text-slate-400">{item.description}</p>}
                   </div>
                 </button>
               ))}
