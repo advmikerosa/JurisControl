@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { storageService } from '../services/storageService';
@@ -101,7 +102,7 @@ const CaseBoardCard = React.memo(({ c, onDelete, onEdit, onNavigate }: any) => {
         <h4 className="font-bold text-sm text-white mb-1 leading-snug line-clamp-2" title={c.title}>{c.title}</h4>
         <p className="text-xs text-slate-400 mb-3 truncate">{c.client.name}</p>
         <div className="flex items-center justify-between pt-3 border-t border-white/5 mt-auto">
-            <span className="text-emerald-400 text-xs font-bold">R$ {c.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <span className="text-emerald-400 text-xs font-bold">R$ {(c.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
             {c.phase && <span className="text-[10px] text-slate-500 truncate max-w-[50%] text-right">{c.phase}</span>}
         </div>
       </GlassCard>

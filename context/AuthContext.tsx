@@ -89,42 +89,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const checkSession = async () => {
-      if (isSupabaseConfigured && supabase) {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (mounted) {
+      try {
+        if (isSupabaseConfigured && supabase) {
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (mounted) {
+              if (session?.user) {
+                mapSupabaseUserToContext(session.user);
+              } else {
+                setUser(null);
+                setIsAuthenticated(false);
+              }
+          }
+          
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (!mounted) return;
             if (session?.user) {
-              mapSupabaseUserToContext(session.user);
+               mapSupabaseUserToContext(session.user);
             } else {
-              setUser(null);
-              setIsAuthenticated(false);
+               setUser(null);
+               setIsAuthenticated(false);
             }
-            setIsLoading(false);
-        }
-        
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-          if (!mounted) return;
-          if (session?.user) {
-             mapSupabaseUserToContext(session.user);
-          } else {
-             setUser(null);
-             setIsAuthenticated(false);
-          }
-          setIsLoading(false);
-        });
+          });
 
-        return () => subscription.unsubscribe();
-      } else {
-        // Fallback LocalStorage (Demo Mode)
-        const storedUser = localStorage.getItem('@JurisControl:user');
-        if (storedUser && mounted) {
-          try {
-            setUser(JSON.parse(storedUser));
-            setIsAuthenticated(true);
-          } catch {
-            localStorage.removeItem('@JurisControl:user');
+          return () => subscription.unsubscribe();
+        } else {
+          // Fallback LocalStorage (Demo Mode)
+          const storedUser = localStorage.getItem('@JurisControl:user');
+          if (storedUser && mounted) {
+            try {
+              setUser(JSON.parse(storedUser));
+              setIsAuthenticated(true);
+            } catch {
+              localStorage.removeItem('@JurisControl:user');
+            }
           }
         }
+      } catch (error) {
+        console.error("Session check failed:", error);
+        if (mounted) {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      } finally {
         if (mounted) setIsLoading(false);
       }
     };

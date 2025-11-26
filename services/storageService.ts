@@ -108,7 +108,7 @@ class StorageService {
           .order('name');
         
         if (error) throw error;
-        return (data || []) as Client[];
+        return (data as unknown) as Client[];
       } catch (error) { 
         console.error("Supabase Error:", error); 
         return []; 
@@ -181,7 +181,14 @@ class StorageService {
             client:clients(id, name, type, avatarUrl)
           `);
         if (error) throw error;
-        return (data || []) as unknown as LegalCase[];
+        
+        // Handle potential array return for relations and safer casting
+        const mappedData = (data || []).map((item: any) => ({
+          ...item,
+          client: Array.isArray(item.client) ? item.client[0] : item.client
+        }));
+
+        return mappedData as unknown as LegalCase[];
       } catch { return []; }
     } else {
       return JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]');
@@ -201,7 +208,14 @@ class StorageService {
           .single();
         
         if (error) throw error;
-        return data as unknown as LegalCase;
+        
+        // Handle relation potentially being array
+        const mappedItem = {
+            ...data,
+            client: Array.isArray(data.client) ? data.client[0] : data.client
+        };
+
+        return mappedItem as unknown as LegalCase;
       } catch (e) { 
         console.error("Error fetching case by id", e);
         return null; 
@@ -247,7 +261,14 @@ class StorageService {
       const { data, count, error } = await query.range(start, end).order('lastUpdate', { ascending: false });
       
       if (error) throw error;
-      return { data: (data || []) as unknown as LegalCase[], total: count || 0 };
+      
+      // Robust casting for Supabase response
+      const mappedData = (data || []).map((item: any) => ({
+          ...item,
+          client: Array.isArray(item.client) ? item.client[0] : item.client
+      }));
+
+      return { data: mappedData as unknown as LegalCase[], total: count || 0 };
     } else {
       let allCases = JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]') as LegalCase[];
       

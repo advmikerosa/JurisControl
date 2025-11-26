@@ -25,281 +25,92 @@ const CASE_PHASES: CasePhase[] = [
   'Distributivo', 'Conhecimento', 'Instrução', 'Julgamento', 'Recurso', 'Execução', 'Encerrado'
 ];
 
-const MOCK_JUDGES: Record<string, string[]> = {
-  'trabalho': ['Dr. José Almeida', 'Dra. Cláudia Santos', 'Dr. Marcos Lima'],
-  'cível': ['Dr. Alexandre Morais', 'Dra. Cármen Lúcia', 'Dr. Gilmar Mendes'],
-  'família': ['Dra. Nancy Andrighi', 'Dr. Roberto Barroso'],
-  'federal': ['Dr. Sérgio Moro', 'Dra. Gabriela Hardt'],
-  'default': ['Dr. João da Silva', 'Dra. Maria Oliveira', 'Dr. Pedro Santos']
-};
-
 export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, onSave, initialData, preSelectedClientId }) => {
   const { user } = useAuth();
   const { addToast } = useToast();
   
-  const [activeTab, setActiveTab] = useState<'info' | 'details' | 'parties'>('info');
-  const [submitting, setSubmitting] = useState(false);
-  const [importingDataJud, setImportingDataJud] = useState(false);
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [step, setStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   
-  // Data Sources
+  // Data States
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
-  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
-  const [officeLawyers, setOfficeLawyers] = useState<{id: string, name: string}[]>([]);
-  const [judgeSuggestions, setJudgeSuggestions] = useState<string[]>([]);
-  
-  // UI Helpers
-  const [clientSearch, setClientSearch] = useState('');
-  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
-
-  const [formData, setFormData] = useState({
-    clientId: '',
-    title: '',
-    category: 'Cível' as LegalCategory,
-    responsible: '',
-    cnj: '',
-    court: '',
-    judge: '',
-    phase: 'Distributivo' as CasePhase,
+  const [formData, setFormData] = useState<Partial<LegalCase>>({
     status: CaseStatus.ACTIVE,
-    distributionDate: new Date().toISOString().split('T')[0],
-    nextHearing: '',
-    opposingParty: '',
-    value: '',
-    description: '',
-    autoGenerateTasks: true,
-    importedMovements: [] as CaseMovement[]
+    phase: 'Distributivo',
+    value: 0,
+    category: 'Cível'
   });
 
   useEffect(() => {
-    const loadData = async () => {
-      const clients = await storageService.getClients();
-      setAvailableClients(clients);
-      setFilteredClients(clients);
-      
-      if (user) {
-        const members = await storageService.getOfficeMembers(user.currentOfficeId);
-        setOfficeLawyers(members);
-      }
-    };
-    if (isOpen) loadData();
-  }, [isOpen, user]);
-
-  useEffect(() => {
     if (isOpen) {
+      loadClients();
       if (initialData) {
-        setFormData({
-          clientId: initialData.client.id,
-          title: initialData.title,
-          category: initialData.category || 'Cível',
-          responsible: initialData.responsibleLawyer,
-          cnj: initialData.cnj,
-          court: initialData.court || '',
-          judge: initialData.judge || '',
-          phase: initialData.phase || 'Distributivo',
-          status: initialData.status,
-          distributionDate: initialData.distributionDate ? convertDateToISO(initialData.distributionDate) : '',
-          nextHearing: initialData.nextHearing ? convertDateToISO(initialData.nextHearing) : '',
-          opposingParty: initialData.opposingParty || '',
-          value: initialData.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
-          description: initialData.description || '',
-          autoGenerateTasks: false,
-          importedMovements: []
-        });
-        setClientSearch(initialData.client.name);
+        setFormData(initialData);
       } else {
-        resetForm();
-        if (preSelectedClientId) {
-           setFormData(prev => ({ ...prev, clientId: preSelectedClientId }));
-           storageService.getClients().then(clients => {
-             const c = clients.find(cl => cl.id === preSelectedClientId);
-             if (c) setClientSearch(c.name);
-           });
-        } else {
-           setFormData(prev => ({ ...prev, responsible: user?.name || '' }));
-        }
+        setFormData({
+          status: CaseStatus.ACTIVE,
+          phase: 'Distributivo',
+          value: 0,
+          category: 'Cível',
+          responsibleLawyer: user?.name || '',
+          client: preSelectedClientId ? { id: preSelectedClientId } as Client : undefined
+        });
       }
-      setActiveTab('info');
-      setErrors({});
+      setStep(1);
     }
   }, [isOpen, initialData, preSelectedClientId, user]);
 
-  useEffect(() => {
-    if (!clientSearch) {
-        setFilteredClients(availableClients);
-    } else {
-        const lower = clientSearch.toLowerCase();
-        setFilteredClients(availableClients.filter(c => 
-            c.name.toLowerCase().includes(lower) || 
-            (c.cpf && c.cpf.includes(lower)) || 
-            (c.cnpj && c.cnpj.includes(lower))
-        ));
+  const loadClients = async () => {
+    const clients = await storageService.getClients();
+    setAvailableClients(clients);
+  };
+
+  const handleImportCNJ = async () => {
+    if (!formData.cnj || formData.cnj.length < 10) {
+        addToast('Digite um CNJ válido para buscar.', 'error');
+        return;
     }
-  }, [clientSearch, availableClients]);
-
-  useEffect(() => {
-    const courtLower = formData.court.toLowerCase();
-    let suggestions: string[] = [];
-    
-    if (courtLower.includes('trabalho')) suggestions = MOCK_JUDGES['trabalho'];
-    else if (courtLower.includes('cível') || courtLower.includes('civil')) suggestions = MOCK_JUDGES['cível'];
-    else if (courtLower.includes('família')) suggestions = MOCK_JUDGES['família'];
-    else if (courtLower.includes('federal')) suggestions = MOCK_JUDGES['federal'];
-    else if (courtLower) suggestions = MOCK_JUDGES['default'];
-    
-    setJudgeSuggestions(suggestions);
-  }, [formData.court]);
-
-  const convertDateToISO = (dateStr: string) => {
-    if (!dateStr) return '';
-    if (dateStr.includes('/')) {
-      const [d, m, y] = dateStr.split('/');
-      return `${y}-${m}-${d}`;
-    }
-    if (dateStr.includes('T')) return dateStr.split('T')[0];
-    return dateStr;
-  };
-
-  const resetForm = () => {
-    setFormData({ 
-        clientId: '', title: '', category: 'Cível', responsible: user?.name || '', 
-        cnj: '', court: '', judge: '', phase: 'Distributivo', status: CaseStatus.ACTIVE,
-        distributionDate: new Date().toISOString().split('T')[0], nextHearing: '',
-        opposingParty: '', value: '', description: '', autoGenerateTasks: true, importedMovements: []
-    });
-    setClientSearch('');
-  };
-
-  const isValidCNJ = (cnj: string) => {
-      if (!cnj) return true; 
-      const clean = cnj.replace(/\D/g, '');
-      return clean.length === 20;
-  };
-
-  const validateForm = () => {
-      const newErrors: { [key: string]: string } = {};
-      
-      if (activeTab === 'info') {
-          if (!formData.clientId) newErrors.client = 'Selecione um cliente.';
-          if (!formData.title.trim()) newErrors.title = 'Título é obrigatório.';
-          if (!formData.responsible.trim()) newErrors.responsible = 'Responsável é obrigatório.';
-      }
-      
-      if (activeTab === 'details') {
-          if (formData.cnj && formData.cnj.length > 0 && !isValidCNJ(formData.cnj)) {
-              newErrors.cnj = 'Formato inválido (20 dígitos)';
-          }
-      }
-      setErrors(newErrors);
-      return Object.keys(newErrors).length === 0;
-  };
-
-  const handleCNJChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let v = e.target.value.replace(/[^\d-.]/g, '');
-    setFormData({ ...formData, cnj: v.substring(0, 25) });
-    
-    if (v.length > 0) {
-        if (v.replace(/\D/g, '').length >= 15 && !isValidCNJ(v)) {
-            setErrors(prev => ({...prev, cnj: 'Formato inválido.'}));
-        } else {
-            setErrors(prev => { const {cnj, ...rest} = prev; return rest; });
-        }
-    } else {
-        setErrors(prev => { const {cnj, ...rest} = prev; return rest; });
-    }
-  };
-
-  const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, value: e.target.value.replace(/[^\d,.]/g, '') });
-  };
-
-  const handleImportDataJud = async () => {
-    if (!formData.cnj || !isValidCNJ(formData.cnj)) {
-      addToast('Digite um CNJ válido (20 dígitos) para importar.', 'warning');
-      return;
-    }
-
-    setImportingDataJud(true);
+    setIsImporting(true);
     try {
-      const data = await dataJudService.fetchProcessByCNJ(formData.cnj);
-      if (data) {
-        setFormData(prev => ({
-          ...prev,
-          title: data.title || prev.title,
-          category: data.category || prev.category,
-          court: data.court || prev.court,
-          distributionDate: data.distributionDate ? convertDateToISO(data.distributionDate) : prev.distributionDate,
-          importedMovements: data.movements || []
-        }));
-        addToast('Dados importados do DataJud com sucesso!', 'success');
-      } else {
-        addToast('Processo não encontrado na base pública do DataJud. Verifique se o tribunal é suportado.', 'info');
-      }
+        const processData = await dataJudService.fetchProcessByCNJ(formData.cnj);
+        if (processData) {
+            setFormData(prev => ({ ...prev, ...processData }));
+            addToast('Dados importados do DataJud com sucesso!', 'success');
+        } else {
+            addToast('Processo não encontrado no DataJud (API Pública). Preencha manualmente.', 'info');
+        }
     } catch (error: any) {
-      addToast(error.message, 'error');
+        addToast(error.message || 'Erro ao buscar dados.', 'error');
     } finally {
-      setImportingDataJud(false);
+        setIsImporting(false);
     }
   };
 
-  const handleSubmit = async () => {
-    const finalErrors: any = {};
-    if (!formData.clientId) finalErrors.client = 'Obrigatório';
-    if (!formData.title) finalErrors.title = 'Obrigatório';
-    
-    if (Object.keys(finalErrors).length > 0) {
-        setErrors(finalErrors);
-        setActiveTab('info');
-        addToast('Verifique os campos obrigatórios.', 'error');
+  const handleSave = async () => {
+    if (!formData.title || !formData.client || !formData.cnj) {
+        addToast('Preencha os campos obrigatórios (*)', 'error');
         return;
     }
 
-    setSubmitting(true);
-
+    setIsLoading(true);
     try {
-        const client = availableClients.find(c => c.id === formData.clientId);
-        if (!client) throw new Error('Cliente inválido');
-
-        const casePayload: LegalCase = {
-          id: initialData ? initialData.id : `case-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-          cnj: formData.cnj || 'N/A',
-          title: formData.title,
-          client: client,
-          status: formData.status,
-          category: formData.category,
-          phase: formData.phase,
-          distributionDate: formData.distributionDate ? new Date(formData.distributionDate).toLocaleDateString('pt-BR') : undefined,
-          value: parseFloat(formData.value.replace(/\./g, '').replace(',', '.')) || 0,
-          responsibleLawyer: formData.responsible,
-          court: formData.court,
-          judge: formData.judge,
-          opposingParty: formData.opposingParty,
-          description: formData.description,
-          nextHearing: formData.nextHearing ? new Date(formData.nextHearing).toLocaleDateString('pt-BR') : undefined,
-          movements: initialData 
-            ? [...(formData.importedMovements || []), ...initialData.movements || []] 
-            : formData.importedMovements || []
-        };
-
-        await storageService.saveCase(casePayload);
-        
-        if (!initialData && formData.autoGenerateTasks) {
-            const baseTask = {
-                priority: 'Média' as any,
-                status: 'A Fazer' as any,
-                assignedTo: formData.responsible,
-                caseId: casePayload.id,
-                clientName: client.name,
-                userId: user?.id
-            };
-            const tasks = [
-                { ...baseTask, id: `t-gen-${Date.now()}-1`, title: 'Análise inicial do caso', dueDate: new Date(Date.now() + 86400000 * 2).toLocaleDateString('pt-BR') },
-                { ...baseTask, id: `t-gen-${Date.now()}-2`, title: 'Coletar documentos', dueDate: new Date(Date.now() + 86400000 * 5).toLocaleDateString('pt-BR') }
-            ];
-            for (const t of tasks) await storageService.saveTask(t);
-            addToast(`${tasks.length} tarefas geradas.`, 'info');
+        // If client is just a partial object (id only), find the full client
+        let fullClient = formData.client;
+        if (formData.client.id && !formData.client.name) {
+            fullClient = availableClients.find(c => c.id === formData.client?.id) || formData.client;
         }
-        
+
+        const caseToSave = {
+            ...formData,
+            client: fullClient,
+            // Ensure mandatory fields have fallbacks
+            responsibleLawyer: formData.responsibleLawyer || user?.name || 'Não atribuído',
+            value: Number(formData.value) || 0,
+            lastUpdate: new Date().toISOString()
+        } as LegalCase;
+
+        await storageService.saveCase(caseToSave);
         addToast(initialData ? 'Processo atualizado!' : 'Processo criado com sucesso!', 'success');
         onSave();
         onClose();
@@ -307,280 +118,245 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
         console.error(error);
         addToast('Erro ao salvar processo.', 'error');
     } finally {
-        setSubmitting(false);
+        setIsLoading(false);
     }
   };
 
+  const nextStep = () => setStep(prev => prev + 1);
+  const prevStep = () => setStep(prev => prev - 1);
+
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      title={initialData ? "Editar Processo" : "Novo Processo Jurídico"} 
-      maxWidth="max-w-3xl" 
+    <Modal isOpen={isOpen} onClose={onClose} title={initialData ? "Editar Processo" : "Novo Processo"} maxWidth="max-w-3xl"
       footer={
-          <div className="flex justify-between w-full">
-             <button disabled={submitting} onClick={onClose} className="px-4 py-2 rounded-lg text-slate-400 hover:bg-white/5 disabled:opacity-50 transition-colors">Cancelar</button>
-             <div className="flex gap-2">
-                 {activeTab !== 'info' && (
-                     <button type="button" onClick={() => setActiveTab(prev => prev === 'parties' ? 'details' : 'info')} className="px-4 py-2 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 flex items-center gap-1 transition-colors"><ChevronLeft size={16} /> Voltar</button>
-                 )}
-                 {activeTab !== 'parties' ? (
-                     <button type="button" onClick={() => { if(validateForm()) setActiveTab(prev => prev === 'info' ? 'details' : 'parties'); }} className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium flex items-center gap-1 transition-colors shadow-lg shadow-indigo-500/20">Próximo <ChevronRight size={16} /></button>
-                 ) : (
-                     <button disabled={submitting} onClick={handleSubmit} className="px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium flex items-center gap-2 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-70">
-                         {submitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                         {submitting ? 'Salvando...' : 'Salvar Processo'}
-                     </button>
-                 )}
-             </div>
-          </div>
+        <div className="flex justify-between w-full">
+            <button 
+                onClick={step === 1 ? onClose : prevStep} 
+                className="px-4 py-2 text-slate-400 hover:text-white transition-colors flex items-center gap-2"
+            >
+                {step > 1 && <ChevronLeft size={16} />}
+                {step === 1 ? 'Cancelar' : 'Voltar'}
+            </button>
+            
+            {step < 3 ? (
+                <button onClick={nextStep} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-indigo-500/20">
+                    Próximo <ChevronRight size={16} />
+                </button>
+            ) : (
+                <button onClick={handleSave} disabled={isLoading} className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-emerald-500/20 disabled:opacity-70">
+                    {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    {initialData ? 'Salvar Alterações' : 'Criar Processo'}
+                </button>
+            )}
+        </div>
       }
     >
-        <div className="flex gap-6 mb-6 border-b border-white/10 pb-4">
-            <button onClick={() => setActiveTab('info')} className={`text-sm font-medium flex items-center gap-2 pb-2 border-b-2 transition-all ${activeTab === 'info' ? 'border-indigo-500 text-white' : 'border-transparent text-slate-500'}`}>
-                <Info size={16} /> Informações Básicas
-            </button>
-            <button onClick={() => { if(validateForm()) setActiveTab('details'); }} className={`text-sm font-medium flex items-center gap-2 pb-2 border-b-2 transition-all ${activeTab === 'details' ? 'border-indigo-500 text-white' : 'border-transparent text-slate-500'}`}>
-                <Scale size={16} /> Detalhes Processuais
-            </button>
-            <button onClick={() => { if(validateForm()) setActiveTab('parties'); }} className={`text-sm font-medium flex items-center gap-2 pb-2 border-b-2 transition-all ${activeTab === 'parties' ? 'border-indigo-500 text-white' : 'border-transparent text-slate-500'}`}>
-                <Users size={16} /> Partes e Valores
-            </button>
+        {/* Stepper */}
+        <div className="flex items-center justify-between mb-8 px-4 relative">
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-white/10 -z-10"></div>
+            {[
+                { num: 1, label: 'Dados Básicos' },
+                { num: 2, label: 'Detalhes' },
+                { num: 3, label: 'Revisão' }
+            ].map((s) => (
+                <div key={s.num} className={`flex flex-col items-center gap-2 bg-[#0f172a] px-2 ${step >= s.num ? 'text-indigo-400' : 'text-slate-600'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 font-bold text-xs transition-all ${step >= s.num ? 'border-indigo-500 bg-indigo-500/20' : 'border-slate-700 bg-slate-800'}`}>
+                        {step > s.num ? <Check size={14} /> : s.num}
+                    </div>
+                    <span className="text-xs font-medium">{s.label}</span>
+                </div>
+            ))}
         </div>
 
-        <div className="min-h-[350px]">
-            {/* --- INFO TAB --- */}
-            {activeTab === 'info' && (
+        <div className="min-h-[300px]">
+            {step === 1 && (
                 <div className="space-y-5 animate-fade-in">
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Cliente Vinculado <span className="text-rose-400">*</span></label>
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                    <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                        <div>
+                            <h4 className="text-blue-300 font-bold text-sm flex items-center gap-2"><Search size={16} /> Importação Automática</h4>
+                            <p className="text-blue-200/60 text-xs mt-1">Digite o CNJ para buscar dados automaticamente via DataJud.</p>
+                        </div>
+                        <div className="flex w-full sm:w-auto gap-2">
                             <input 
                                 type="text" 
-                                placeholder="Buscar cliente..." 
-                                value={clientSearch}
-                                onChange={(e) => { setClientSearch(e.target.value); setIsClientDropdownOpen(true); setFormData(p => ({...p, clientId: ''})); }}
-                                onFocus={() => setIsClientDropdownOpen(true)}
-                                className={`w-full bg-black/20 border rounded-lg py-3 pl-10 pr-4 text-white focus:border-indigo-500 focus:outline-none ${errors.client ? 'border-rose-500' : 'border-white/10'}`}
+                                placeholder="CNJ (0000000-00.0000.0.00.0000)" 
+                                value={formData.cnj || ''}
+                                onChange={e => setFormData({...formData, cnj: e.target.value})}
+                                className="bg-black/20 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-blue-500 flex-1 sm:w-48"
                             />
-                            {formData.clientId && <Check className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" size={16} />}
-                            
-                            {isClientDropdownOpen && (
-                                <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50">
-                                    {filteredClients.map(c => (
-                                        <div 
-                                            key={c.id} 
-                                            onClick={() => { setFormData({...formData, clientId: c.id}); setClientSearch(c.name); setIsClientDropdownOpen(false); }}
-                                            className="px-4 py-2 hover:bg-white/10 cursor-pointer text-sm text-slate-200 border-b border-white/5 last:border-0"
-                                        >
-                                            {c.name} <span className="text-xs text-slate-500 ml-2">({c.type})</span>
-                                        </div>
-                                    ))}
-                                    {filteredClients.length === 0 && <div className="p-3 text-slate-500 text-xs text-center">Nenhum cliente encontrado.</div>}
-                                </div>
-                            )}
+                            <button onClick={handleImportCNJ} disabled={isImporting} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-2">
+                                {isImporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                Importar
+                            </button>
                         </div>
-                        {errors.client && <span className="text-xs text-rose-400 ml-1">{errors.client}</span>}
                     </div>
 
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Título do Processo <span className="text-rose-400">*</span></label>
+                    <div className="space-y-1">
+                        <label className="text-xs text-slate-400 ml-1">Título do Processo <span className="text-rose-400">*</span></label>
                         <input 
                             type="text" 
-                            value={formData.title} 
-                            onChange={(e) => setFormData({...formData, title: e.target.value})}
-                            className={`w-full bg-black/20 border rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none ${errors.title ? 'border-rose-500' : 'border-white/10'}`}
-                            placeholder="Ex: Ação de Indenização"
+                            value={formData.title || ''} 
+                            onChange={e => setFormData({...formData, title: e.target.value})}
+                            className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-indigo-500 transition-colors placeholder:text-slate-600"
+                            placeholder="Ex: Ação Trabalhista - Silva vs Empresa X"
                         />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Categoria</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400 ml-1">Cliente <span className="text-rose-400">*</span></label>
                             <div className="relative">
-                                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                                 <select 
-                                    value={formData.category} 
-                                    onChange={(e) => setFormData({...formData, category: e.target.value as LegalCategory})}
-                                    className="w-full bg-black/20 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white focus:border-indigo-500 focus:outline-none appearance-none cursor-pointer"
+                                    value={formData.client?.id || ''}
+                                    onChange={e => {
+                                        const client = availableClients.find(c => c.id === e.target.value);
+                                        setFormData({...formData, client});
+                                    }}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                                    disabled={!!preSelectedClientId}
                                 >
-                                    {LEGAL_CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-slate-800">{cat}</option>)}
+                                    <option value="" className="bg-slate-900">Selecione um cliente...</option>
+                                    {availableClients.map(c => (
+                                        <option key={c.id} value={c.id} className="bg-slate-900">{c.name}</option>
+                                    ))}
                                 </select>
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Advogado Responsável <span className="text-rose-400">*</span></label>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400 ml-1">Categoria</label>
                             <div className="relative">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                <select 
+                                    value={formData.category}
+                                    onChange={e => setFormData({...formData, category: e.target.value as LegalCategory})}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                                >
+                                    {LEGAL_CATEGORIES.map(cat => (
+                                        <option key={cat} value={cat} className="bg-slate-900">{cat}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {step === 2 && (
+                <div className="space-y-5 animate-fade-in">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400 ml-1">Valor da Causa (R$)</label>
+                            <input 
+                                type="number" 
+                                value={formData.value} 
+                                onChange={e => setFormData({...formData, value: Number(e.target.value)})}
+                                className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-indigo-500"
+                                placeholder="0,00"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400 ml-1">Fase Processual</label>
+                            <select 
+                                value={formData.phase}
+                                onChange={e => setFormData({...formData, phase: e.target.value as CasePhase})}
+                                className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                            >
+                                {CASE_PHASES.map(phase => (
+                                    <option key={phase} value={phase} className="bg-slate-900">{phase}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400 ml-1">Tribunal / Vara</label>
+                            <div className="relative">
+                                <Scale className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                                 <input 
                                     type="text" 
-                                    list="lawyers" 
-                                    value={formData.responsible} 
-                                    onChange={(e) => setFormData({...formData, responsible: e.target.value})}
-                                    className={`w-full bg-black/20 border rounded-lg py-3 pl-10 pr-4 text-white focus:border-indigo-500 focus:outline-none ${errors.responsible ? 'border-rose-500' : 'border-white/10'}`}
+                                    value={formData.court || ''} 
+                                    onChange={e => setFormData({...formData, court: e.target.value})}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white outline-none focus:border-indigo-500"
+                                    placeholder="Ex: 2ª Vara Cível de SP"
                                 />
-                                <datalist id="lawyers">
-                                    {officeLawyers.map(l => <option key={l.id} value={l.name} />)}
-                                </datalist>
                             </div>
                         </div>
-                    </div>
-                </div>
-            )}
-
-            {/* --- DETAILS TAB --- */}
-            {activeTab === 'details' && (
-                <div className="space-y-5 animate-fade-in">
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Número CNJ</label>
-                        <div className="flex gap-2">
-                            <input 
-                                type="text" 
-                                value={formData.cnj} 
-                                onChange={handleCNJChange}
-                                className={`flex-1 bg-black/20 border rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none font-mono ${errors.cnj ? 'border-rose-500' : 'border-white/10'}`}
-                                placeholder="0000000-00.0000.0.00.0000"
-                            />
-                            <button 
-                                onClick={handleImportDataJud}
-                                disabled={importingDataJud}
-                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
-                                title="Buscar na base do CNJ"
-                            >
-                                {importingDataJud ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-                                <span className="hidden sm:inline">Importar</span>
-                            </button>
-                        </div>
-                        {errors.cnj && <span className="text-xs text-rose-400 ml-1">{errors.cnj}</span>}
-                        <p className="text-[10px] text-slate-500 ml-1 flex items-center gap-1"><Info size={10}/> Digite o CNJ para importar dados automaticamente.</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Tribunal / Vara</label>
-                            <input 
-                                type="text" 
-                                value={formData.court} 
-                                onChange={(e) => setFormData({...formData, court: e.target.value})}
-                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none"
-                                placeholder="Ex: 2ª Vara Cível de SP"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Juiz</label>
-                            <input 
-                                type="text" 
-                                list="judges"
-                                value={formData.judge} 
-                                onChange={(e) => setFormData({...formData, judge: e.target.value})}
-                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none"
-                            />
-                            <datalist id="judges">
-                                {judgeSuggestions.map((j, i) => <option key={i} value={j} />)}
-                            </datalist>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-5">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Fase Processual</label>
-                            <select 
-                                value={formData.phase} 
-                                onChange={(e) => setFormData({...formData, phase: e.target.value as CasePhase})}
-                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none appearance-none cursor-pointer"
-                            >
-                                {CASE_PHASES.map(p => <option key={p} value={p} className="bg-slate-800">{p}</option>)}
-                            </select>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Status</label>
-                            <select 
-                                value={formData.status} 
-                                onChange={(e) => setFormData({...formData, status: e.target.value as CaseStatus})}
-                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none appearance-none cursor-pointer"
-                            >
-                                <option value={CaseStatus.ACTIVE} className="bg-slate-800">Ativo</option>
-                                <option value={CaseStatus.PENDING} className="bg-slate-800">Pendente</option>
-                                <option value={CaseStatus.ARCHIVED} className="bg-slate-800">Arquivado</option>
-                                <option value={CaseStatus.WON} className="bg-slate-800">Ganho</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-5">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Data Distribuição</label>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400 ml-1">Próxima Audiência</label>
                             <input 
                                 type="date" 
-                                value={formData.distributionDate} 
-                                onChange={(e) => setFormData({...formData, distributionDate: e.target.value})}
-                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none scheme-dark"
+                                value={formData.nextHearing ? formData.nextHearing.split('/').reverse().join('-') : ''} 
+                                onChange={e => {
+                                    const date = e.target.value ? new Date(e.target.value).toLocaleDateString('pt-BR') : undefined;
+                                    setFormData({...formData, nextHearing: date});
+                                }}
+                                className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-indigo-500 scheme-dark"
                             />
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Próxima Audiência</label>
+                    </div>
+
+                    <div className="space-y-1">
+                        <label className="text-xs text-slate-400 ml-1">Advogado Responsável</label>
+                        <div className="relative">
+                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                             <input 
-                                type="date" 
-                                value={formData.nextHearing} 
-                                onChange={(e) => setFormData({...formData, nextHearing: e.target.value})}
-                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none scheme-dark"
+                                type="text" 
+                                value={formData.responsibleLawyer || ''} 
+                                onChange={e => setFormData({...formData, responsibleLawyer: e.target.value})}
+                                className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white outline-none focus:border-indigo-500"
+                                placeholder="Nome do advogado"
                             />
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* --- PARTIES TAB --- */}
-            {activeTab === 'parties' && (
-                <div className="space-y-5 animate-fade-in">
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Parte Contrária</label>
-                        <input 
-                            type="text" 
-                            value={formData.opposingParty} 
-                            onChange={(e) => setFormData({...formData, opposingParty: e.target.value})}
-                            className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none"
-                            placeholder="Nome da parte adversa"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Valor da Causa (R$)</label>
-                        <input 
-                            type="text" 
-                            value={formData.value} 
-                            onChange={handleValueChange}
-                            className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none font-mono text-lg"
-                            placeholder="0,00"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Descrição / Observações Iniciais</label>
-                        <textarea 
-                            rows={4}
-                            value={formData.description} 
-                            onChange={(e) => setFormData({...formData, description: e.target.value})}
-                            className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none resize-none"
-                            placeholder="Detalhes importantes sobre o caso..."
-                        />
-                    </div>
-
-                    {!initialData && (
-                        <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-xl flex items-center gap-3">
-                            <div 
-                                onClick={() => setFormData(p => ({...p, autoGenerateTasks: !p.autoGenerateTasks}))}
-                                className={`w-5 h-5 rounded border flex items-center justify-center cursor-pointer transition-colors ${formData.autoGenerateTasks ? 'bg-indigo-600 border-indigo-600' : 'border-slate-500'}`}
-                            >
-                                {formData.autoGenerateTasks && <Check size={14} className="text-white" />}
+            {step === 3 && (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="bg-white/5 rounded-xl p-5 border border-white/10 space-y-4">
+                        <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                                <Briefcase size={24} />
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-white">Gerar Tarefas Automáticas</p>
-                                <p className="text-xs text-slate-400">Cria tarefas iniciais padrão (Ex: Coletar Documentos, Análise Inicial) ao salvar.</p>
+                                <h3 className="text-white font-bold text-lg">{formData.title}</h3>
+                                <p className="text-slate-400 text-sm">{formData.cnj}</p>
                             </div>
                         </div>
-                    )}
+                        
+                        <div className="grid grid-cols-2 gap-y-4 gap-x-8 border-t border-white/5 pt-4">
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Cliente</p>
+                                <p className="text-white font-medium">{formData.client?.name || 'Não selecionado'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Categoria</p>
+                                <p className="text-white font-medium">{formData.category}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Valor</p>
+                                <p className="text-emerald-400 font-bold">R$ {Number(formData.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Fase</p>
+                                <p className="text-white font-medium">{formData.phase}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Tribunal</p>
+                                <p className="text-white font-medium">{formData.court || '-'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Próx. Audiência</p>
+                                <p className="text-white font-medium">{formData.nextHearing || 'Não agendada'}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+                        <AlertCircle size={16} />
+                        <p>Verifique se todas as informações estão corretas antes de salvar.</p>
+                    </div>
                 </div>
             )}
         </div>
