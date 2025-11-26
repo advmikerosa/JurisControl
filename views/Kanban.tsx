@@ -175,10 +175,10 @@ const Column = ({ title, statusKey, color, tasks, availableCases, onAddTask, onE
                 exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
                 draggable
                 onDragStart={(e) => {
-                  // @ts-ignore
-                  e.dataTransfer.setData("text/plain", task.id);
-                  e.dataTransfer.effectAllowed = "move";
-                  // Optional: Custom drag image could be set here
+                  // Fix: Cast event to React.DragEvent to resolve TS2339 error
+                  const event = e as unknown as React.DragEvent<HTMLDivElement>;
+                  event.dataTransfer.setData("text/plain", task.id);
+                  event.dataTransfer.effectAllowed = "move";
                 }}
                 className="cursor-grab active:cursor-grabbing group touch-manipulation"
                 whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
