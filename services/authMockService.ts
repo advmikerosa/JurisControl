@@ -61,6 +61,7 @@ export const authMockService = {
     };
 
     // CRITICAL: Store user temporarily to simulate authenticated state for storage service calls
+    // This prevents "Cannot read properties of undefined (reading 'name')" in storageService.createOffice
     localStorage.setItem('@JurisControl:user', JSON.stringify(user));
 
     try {
@@ -84,7 +85,8 @@ export const authMockService = {
       }
     } catch (e) {
       console.error("Mock register office error", e);
-      // If office creation fails (e.g. handle taken), we might want to bubble up the error or handle gracefully
+      // Clean up if critical failure, though in mock we usually just throw
+      // localStorage.removeItem('@JurisControl:user');
       throw e;
     }
 

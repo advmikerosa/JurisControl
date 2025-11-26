@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -35,21 +36,21 @@ export const Login: React.FC = () => {
     // Remove everything that is not alphanumeric
     v = v.replace(/[^A-Z0-9]/g, '');
     
-    // Logic for UF/Number
-    // Example: SP123456 -> SP/123.456
+    // Logic for UF/Number: UF/123.456
     if (v.length > 2) {
       v = v.substring(0, 2) + '/' + v.substring(2);
     }
-    if (v.length > 6) {
+    if (v.length > 6) { // 2 (UF) + 1 (/) + 3 (Nums) = 6 chars before dot
       const uf = v.substring(0, 2);
-      const num = v.substring(3); // Part after /
-      if (num.length > 3) {
-           // Add dot after first 3 numbers of the numeric part
-           v = `${uf}/${num.substring(0, 3)}.${num.substring(3)}`;
+      const slash = v.substring(2, 3);
+      const numPart = v.substring(3);
+      
+      if (numPart.length > 3) {
+         v = `${uf}${slash}${numPart.substring(0,3)}.${numPart.substring(3)}`;
       }
     }
-    // Limit length to standard OAB format
-    setOab(v.substring(0, 11));
+    // Limit length (UF/123.456) = 10 chars
+    setOab(v.substring(0, 10));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

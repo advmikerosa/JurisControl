@@ -1,3 +1,4 @@
+
 import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { notificationService } from './notificationService';
@@ -503,7 +504,9 @@ class StorageService {
 
   async createOffice(officeData: Partial<Office>): Promise<Office> {
     const userId = await this.getUserId();
+    // Fallback if user is null in localStorage (prevents crash)
     const userStr = localStorage.getItem('@JurisControl:user');
+    // FIX: Check if userStr exists before parsing, and use defensive optional chaining later
     const user = userStr ? JSON.parse(userStr) : { name: 'Admin', email: 'admin@email.com', avatar: '' };
 
     let handle = officeData.handle || `@office${Date.now()}`;
@@ -521,9 +524,9 @@ class StorageService {
             created_at: new Date().toISOString(),
             members: [{
                 userId: userId,
-                name: user.name || 'User',
-                email: user.email || '',
-                avatarUrl: user.avatar || '',
+                name: user?.name || 'User', // FIX: Optional chaining
+                email: user?.email || '',
+                avatarUrl: user?.avatar || '',
                 role: 'Admin',
                 permissions: { financial: true, cases: true, documents: true, settings: true }
             }]
@@ -555,9 +558,9 @@ class StorageService {
           members: [
             {
               userId: userId,
-              name: user.name,
-              email: user.email,
-              avatarUrl: user.avatar,
+              name: user?.name || 'User', // FIX: Optional chaining
+              email: user?.email || '',
+              avatarUrl: user?.avatar || '',
               role: 'Admin',
               permissions: { financial: true, cases: true, documents: true, settings: true }
             }
@@ -629,9 +632,9 @@ class StorageService {
         if (!targetOffice.members.some(m => m.userId === userId)) {
            targetOffice.members.push({
              userId: userId,
-             name: user.name,
-             email: user.email,
-             avatarUrl: user.avatar,
+             name: user?.name || 'Novo Membro', // FIX: Optional chaining
+             email: user?.email || '',
+             avatarUrl: user?.avatar || '',
              role: 'Advogado',
              permissions: { financial: false, cases: true, documents: true, settings: false }
            });
