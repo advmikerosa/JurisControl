@@ -1,4 +1,4 @@
-import React, { Component, Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
+import React, { Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Layout } from './components/Layout';
@@ -6,6 +6,7 @@ import { CookieConsent } from './components/CookieConsent';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { storageService } from './services/storageService';
 import { Logo } from './components/Logo';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
@@ -36,7 +37,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = {
     hasError: false,
     error: null
@@ -185,18 +186,20 @@ const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      <ToastProvider>
-        <AuthProvider>
-          <NotificationProvider>
-            <Router>
-              <Suspense fallback={<LoadingScreen />}>
-                 <AnimatedRoutes />
-                 <CookieConsent />
-              </Suspense>
-            </Router>
-          </NotificationProvider>
-        </AuthProvider>
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <NotificationProvider>
+              <Router>
+                <Suspense fallback={<LoadingScreen />}>
+                   <AnimatedRoutes />
+                   <CookieConsent />
+                </Suspense>
+              </Router>
+            </NotificationProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 };
