@@ -20,6 +20,7 @@
               slate: {
                 50: '#F8FAFC', // Very light background
                 100: '#F1F5F9', // Card background light
+                200: '#E2E8F0', // Borders
                 850: '#1e293b', // Dark mode card
                 950: '#0f172a', // Dark mode bg
               }
@@ -56,7 +57,7 @@
     <style>
       body {
         /* Default Light Mode (Comfort) */
-        background-color: #F1F5F9; 
+        background-color: #F8FAFC; 
         color: #1e293b;
         min-height: 100vh;
         -webkit-font-smoothing: antialiased;
@@ -78,11 +79,11 @@
         background: transparent; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #cbd5e1; 
+        background: #94a3b8; 
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8; 
+        background: #64748b; 
       }
 
       .dark ::-webkit-scrollbar-track {
@@ -103,25 +104,25 @@
         scrollbar-width: none;
       }
     </style>
-<script type="importmap">
+  <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "framer-motion": "https://aistudiocdn.com/framer-motion@^12.23.24",
-    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.0",
-    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
-    "vite": "https://aistudiocdn.com/vite@^7.2.4",
     "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
-    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.84.0"
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "framer-motion": "https://aistudiocdn.com/framer-motion@^12.23.24",
+    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.85.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.0"
   }
 }
 </script>
 </head>
-  <body class="bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+  <body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

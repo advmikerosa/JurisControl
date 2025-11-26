@@ -137,37 +137,39 @@ export const Documents: React.FC = () => {
       {/* TABLE OR EMPTY STATE */}
       <GlassCard className="p-0 overflow-hidden min-h-[400px]">
         {filteredDocs.length > 0 ? (
-          <table className="w-full text-left text-sm">
-            <thead className="text-slate-500 border-b border-white/10 bg-white/5">
-              <tr>
-                <th className="py-4 pl-6 font-medium">Nome</th>
-                <th className="py-4 font-medium">Data</th>
-                <th className="py-4 font-medium">Tamanho</th>
-                <th className="py-4 pr-6 text-right font-medium">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {filteredDocs.map(doc => (
-                <tr key={doc.id} className="group hover:bg-white/5 transition-colors">
-                  <td className="py-4 pl-6 text-white flex items-center gap-3 cursor-pointer" onClick={() => setPreviewDoc(doc)}>
-                     <div className="p-2 rounded bg-indigo-500/20 text-indigo-300">
-                       {['JPG','PNG','IMG'].includes(doc.type) ? <ImageIcon size={18} /> : <FileText size={18} />}
-                     </div>
-                     <span className="font-medium group-hover:text-indigo-300 transition-colors">{doc.name}</span>
-                  </td>
-                  <td className="py-4 text-slate-400">{doc.date}</td>
-                  <td className="py-4 text-slate-400">{doc.size}</td>
-                  <td className="py-4 pr-6 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => setPreviewDoc(doc)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-indigo-400 transition-colors" title="Visualizar"><Eye size={18} /></button>
-                      <button className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors" title="Baixar"><Download size={18} /></button>
-                      <button onClick={() => handleDelete(doc.id)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-rose-400 transition-colors" title="Excluir"><Trash2 size={18} /></button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-slate-500 border-b border-white/10 bg-white/5">
+                <tr>
+                  <th className="py-4 pl-6 font-medium">Nome</th>
+                  <th className="py-4 font-medium">Data</th>
+                  <th className="py-4 font-medium">Tamanho</th>
+                  <th className="py-4 pr-6 text-right font-medium">Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {filteredDocs.map(doc => (
+                  <tr key={doc.id} className="group hover:bg-white/5 transition-colors">
+                    <td className="py-4 pl-6 text-white flex items-center gap-3 cursor-pointer" onClick={() => setPreviewDoc(doc)}>
+                       <div className="p-2 rounded bg-indigo-500/20 text-indigo-300">
+                         {['JPG','PNG','IMG'].includes(doc.type) ? <ImageIcon size={18} /> : <FileText size={18} />}
+                       </div>
+                       <span className="font-medium group-hover:text-indigo-300 transition-colors whitespace-nowrap">{doc.name}</span>
+                    </td>
+                    <td className="py-4 text-slate-400 whitespace-nowrap">{doc.date}</td>
+                    <td className="py-4 text-slate-400 whitespace-nowrap">{doc.size}</td>
+                    <td className="py-4 pr-6 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => setPreviewDoc(doc)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-indigo-400 transition-colors" title="Visualizar"><Eye size={18} /></button>
+                        <button className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors" title="Baixar"><Download size={18} /></button>
+                        <button onClick={() => handleDelete(doc.id)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-rose-400 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full py-20 text-slate-500 gap-4">
              <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center">

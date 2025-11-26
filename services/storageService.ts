@@ -110,7 +110,7 @@ class StorageService {
         if (error) throw error;
         return (data as unknown) as Client[];
       } catch (error) { 
-        console.error("Supabase Error:", error); 
+        console.error("Supabase Error (getClients):", error); 
         return []; 
       }
     } else {
@@ -183,13 +183,19 @@ class StorageService {
         if (error) throw error;
         
         // Handle potential array return for relations and safer casting
-        const mappedData = (data || []).map((item: any) => ({
-          ...item,
-          client: Array.isArray(item.client) ? item.client[0] : item.client
-        }));
+        const mappedData = (data || []).map((item: any) => {
+          const clientObj = Array.isArray(item.client) ? item.client[0] : item.client;
+          return {
+            ...item,
+            client: clientObj || { id: 'unknown', name: 'Cliente Desconhecido', type: 'PF', avatarUrl: '' }
+          };
+        });
 
         return mappedData as unknown as LegalCase[];
-      } catch { return []; }
+      } catch (e) { 
+        console.error("Supabase Error (getCases):", e); 
+        return []; 
+      }
     } else {
       return JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]');
     }
@@ -212,7 +218,7 @@ class StorageService {
         // Handle relation potentially being array
         const mappedItem = {
             ...data,
-            client: Array.isArray(data.client) ? data.client[0] : data.client
+            client: Array.isArray(data.client) ? data.client[0] : (data.client || { id: 'unknown', name: 'Cliente Desconhecido' })
         };
 
         return mappedItem as unknown as LegalCase;
@@ -238,68 +244,84 @@ class StorageService {
     const end = start + limit - 1;
 
     if (isSupabaseConfigured && supabase) {
-      let query = supabase
-        .from(TABLE_NAMES.CASES)
-        .select(`
-          id, cnj, title, status, category, phase, value, responsibleLawyer, nextHearing, lastUpdate,
-          client:clients(id, name, type, avatarUrl)
-        `, { count: 'exact' });
+      try {
+        let query = supabase
+          .from(TABLE_NAMES.CASES)
+          .select(`
+            id, cnj, title, status, category, phase, value, responsibleLawyer, nextHearing, lastUpdate,
+            client:clients(id, name, type, avatarUrl)
+          `, { count: 'exact' });
 
-      if (searchTerm) {
-        query = query.or(`title.ilike.%${searchTerm}%,cnj.ilike.%${searchTerm}%`);
-      }
-      if (statusFilter && statusFilter !== 'Todos') {
-        query = query.eq('status', statusFilter);
-      }
-      if (categoryFilter && categoryFilter !== 'Todos') {
-        query = query.eq('category', categoryFilter);
-      }
-      if (dateRange && dateRange.start && dateRange.end) {
-         query = query.gte('lastUpdate', dateRange.start).lte('lastUpdate', dateRange.end);
-      }
+        if (searchTerm) {
+          query = query.or(`title.ilike.%${searchTerm}%,cnj.ilike.%${searchTerm}%`);
+        }
+        if (statusFilter && statusFilter !== 'Todos') {
+          query = query.eq('status', statusFilter);
+        }
+        if (categoryFilter && categoryFilter !== 'Todos') {
+          query = query.eq('category', categoryFilter);
+        }
+        if (dateRange && dateRange.start && dateRange.end) {
+           query = query.gte('lastUpdate', dateRange.start).lte('lastUpdate', dateRange.end);
+        }
 
-      const { data, count, error } = await query.range(start, end).order('lastUpdate', { ascending: false });
-      
-      if (error) throw error;
-      
-      // Robust casting for Supabase response
-      const mappedData = (data || []).map((item: any) => ({
-          ...item,
-          client: Array.isArray(item.client) ? item.client[0] : item.client
-      }));
-
-      return { data: mappedData as unknown as LegalCase[], total: count || 0 };
-    } else {
-      let allCases = JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]') as LegalCase[];
-      
-      if (searchTerm) {
-        const lowerSearch = searchTerm.toLowerCase();
-        allCases = allCases.filter(c => 
-          c.title.toLowerCase().includes(lowerSearch) || 
-          c.cnj.includes(lowerSearch) ||
-          c.client.name.toLowerCase().includes(lowerSearch)
-        );
-      }
-      
-      if (statusFilter && statusFilter !== 'Todos') {
-        allCases = allCases.filter(c => c.status === statusFilter);
-      }
-      if (categoryFilter && categoryFilter !== 'Todos') {
-        allCases = allCases.filter(c => c.category === categoryFilter);
-      }
-
-      if (dateRange && dateRange.start && dateRange.end) {
-        allCases = allCases.filter(c => {
-           if (!c.lastUpdate) return false;
-           const dateStr = c.lastUpdate.split('T')[0];
-           return dateStr >= dateRange.start && dateStr <= dateRange.end;
+        const { data, count, error } = await query.range(start, end);
+        
+        if (error) {
+          console.error("Supabase Query Error:", error);
+          return { data: [], total: 0 };
+        }
+        
+        // Robust casting for Supabase response
+        const mappedData = (data || []).map((item: any) => {
+            const c = Array.isArray(item.client) ? item.client[0] : item.client;
+            return {
+                ...item,
+                client: c || { id: 'unknown', name: 'Cliente Removido', type: 'PF', avatarUrl: '' }
+            };
         });
+
+        return { data: mappedData as unknown as LegalCase[], total: count || 0 };
+      } catch (error) {
+        console.error("Supabase Exception in getCasesPaginated:", error);
+        return { data: [], total: 0 };
       }
+    } else {
+      try {
+        let allCases = JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]') as LegalCase[];
+        
+        if (searchTerm) {
+          const lowerSearch = searchTerm.toLowerCase();
+          allCases = allCases.filter(c => 
+            c.title.toLowerCase().includes(lowerSearch) || 
+            c.cnj.includes(lowerSearch) ||
+            c.client.name.toLowerCase().includes(lowerSearch)
+          );
+        }
+        
+        if (statusFilter && statusFilter !== 'Todos') {
+          allCases = allCases.filter(c => c.status === statusFilter);
+        }
+        if (categoryFilter && categoryFilter !== 'Todos') {
+          allCases = allCases.filter(c => c.category === categoryFilter);
+        }
 
-      allCases.sort((a, b) => new Date(b.lastUpdate || 0).getTime() - new Date(a.lastUpdate || 0).getTime());
+        if (dateRange && dateRange.start && dateRange.end) {
+          allCases = allCases.filter(c => {
+             if (!c.lastUpdate) return false;
+             const dateStr = c.lastUpdate.split('T')[0];
+             return dateStr >= dateRange.start && dateStr <= dateRange.end;
+          });
+        }
 
-      const paginatedData = allCases.slice(start, end + 1);
-      return { data: paginatedData, total: allCases.length };
+        allCases.sort((a, b) => new Date(b.lastUpdate || 0).getTime() - new Date(a.lastUpdate || 0).getTime());
+
+        const paginatedData = allCases.slice(start, end + 1);
+        return { data: paginatedData, total: allCases.length };
+      } catch (error) {
+        console.error("LocalStorage Error in getCasesPaginated:", error);
+        return { data: [], total: 0 };
+      }
     }
   }
 

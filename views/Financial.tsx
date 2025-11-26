@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { storageService } from '../services/storageService';
@@ -265,10 +266,10 @@ export const Financial: React.FC = () => {
         </div>
       </div>
 
-      <div className="border-b border-white/10 flex gap-6 text-sm font-medium text-slate-400">
-         <button onClick={() => setActiveTab('overview')} className={`pb-3 transition-colors ${activeTab === 'overview' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'hover:text-white'}`}>Visão Geral</button>
-         <button onClick={() => setActiveTab('list')} className={`pb-3 transition-colors ${activeTab === 'list' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'hover:text-white'}`}>Lançamentos</button>
-         <button onClick={() => setActiveTab('reports')} className={`pb-3 transition-colors ${activeTab === 'reports' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'hover:text-white'}`}>Relatórios</button>
+      <div className="border-b border-white/10 flex gap-6 text-sm font-medium text-slate-400 overflow-x-auto">
+         <button onClick={() => setActiveTab('overview')} className={`pb-3 transition-colors whitespace-nowrap ${activeTab === 'overview' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'hover:text-white'}`}>Visão Geral</button>
+         <button onClick={() => setActiveTab('list')} className={`pb-3 transition-colors whitespace-nowrap ${activeTab === 'list' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'hover:text-white'}`}>Lançamentos</button>
+         <button onClick={() => setActiveTab('reports')} className={`pb-3 transition-colors whitespace-nowrap ${activeTab === 'reports' ? 'text-indigo-400 border-b-2 border-indigo-400' : 'hover:text-white'}`}>Relatórios</button>
       </div>
 
       <div className="flex items-center gap-4 bg-white/5 p-2 rounded-lg w-fit border border-white/10">
@@ -391,31 +392,31 @@ export const Financial: React.FC = () => {
                 <table className="w-full text-left text-sm">
                   <thead className="bg-white/5 text-slate-400 border-b border-white/10">
                     <tr>
-                      <th className="py-3 px-4">Descrição</th>
-                      <th className="py-3 px-4">Categoria</th>
-                      <th className="py-3 px-4">Vencimento</th>
-                      <th className="py-3 px-4">Valor</th>
-                      <th className="py-3 px-4 text-center">Status</th>
-                      <th className="py-3 px-4 text-right">Ações</th>
+                      <th className="py-3 px-4 whitespace-nowrap">Descrição</th>
+                      <th className="py-3 px-4 whitespace-nowrap">Categoria</th>
+                      <th className="py-3 px-4 whitespace-nowrap">Vencimento</th>
+                      <th className="py-3 px-4 whitespace-nowrap">Valor</th>
+                      <th className="py-3 px-4 text-center whitespace-nowrap">Status</th>
+                      <th className="py-3 px-4 text-right whitespace-nowrap">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {filteredList.length > 0 ? (
                       filteredList.map(t => (
                         <tr key={t.id} className="hover:bg-white/5 transition-colors group">
-                           <td className="py-3 px-4">
-                              <p className="text-white font-medium group-hover:text-indigo-300 transition-colors">{t.title}</p>
+                           <td className="py-3 px-4 min-w-[200px]">
+                              <p className="text-white font-medium group-hover:text-indigo-300 transition-colors truncate">{t.title}</p>
                               {t.installment && <span className="text-[10px] text-slate-500 bg-white/5 px-1.5 rounded">Parcela {t.installment.current}/{t.installment.total}</span>}
                            </td>
-                           <td className="py-3 px-4">
+                           <td className="py-3 px-4 whitespace-nowrap">
                               {t.clientName && <p className="text-indigo-300 text-xs mb-0.5">{t.clientName}</p>}
                               <span className="text-slate-400 text-xs bg-white/5 px-2 py-0.5 rounded-full border border-white/5">{t.category}</span>
                            </td>
-                           <td className="py-3 px-4 text-slate-300 font-mono text-xs">{formatDate(t.dueDate)}</td>
-                           <td className={`py-3 px-4 font-bold font-mono ${t.type === 'Receita' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                           <td className="py-3 px-4 text-slate-300 font-mono text-xs whitespace-nowrap">{formatDate(t.dueDate)}</td>
+                           <td className={`py-3 px-4 font-bold font-mono whitespace-nowrap ${t.type === 'Receita' ? 'text-emerald-400' : 'text-rose-400'}`}>
                               {t.type === 'Receita' ? '+' : '-'}{formatCurrency(Number(t.amount))}
                            </td>
-                           <td className="py-3 px-4 text-center">
+                           <td className="py-3 px-4 text-center whitespace-nowrap">
                               <span onClick={() => toggleStatus(t.id, t.status)} className={`cursor-pointer select-none inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:opacity-80 ${t.status === 'Pago' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : t.status === 'Atrasado' ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}`}>
                                 {t.status === 'Pago' ? <CheckCircle size={10} /> : t.status === 'Atrasado' ? <AlertCircle size={10} /> : <Clock size={10} />}
                                 {t.status}

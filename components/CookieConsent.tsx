@@ -4,24 +4,42 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Cookie } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+const STORAGE_KEY = '@JurisControl:cookie-consent';
+
 export const CookieConsent: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const consent = localStorage.getItem('@JurisControl:cookie-consent');
-    if (!consent) {
-      const timer = setTimeout(() => setIsVisible(true), 1500);
-      return () => clearTimeout(timer);
+    try {
+      const storedConsent = localStorage.getItem(STORAGE_KEY);
+      
+      if (!storedConsent) {
+        const timer = setTimeout(() => setIsVisible(true), 1500);
+        return () => clearTimeout(timer);
+      }
+
+      // Handle potential legacy string values ('accepted'/'rejected')
+      if (storedConsent === 'accepted' || storedConsent === 'rejected') {
+        return;
+      }
+
+      // Validate JSON structure
+      const consent = JSON.parse(storedConsent);
+      if (typeof consent.accepted !== 'boolean') {
+        setIsVisible(true);
+      }
+    } catch (e) {
+      // On error (e.g. corrupted JSON), show modal to reset
+      setIsVisible(true);
     }
   }, []);
 
-  const handleAccept = () => {
-    localStorage.setItem('@JurisControl:cookie-consent', 'accepted');
-    setIsVisible(false);
-  };
-
-  const handleReject = () => {
-    localStorage.setItem('@JurisControl:cookie-consent', 'rejected');
+  const handleConsent = (accepted: boolean) => {
+    const consentData = {
+      accepted,
+      timestamp: new Date().toISOString()
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(consentData));
     setIsVisible(false);
   };
 
@@ -50,13 +68,13 @@ export const CookieConsent: React.FC = () => {
 
             <div className="flex items-center gap-2 w-full">
               <button
-                onClick={handleReject}
+                onClick={() => handleConsent(false)}
                 className="flex-1 px-3 py-2 rounded-lg border border-white/10 text-slate-300 hover:bg-white/5 hover:text-white transition-colors text-xs font-medium"
               >
                 Recusar
               </button>
               <button
-                onClick={handleAccept}
+                onClick={() => handleConsent(true)}
                 className="flex-1 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 transition-colors text-xs font-medium"
               >
                 Aceitar

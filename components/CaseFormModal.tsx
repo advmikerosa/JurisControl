@@ -32,6 +32,7 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
   
   // Data States
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
@@ -58,6 +59,7 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
         });
       }
       setStep(1);
+      setErrors({});
     }
   }, [isOpen, initialData, preSelectedClientId, user]);
 
@@ -76,6 +78,8 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
         const processData = await dataJudService.fetchProcessByCNJ(formData.cnj);
         if (processData) {
             setFormData(prev => ({ ...prev, ...processData }));
+            // Clear errors related to fields that might be filled
+            setErrors(prev => ({ ...prev, cnj: '', title: '' }));
             addToast('Dados importados do DataJud com sucesso!', 'success');
         } else {
             addToast('Processo não encontrado no DataJud (API Pública). Preencha manualmente.', 'info');
@@ -88,16 +92,11 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
   };
 
   const handleSave = async () => {
-    if (!formData.title || !formData.client || !formData.cnj) {
-        addToast('Preencha os campos obrigatórios (*)', 'error');
-        return;
-    }
-
     setIsLoading(true);
     try {
         // If client is just a partial object (id only), find the full client
         let fullClient = formData.client;
-        if (formData.client.id && !formData.client.name) {
+        if (formData.client && formData.client.id && !formData.client.name) {
             fullClient = availableClients.find(c => c.id === formData.client?.id) || formData.client;
         }
 
@@ -122,8 +121,40 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
     }
   };
 
-  const nextStep = () => setStep(prev => prev + 1);
+  const validateStep1 = () => {
+    const newErrors: { [key: string]: string } = {};
+    
+    if (!formData.title?.trim()) newErrors.title = 'O título do processo é obrigatório.';
+    if (!formData.client?.id) newErrors.client = 'Selecione um cliente.';
+    if (!formData.cnj?.trim()) newErrors.cnj = 'O número do CNJ é obrigatório.';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const nextStep = () => {
+    if (step === 1) {
+        if (validateStep1()) {
+            setStep(prev => prev + 1);
+        } else {
+            addToast('Por favor, preencha os campos obrigatórios.', 'error');
+        }
+    } else {
+        setStep(prev => prev + 1);
+    }
+  };
+
   const prevStep = () => setStep(prev => prev - 1);
+
+  const clearError = (field: string) => {
+      if (errors[field]) {
+          setErrors(prev => {
+              const newErrors = { ...prev };
+              delete newErrors[field];
+              return newErrors;
+          });
+      }
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={initialData ? "Editar Processo" : "Novo Processo"} maxWidth="max-w-3xl"
@@ -175,18 +206,24 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                             <h4 className="text-blue-300 font-bold text-sm flex items-center gap-2"><Search size={16} /> Importação Automática</h4>
                             <p className="text-blue-200/60 text-xs mt-1">Digite o CNJ para buscar dados automaticamente via DataJud.</p>
                         </div>
-                        <div className="flex w-full sm:w-auto gap-2">
-                            <input 
-                                type="text" 
-                                placeholder="CNJ (0000000-00.0000.0.00.0000)" 
-                                value={formData.cnj || ''}
-                                onChange={e => setFormData({...formData, cnj: e.target.value})}
-                                className="bg-black/20 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-blue-500 flex-1 sm:w-48"
-                            />
-                            <button onClick={handleImportCNJ} disabled={isImporting} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-2">
-                                {isImporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                                Importar
-                            </button>
+                        <div className="flex flex-col w-full sm:w-auto gap-1">
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    placeholder="CNJ (0000000-00.0000.0.00.0000)" 
+                                    value={formData.cnj || ''}
+                                    onChange={e => {
+                                        setFormData({...formData, cnj: e.target.value});
+                                        clearError('cnj');
+                                    }}
+                                    className={`bg-black/20 border rounded-lg px-3 py-1.5 text-sm text-white outline-none flex-1 sm:w-48 transition-all ${errors.cnj ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-blue-500'}`}
+                                />
+                                <button onClick={handleImportCNJ} disabled={isImporting} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-2">
+                                    {isImporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                    Importar
+                                </button>
+                            </div>
+                            {errors.cnj && <span className="text-[10px] text-rose-400 ml-1">{errors.cnj}</span>}
                         </div>
                     </div>
 
@@ -195,24 +232,29 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                         <input 
                             type="text" 
                             value={formData.title || ''} 
-                            onChange={e => setFormData({...formData, title: e.target.value})}
-                            className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-indigo-500 transition-colors placeholder:text-slate-600"
+                            onChange={e => {
+                                setFormData({...formData, title: e.target.value});
+                                clearError('title');
+                            }}
+                            className={`w-full bg-white/5 border rounded-lg p-3 text-white outline-none transition-colors placeholder:text-slate-600 ${errors.title ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'}`}
                             placeholder="Ex: Ação Trabalhista - Silva vs Empresa X"
                         />
+                        {errors.title && <span className="text-[10px] text-rose-400 ml-1 flex items-center gap-1"><AlertCircle size={10} /> {errors.title}</span>}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1">
                             <label className="text-xs text-slate-400 ml-1">Cliente <span className="text-rose-400">*</span></label>
                             <div className="relative">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                <User className={`absolute left-3 top-1/2 -translate-y-1/2 ${errors.client ? 'text-rose-400' : 'text-slate-500'}`} size={16} />
                                 <select 
                                     value={formData.client?.id || ''}
                                     onChange={e => {
                                         const client = availableClients.find(c => c.id === e.target.value);
                                         setFormData({...formData, client});
+                                        clearError('client');
                                     }}
-                                    className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                                    className={`w-full bg-white/5 border rounded-lg py-3 pl-10 pr-4 text-white outline-none appearance-none cursor-pointer transition-all ${errors.client ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'}`}
                                     disabled={!!preSelectedClientId}
                                 >
                                     <option value="" className="bg-slate-900">Selecione um cliente...</option>
@@ -221,6 +263,7 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                                     ))}
                                 </select>
                             </div>
+                            {errors.client && <span className="text-[10px] text-rose-400 ml-1">{errors.client}</span>}
                         </div>
                         <div className="space-y-1">
                             <label className="text-xs text-slate-400 ml-1">Categoria</label>

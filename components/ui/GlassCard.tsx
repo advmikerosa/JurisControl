@@ -20,7 +20,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, className = '', 
         bg-white/80 dark:bg-[#1e293b]/60 
         backdrop-blur-md 
         border border-slate-200 dark:border-white/10 
-        shadow-glass-light dark:shadow-glass
+        shadow-sm dark:shadow-glass
         rounded-2xl 
         p-6 
         text-slate-800 dark:text-slate-100

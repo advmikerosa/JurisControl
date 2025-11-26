@@ -1,3 +1,4 @@
+
 import React, { Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
@@ -13,6 +14,7 @@ import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 
 // Lazy Loading dos Componentes das Views
 const Dashboard = React.lazy(() => import('./views/Dashboard').then(module => ({ default: module.Dashboard })));
+const CalendarView = React.lazy(() => import('./views/CalendarView').then(module => ({ default: module.CalendarView })));
 const Cases = React.lazy(() => import('./views/Cases').then(module => ({ default: module.Cases })));
 const CaseDetails = React.lazy(() => import('./views/CaseDetails').then(module => ({ default: module.CaseDetails })));
 const Kanban = React.lazy(() => import('./views/Kanban').then(module => ({ default: module.Kanban })));
@@ -38,10 +40,10 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = {
-    hasError: false,
-    error: null
-  };
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -109,7 +111,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 const LoadingScreen = () => (
-  <div className="flex flex-col items-center justify-center h-screen w-full bg-[#0f172a] text-white relative overflow-hidden">
+  <div className="flex flex-col items-center justify-center h-screen w-full bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-white relative overflow-hidden transition-colors duration-300">
     <div className="absolute inset-0 opacity-30 pointer-events-none">
        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-600/20 rounded-full blur-[120px]" />
        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-600/20 rounded-full blur-[120px]" />
@@ -117,13 +119,13 @@ const LoadingScreen = () => (
     <div className="relative z-10 flex flex-col items-center gap-6">
       <div className="relative">
         <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full"></div>
-        <Logo size={64} className="animate-pulse" />
+        <Logo size={64} className="animate-pulse drop-shadow-lg" />
       </div>
       <div className="flex flex-col items-center gap-2">
-        <div className="h-1 w-32 bg-slate-800 rounded-full overflow-hidden">
-            <div className="h-full bg-indigo-500 animate-progress origin-left w-full"></div>
+        <div className="h-1 w-32 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-full bg-indigo-600 dark:bg-indigo-500 animate-progress origin-left w-full"></div>
         </div>
-        <p className="text-xs font-bold text-slate-500 tracking-widest uppercase">Carregando</p>
+        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-widest uppercase">Carregando</p>
       </div>
     </div>
     <style>{`
@@ -157,6 +159,7 @@ const AnimatedRoutes: React.FC = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/confirm-email" element={<EmailConfirmation />} />
         <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/calendar" element={<ProtectedRoute><CalendarView /></ProtectedRoute>} />
         <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
         <Route path="/clients/:id" element={<ProtectedRoute><ClientDetails /></ProtectedRoute>} />
         <Route path="/cases" element={<ProtectedRoute><Cases /></ProtectedRoute>} />

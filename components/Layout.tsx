@@ -22,7 +22,8 @@ import {
   User,
   Loader2,
   Sun,
-  Moon
+  Moon,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MOCK_OFFICES, storageService } from '../services/storageService';
@@ -100,6 +101,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Visão Geral' },
+    { path: '/calendar', icon: CalendarIcon, label: 'Calendário' },
     { path: '/clients', icon: UserCheck, label: 'Clientes' },
     { path: '/cases', icon: Briefcase, label: 'Processos' },
     { path: '/crm', icon: Users, label: 'Tarefas / CRM' },
@@ -124,7 +126,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative selection:bg-indigo-500/30 selection:text-indigo-900 dark:selection:text-indigo-100 bg-slate-100 dark:bg-[#0f172a] transition-colors duration-300">
+    <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative selection:bg-indigo-500/30 selection:text-indigo-900 dark:selection:text-indigo-100 bg-slate-50 dark:bg-[#0f172a] transition-colors duration-300">
       
       {/* Ambient Background - Dark Mode only or subtle light mode */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden opacity-30 dark:opacity-100 transition-opacity">
@@ -133,7 +135,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
 
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex flex-col w-72 h-screen fixed left-0 top-0 z-50 border-r border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-xl shadow-2xl transition-colors duration-300">
+      <aside className="hidden md:flex flex-col w-72 h-screen fixed left-0 top-0 z-[100] border-r border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-xl shadow-lg transition-colors duration-300">
         <div className="p-8 flex items-center gap-3">
           <Logo size={32} className="drop-shadow-md" />
           <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">JurisControl</span>
@@ -149,7 +151,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden
                 ${isActive 
                   ? 'text-indigo-700 dark:text-white bg-indigo-50 dark:bg-white/10 shadow-sm dark:shadow-[0_0_15px_rgba(255,255,255,0.1)] border border-indigo-100 dark:border-white/5' 
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5'
                 }
               `}
             >
@@ -158,7 +160,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   {isActive && (
                     <motion.div
                       layoutId="activeNav"
-                      className="absolute inset-0 bg-gradient-to-r from-indigo-600/10 to-transparent opacity-50 dark:bg-gradient-to-r dark:from-indigo-600/20 dark:to-transparent"
+                      className="absolute inset-0 bg-gradient-to-r from-indigo-600/5 to-transparent opacity-50 dark:bg-gradient-to-r dark:from-indigo-600/20 dark:to-transparent"
                       initial={false}
                       transition={{ type: "spring", stiffness: 500, damping: 30 }}
                     />
@@ -198,7 +200,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/60 z-[60] md:hidden backdrop-blur-sm"
+                className="fixed inset-0 bg-black/60 z-[120] md:hidden backdrop-blur-sm"
                 onClick={() => setIsMobileMenuOpen(false)}
               />
               <motion.aside
@@ -206,7 +208,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
                 transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-                className="fixed left-0 top-0 bottom-0 w-[85%] max-w-xs bg-white dark:bg-[#0f172a] border-r border-slate-200 dark:border-white/10 z-[70] p-6 flex flex-col shadow-2xl"
+                className="fixed left-0 top-0 bottom-0 w-[85%] max-w-xs bg-white dark:bg-[#0f172a] border-r border-slate-200 dark:border-white/10 z-[130] p-6 flex flex-col shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
                  <div className="flex justify-between items-center mb-8">
@@ -223,13 +225,28 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                        to={item.path}
                        end={item.path === '/'}
                        onClick={() => setIsMobileMenuOpen(false)}
-                       className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${isActive ? 'bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30' : 'text-slate-600 dark:text-slate-400'}`}
+                       className={({ isActive }) => `flex items-center gap-3 px-4 py-3.5 rounded-xl font-medium transition-colors ${isActive ? 'bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-500/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}
                      >
                        <item.icon size={20} />
                        {item.label}
                      </NavLink>
                    ))}
                  </nav>
+                 <div className="border-t border-slate-200 dark:border-white/10 pt-4 space-y-2">
+                    <NavLink 
+                      to="/settings"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-white/5"
+                    >
+                      <Settings size={20} /> Configurações
+                    </NavLink>
+                    <button 
+                      onClick={() => { setIsMobileMenuOpen(false); logout(); }}
+                      className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-rose-600 dark:text-rose-400 font-medium hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                    >
+                      <LogOut size={20} /> Sair
+                    </button>
+                 </div>
               </motion.aside>
           </>
         )}
@@ -239,7 +256,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <main className="flex-1 md:ml-72 relative z-10 flex flex-col min-h-screen bg-transparent">
         
         {/* Header */}
-        <header className="h-20 px-6 md:px-10 flex items-center justify-between sticky top-0 z-40 transition-all bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+        <header className="h-20 px-4 md:px-10 flex items-center justify-between sticky top-0 z-40 transition-all bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
           {/* Mobile Toggle */}
           <div className="flex items-center gap-4 md:hidden">
              <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 rounded-lg">
@@ -263,7 +280,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 value={globalSearch}
                 onChange={(e) => setGlobalSearch(e.target.value)}
                 onFocus={() => globalSearch.length >= 2 && setShowResults(true)}
-                className="block w-full pl-10 pr-3 py-2.5 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl leading-5 text-slate-800 dark:text-slate-300 placeholder-slate-500 dark:placeholder-slate-600 focus:outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all sm:text-sm"
+                className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl leading-5 text-slate-800 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all sm:text-sm shadow-sm"
               />
             </div>
 
@@ -274,11 +291,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-50"
+                  className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 max-h-[400px] flex flex-col"
                 >
                   {searchResults.length > 0 ? (
-                    <div className="py-2">
-                      <div className="px-4 py-2 text-[10px] uppercase font-bold text-slate-500 tracking-wider">Resultados</div>
+                    <div className="py-2 overflow-y-auto custom-scrollbar">
+                      <div className="px-4 py-2 text-[10px] uppercase font-bold text-slate-500 tracking-wider bg-slate-50/50 dark:bg-white/5 backdrop-blur-sm sticky top-0 z-10 border-b border-slate-100 dark:border-white/5 mb-1">
+                        Resultados ({searchResults.length})
+                      </div>
                       {searchResults.map((result) => (
                         <button
                           key={`${result.type}-${result.id}`}
@@ -302,8 +321,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                       ))}
                     </div>
                   ) : (
-                    <div className="p-4 text-center text-slate-500 text-sm">
-                      {isSearching ? 'Buscando...' : 'Nenhum resultado.'}
+                    <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm flex flex-col items-center justify-center">
+                      {isSearching ? (
+                        <div className="flex flex-col items-center gap-3">
+                           <Loader2 size={24} className="animate-spin text-indigo-500" />
+                           <span className="font-medium">Buscando...</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 animate-fade-in">
+                           <div className="w-12 h-12 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center mb-2">
+                              <Search size={20} className="opacity-40 text-slate-500 dark:text-slate-400" />
+                           </div>
+                           <p className="font-medium text-slate-600 dark:text-slate-300">Nenhum resultado encontrado</p>
+                           <p className="text-xs text-slate-400 max-w-[200px]">Não encontramos nada para "{globalSearch}". Tente outro termo.</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </motion.div>
@@ -385,12 +417,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                        </div>
                        <div className="flex gap-2">
                          {unreadCount > 0 && (
-                           <button onClick={markAllAsRead} className="text-xs text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 px-2 py-1 hover:bg-slate-200 dark:hover:bg-white/5 rounded transition-colors" title="Marcar todas">
+                           <button onClick={markAllAsRead} className="text-xs text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 px-2 py-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded transition-colors" title="Marcar todas">
                              Marcar lidas
                            </button>
                          )}
                          {notifications.length > 0 && (
-                           <button onClick={clearAll} className="text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 p-1 hover:bg-slate-200 dark:hover:bg-white/5 rounded transition-colors" title="Limpar tudo">
+                           <button onClick={clearAll} className="text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded transition-colors" title="Limpar tudo">
                              <Trash2 size={14} />
                            </button>
                          )}
@@ -455,14 +487,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </header>
 
         {/* Page Content Wrapper */}
-        <div className="flex-1 p-6 md:p-10 overflow-y-auto custom-scrollbar flex flex-col max-w-[1600px] mx-auto w-full">
+        <div className="flex-1 p-4 md:p-10 overflow-y-auto custom-scrollbar flex flex-col max-w-[1600px] mx-auto w-full">
           <Breadcrumbs />
           <div className="flex-1 relative z-10">
              {children}
           </div>
           
           {/* Footer */}
-          <footer className="mt-12 border-t border-slate-200 dark:border-white/5 pt-8 pb-4 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500 dark:text-slate-600">
+          <footer className="mt-12 border-t border-slate-300 dark:border-white/5 pt-8 pb-4 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500 dark:text-slate-600">
             <div>
               © {new Date().getFullYear()} JurisControl. Sistema Jurídico Inteligente.
             </div>
