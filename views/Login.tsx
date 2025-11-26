@@ -32,26 +32,24 @@ export const Login: React.FC = () => {
 
   const handleOabChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let v = e.target.value.toUpperCase();
-    // Remove tudo que não for letra ou número
+    // Remove everything that is not alphanumeric
     v = v.replace(/[^A-Z0-9]/g, '');
     
-    // Máscara UF/000.000
+    // Logic for UF/Number
+    // Example: SP123456 -> SP/123.456
     if (v.length > 2) {
       v = v.substring(0, 2) + '/' + v.substring(2);
     }
     if (v.length > 6) {
-      // UF/000.000
-      // v[2] é a barra
-      // Se tiver mais que 3 numeros depois da barra, colocar ponto
-      // Ex: SP/123.456
       const uf = v.substring(0, 2);
-      const num = v.substring(3);
+      const num = v.substring(3); // Part after /
       if (num.length > 3) {
-         v = `${uf}/${num.substring(0, 3)}.${num.substring(3)}`;
+           // Add dot after first 3 numbers of the numeric part
+           v = `${uf}/${num.substring(0, 3)}.${num.substring(3)}`;
       }
     }
-    // Limitar tamanho
-    setOab(v.substring(0, 10));
+    // Limit length to standard OAB format
+    setOab(v.substring(0, 11));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -74,7 +72,8 @@ export const Login: React.FC = () => {
             if (!officeName) throw new Error('Digite o nome do seu escritório.');
             if (!officeHandle) throw new Error('Crie um identificador (@handle) para o escritório.');
         }
-        if (!officeHandle.startsWith('@')) throw new Error('O identificador do escritório deve começar com @.');
+        if (!officeHandle && officeMode === 'join') throw new Error('Digite o identificador do escritório para entrar.');
+        if (officeHandle && !officeHandle.startsWith('@')) throw new Error('O identificador do escritório deve começar com @.');
 
         const needsVerification = await register(name, email, password, oab, {
             mode: officeMode,
@@ -271,10 +270,10 @@ export const Login: React.FC = () => {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="space-y-4 pt-2 border-t border-white/10 mt-4"
+                  className="space-y-4 pt-4 border-t border-white/10 mt-4"
                 >
                    <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-2">
-                      <Building size={16} className="text-indigo-400" /> Informações do Escritório
+                      <Building size={16} className="text-indigo-400" /> Dados do Escritório
                    </h3>
                    
                    <div className="flex p-1 bg-black/20 rounded-lg border border-white/5">

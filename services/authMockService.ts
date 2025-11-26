@@ -1,5 +1,4 @@
 
-
 import { User, AuthProvider, Office } from '../types';
 import { storageService } from './storageService';
 
@@ -61,7 +60,7 @@ export const authMockService = {
       role: 'Advogado'
     };
 
-    // Store user temporarily to simulate authenticated state for storage service
+    // CRITICAL: Store user temporarily to simulate authenticated state for storage service calls
     localStorage.setItem('@JurisControl:user', JSON.stringify(user));
 
     try {
@@ -79,12 +78,14 @@ export const authMockService = {
         
         user.offices = [office.id];
         user.currentOfficeId = office.id;
-        // Update user in storage with new office linkage
+        
+        // Update user in storage with new office linkage so dashboard can load
         localStorage.setItem('@JurisControl:user', JSON.stringify(user));
       }
     } catch (e) {
       console.error("Mock register office error", e);
-      // If office creation fails in mock, we still return the user but maybe warn
+      // If office creation fails (e.g. handle taken), we might want to bubble up the error or handle gracefully
+      throw e;
     }
 
     return user;
