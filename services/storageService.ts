@@ -1,4 +1,3 @@
-
 import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { notificationService } from './notificationService';
@@ -31,10 +30,11 @@ export const MOCK_OFFICES: Office[] = [];
 
 class StorageService {
   
-  private async getUserId(): Promise<string> {
+  private async getUserId(): Promise<string | null> {
     if (isSupabaseConfigured && supabase) {
       const { data } = await supabase.auth.getSession();
-      return data.session?.user?.id || 'anon';
+      // Retorna ID apenas se houver sessão, caso contrário null para evitar erro 400 (invalid input syntax for type uuid)
+      return data.session?.user?.id || null; 
     }
     const stored = localStorage.getItem('@JurisControl:user');
     return stored ? JSON.parse(stored).id : 'local-user';
@@ -52,6 +52,8 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
+        if (!userId) return []; // Abortar se não autenticado
+
         const { data, error } = await supabase
           .from(TABLE_NAMES.CLIENTS)
           .select('id, name, type, status, email, phone, city, state, avatarUrl, cpf, cnpj, corporateName, createdAt, tags, alerts, notes, documents, history')
@@ -73,6 +75,7 @@ class StorageService {
     const userId = await this.getUserId();
 
     if (isSupabaseConfigured && supabase) {
+      if (!userId) throw new Error("Usuário não autenticado");
       const payload = { ...client, user_id: userId };
       const { id, ...insertPayload } = payload;
       
@@ -89,7 +92,7 @@ class StorageService {
           list[idx] = client;
       } else {
           if (!client.id) client.id = `cli-${Date.now()}`;
-          list.unshift({ ...client, userId });
+          list.unshift({ ...client, userId: userId || 'local' });
       }
       localStorage.setItem(LOCAL_KEYS.CLIENTS, JSON.stringify(list));
       this.logActivity(`Salvou cliente: ${client.name}`);
@@ -106,6 +109,7 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
       const userId = await this.getUserId();
+      if (!userId) return;
       await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id).eq('user_id', userId);
     } else {
       const list = await this.getClients();
@@ -119,6 +123,8 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
+        if (!userId) return [];
+
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
           .select(`*, client:clients(*)`)
@@ -147,6 +153,8 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
+        if (!userId) return null;
+
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
           .select(`*, client:clients(*)`)
@@ -185,6 +193,8 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
+        if (!userId) return { data: [], total: 0 };
+
         let query = supabase
           .from(TABLE_NAMES.CASES)
           .select(`*, client:clients!inner(id, name, type, avatarUrl)`, { count: 'exact' })
@@ -250,6 +260,7 @@ class StorageService {
     legalCase.lastUpdate = new Date().toISOString();
     
     if (isSupabaseConfigured && supabase) {
+      if (!userId) throw new Error("Usuário não autenticado");
       const { id, client, ...rest } = legalCase;
       const payload: any = {
         ...rest,
@@ -272,7 +283,7 @@ class StorageService {
           list[idx] = legalCase;
       } else {
           if (!legalCase.id) legalCase.id = `case-${Date.now()}`;
-          list.push({ ...legalCase, userId });
+          list.push({ ...legalCase, userId: userId || 'local' });
       }
       localStorage.setItem(LOCAL_KEYS.CASES, JSON.stringify(list));
       this.logActivity(`Salvou processo: ${legalCase.title}`);
@@ -282,6 +293,7 @@ class StorageService {
   async deleteCase(id: string) {
     if (isSupabaseConfigured && supabase) {
       const userId = await this.getUserId();
+      if (!userId) return;
       await supabase.from(TABLE_NAMES.CASES).delete().eq('id', id).eq('user_id', userId);
     } else {
       const list = await this.getCases();
@@ -295,6 +307,7 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
+        if (!userId) return [];
         const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('user_id', userId);
         return (data || []) as Task[];
       } catch { return []; }
@@ -306,6 +319,7 @@ class StorageService {
   async getTasksByCaseId(caseId: string): Promise<Task[]> {
     if (isSupabaseConfigured && supabase) {
         const userId = await this.getUserId();
+        if (!userId) return [];
         const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('caseId', caseId).eq('user_id', userId);
         return (data || []) as Task[];
     } else {
@@ -317,6 +331,7 @@ class StorageService {
   async saveTask(task: Task) {
     const userId = await this.getUserId();
     if (isSupabaseConfigured && supabase) {
+      if (!userId) throw new Error("Usuário não autenticado");
       const { id, ...rest } = task;
       const payload = { ...rest, user_id: userId };
       if (id && !id.startsWith('task-')) {
@@ -339,6 +354,7 @@ class StorageService {
   async deleteTask(id: string) {
     if (isSupabaseConfigured && supabase) {
       const userId = await this.getUserId();
+      if (!userId) return;
       await supabase.from(TABLE_NAMES.TASKS).delete().eq('id', id).eq('user_id', userId);
     } else {
       const list = await this.getTasks();
@@ -351,6 +367,7 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
+        if (!userId) return [];
         const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('user_id', userId);
         return (data || []) as FinancialRecord[];
       } catch { return []; }
@@ -362,6 +379,7 @@ class StorageService {
   async getFinancialsByCaseId(caseId: string): Promise<FinancialRecord[]> {
     if (isSupabaseConfigured && supabase) {
         const userId = await this.getUserId();
+        if (!userId) return [];
         const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('caseId', caseId).eq('user_id', userId);
         return (data || []) as FinancialRecord[];
     } else {
@@ -373,6 +391,7 @@ class StorageService {
   async saveFinancial(record: FinancialRecord) {
     const userId = await this.getUserId();
     if (isSupabaseConfigured && supabase) {
+      if (!userId) throw new Error("Usuário não autenticado");
       const { id, ...rest } = record;
       const payload = { ...rest, user_id: userId };
       if (id && !id.startsWith('trans-')) {
@@ -397,6 +416,7 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
+        if (!userId) return [];
         const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('user_id', userId);
         return (data || []) as SystemDocument[];
       } catch { return []; }
@@ -408,6 +428,7 @@ class StorageService {
   async getDocumentsByCaseId(caseId: string): Promise<SystemDocument[]> {
     if (isSupabaseConfigured && supabase) {
         const userId = await this.getUserId();
+        if (!userId) return [];
         const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('caseId', caseId).eq('user_id', userId);
         return (data || []) as SystemDocument[];
     } else {
@@ -419,12 +440,13 @@ class StorageService {
   async saveDocument(docData: SystemDocument) {
     const userId = await this.getUserId();
     if (isSupabaseConfigured && supabase) {
+      if (!userId) throw new Error("Usuário não autenticado");
       const { id, ...rest } = docData;
       const payload = { ...rest, user_id: userId };
       await supabase.from(TABLE_NAMES.DOCUMENTS).insert([{ id, ...payload }]);
     } else {
       const list = await this.getDocuments();
-      list.unshift({ ...docData, userId });
+      list.unshift({ ...docData, userId: userId || 'local' });
       localStorage.setItem(LOCAL_KEYS.DOCUMENTS, JSON.stringify(list));
     }
     this.logActivity(`Upload de documento: ${docData.name}`);
@@ -433,6 +455,7 @@ class StorageService {
   async deleteDocument(id: string) {
     if (isSupabaseConfigured && supabase) {
       const userId = await this.getUserId();
+      if (!userId) return;
       await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id).eq('user_id', userId);
     } else {
       const list = await this.getDocuments();
@@ -512,6 +535,8 @@ class StorageService {
     if (!handle.startsWith('@')) handle = '@' + handle;
 
     if (isSupabaseConfigured && supabase) {
+        if (!userId) throw new Error("Usuário não autenticado para criar escritório");
+        
         const { count } = await supabase.from(TABLE_NAMES.OFFICES).select('id', { count: 'exact', head: true }).eq('handle', handle);
         if (count && count > 0) throw new Error("Este identificador (@handle) já está em uso.");
 
@@ -553,10 +578,10 @@ class StorageService {
           name: officeData.name || 'Novo Escritório',
           handle: handle,
           location: officeData.location || 'Brasil',
-          ownerId: userId,
+          ownerId: userId || 'local',
           members: [
             {
-              userId: userId,
+              userId: userId || 'local',
               name: user?.name || 'User',
               email: user?.email || '',
               avatarUrl: user?.avatar || '',
@@ -580,6 +605,8 @@ class StorageService {
         if (error || !office) throw new Error("Escritório não encontrado.");
 
         const userId = await this.getUserId();
+        if (!userId) throw new Error("Usuário não autenticado para entrar em escritório");
+
         const { data: { session } } = await supabase.auth.getSession();
         const u = session?.user?.user_metadata || {};
 
@@ -630,7 +657,7 @@ class StorageService {
         
         if (!targetOffice.members.some(m => m.userId === userId)) {
            targetOffice.members.push({
-             userId: userId,
+             userId: userId || 'local',
              name: user?.name || 'Novo Membro',
              email: user?.email || '',
              avatarUrl: user?.avatar || '',
@@ -659,15 +686,17 @@ class StorageService {
   logActivity(action: string, status: 'Success' | 'Failed' | 'Warning' = 'Success') {
     if (isSupabaseConfigured && supabase) {
         this.getUserId().then(uid => {
-            supabase!.from(TABLE_NAMES.LOGS).insert([{
-                user_id: uid,
-                action,
-                status,
-                device: navigator.userAgent,
-                ip: 'IP_PLACEHOLDER'
-            }]).then(({ error }) => {
-                if(error) console.warn("Failed to log to Supabase", error);
-            });
+            if (uid) {
+                supabase!.from(TABLE_NAMES.LOGS).insert([{
+                    user_id: uid,
+                    action,
+                    status,
+                    device: navigator.userAgent,
+                    ip: 'IP_PLACEHOLDER'
+                }]).then(({ error }) => {
+                    if(error) console.warn("Failed to log to Supabase", error);
+                });
+            }
         });
     } else {
         const logs = this.getLogs();
@@ -707,7 +736,9 @@ class StorageService {
       localStorage.setItem(LOCAL_KEYS.SETTINGS, JSON.stringify(settings));
       if (isSupabaseConfigured && supabase) {
           this.getUserId().then(uid => {
-              supabase!.from(TABLE_NAMES.PROFILES).update({ settings }).eq('id', uid);
+              if (uid) {
+                  supabase!.from(TABLE_NAMES.PROFILES).update({ settings }).eq('id', uid);
+              }
           });
       }
   }

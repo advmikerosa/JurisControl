@@ -26,13 +26,13 @@ import {
   Calendar as CalendarIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MOCK_OFFICES, storageService } from '../services/storageService';
+import { storageService } from '../services/storageService';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
 import { Logo } from './Logo';
-import { SearchResult } from '../types';
+import { SearchResult, Office } from '../types';
 import { Breadcrumbs } from './Breadcrumbs';
 
 interface LayoutProps {
@@ -48,8 +48,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { theme, toggleTheme } = useTheme();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [currentOffice, setCurrentOffice] = useState(MOCK_OFFICES[0]);
+  
+  // Office State Management - Initialize as null to prevent crash
+  const [currentOffice, setCurrentOffice] = useState<Office | null>(null);
+  const [userOffices, setUserOffices] = useState<Office[]>([]);
   const [isOfficeMenuOpen, setIsOfficeMenuOpen] = useState(false);
+  
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isFabOpen, setIsFabOpen] = useState(false);
 
@@ -62,6 +66,47 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   // Refs for click outside
   const notificationRef = useRef<HTMLDivElement>(null);
+
+  // Load Offices Effect
+  useEffect(() => {
+    const fetchOffices = async () => {
+      try {
+        const allOffices = await storageService.getOffices();
+        
+        // Filter offices for the current user
+        // Logic: Office ID is in user.offices OR user is a member in the office members list
+        const myOffices = user 
+            ? allOffices.filter(o => 
+                (user.offices && user.offices.includes(o.id)) || 
+                (o.members && o.members.some(m => m.userId === user.id))
+              )
+            : [];
+            
+        setUserOffices(myOffices);
+
+        if (myOffices.length > 0) {
+            // Prefer the office set in user profile, otherwise first one
+            const selected = user?.currentOfficeId 
+                ? myOffices.find(o => o.id === user.currentOfficeId) 
+                : myOffices[0];
+            setCurrentOffice(selected || myOffices[0]);
+        } else {
+            // Fallback dummy office to prevent UI breakage if no office is found
+            setCurrentOffice({
+                id: 'default',
+                name: 'Meu Escritório',
+                handle: '@usuario',
+                ownerId: user?.id || '',
+                location: 'Brasil',
+                members: []
+            });
+        }
+      } catch (e) {
+        console.error("Failed to load offices", e);
+      }
+    };
+    fetchOffices();
+  }, [user]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -361,12 +406,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 onClick={() => setIsOfficeMenuOpen(!isOfficeMenuOpen)}
                 className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white transition-colors py-1.5 px-3 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent hover:border-slate-200 dark:hover:border-white/10"
               >
-                <span>{currentOffice.name}</span>
+                <span>{currentOffice?.name || 'Carregando...'}</span>
                 <ChevronDown size={14} className={`transition-transform ${isOfficeMenuOpen ? 'rotate-180' : ''}`} />
               </button>
               
               <AnimatePresence>
-                {isOfficeMenuOpen && (
+                {isOfficeMenuOpen && userOffices.length > 0 && (
                   <motion.div 
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -374,14 +419,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-50"
                   >
                     <div className="p-1">
-                      {MOCK_OFFICES.map(office => (
+                      {userOffices.map(office => (
                         <button 
                           key={office.id}
                           onClick={() => { setCurrentOffice(office); setIsOfficeMenuOpen(false); addToast(`Alternado para ${office.name}`, 'success'); }}
-                          className={`w-full text-left px-4 py-2.5 text-sm rounded-lg transition-colors flex items-center justify-between ${currentOffice.id === office.id ? 'bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'}`}
+                          className={`w-full text-left px-4 py-2.5 text-sm rounded-lg transition-colors flex items-center justify-between ${currentOffice?.id === office.id ? 'bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'}`}
                         >
                           {office.name}
-                          {currentOffice.id === office.id && <Check size={16} />}
+                          {currentOffice?.id === office.id && <Check size={16} />}
                         </button>
                       ))}
                     </div>
