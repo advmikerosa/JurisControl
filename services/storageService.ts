@@ -102,9 +102,11 @@ class StorageService {
   async getClients(): Promise<Client[]> {
     if (isSupabaseConfigured && supabase) {
       try {
+        const userId = await this.getUserId();
         const { data, error } = await supabase
           .from(TABLE_NAMES.CLIENTS)
           .select('id, name, type, status, email, phone, city, state, avatarUrl, cpf, cnpj, corporateName, createdAt, tags')
+          .eq('user_id', userId)
           .order('name');
         
         if (error) throw error;
@@ -126,7 +128,7 @@ class StorageService {
       const payload = { ...rest, user_id: userId };
       
       if (id && !id.startsWith('cli-')) {
-        await supabase.from(TABLE_NAMES.CLIENTS).update(payload).eq('id', id);
+        await supabase.from(TABLE_NAMES.CLIENTS).update(payload).eq('id', id).eq('user_id', userId);
         this.logActivity(`Atualizou dados do cliente: ${client.name}`);
       } else {
         await supabase.from(TABLE_NAMES.CLIENTS).insert([{ id, ...payload }]);
@@ -160,7 +162,8 @@ class StorageService {
     }
 
     if (isSupabaseConfigured && supabase) {
-      await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id);
+      const userId = await this.getUserId();
+      await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id).eq('user_id', userId);
     } else {
       const list = await this.getClients();
       const clientName = list.find(c => c.id === id)?.name || 'Desconhecido';
@@ -174,15 +177,16 @@ class StorageService {
   async getCases(): Promise<LegalCase[]> {
     if (isSupabaseConfigured && supabase) {
       try {
+        const userId = await this.getUserId();
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
           .select(`
             id, cnj, title, status, category, phase, value, responsibleLawyer, nextHearing, lastUpdate, movements, changeLog,
             client:clients(id, name, type, avatarUrl)
-          `);
+          `)
+          .eq('user_id', userId);
         if (error) throw error;
         
-        // Handle potential array return for relations and safer casting
         const mappedData = (data || []).map((item: any) => {
           const clientObj = Array.isArray(item.client) ? item.client[0] : item.client;
           return {
@@ -204,6 +208,7 @@ class StorageService {
   async getCaseById(id: string): Promise<LegalCase | null> {
     if (isSupabaseConfigured && supabase) {
       try {
+        const userId = await this.getUserId();
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
           .select(`
@@ -211,11 +216,11 @@ class StorageService {
             client:clients(*)
           `)
           .eq('id', id)
+          .eq('user_id', userId)
           .single();
         
         if (error) throw error;
         
-        // Handle relation potentially being array
         const mappedItem = {
             ...data,
             client: Array.isArray(data.client) ? data.client[0] : (data.client || { id: 'unknown', name: 'Cliente Desconhecido' })
@@ -245,12 +250,14 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
       try {
+        const userId = await this.getUserId();
         let query = supabase
           .from(TABLE_NAMES.CASES)
           .select(`
             id, cnj, title, status, category, phase, value, responsibleLawyer, nextHearing, lastUpdate,
             client:clients(id, name, type, avatarUrl)
-          `, { count: 'exact' });
+          `, { count: 'exact' })
+          .eq('user_id', userId);
 
         if (searchTerm) {
           query = query.or(`title.ilike.%${searchTerm}%,cnj.ilike.%${searchTerm}%`);
@@ -272,7 +279,6 @@ class StorageService {
           return { data: [], total: 0 };
         }
         
-        // Robust casting for Supabase response
         const mappedData = (data || []).map((item: any) => {
             const c = Array.isArray(item.client) ? item.client[0] : item.client;
             return {
@@ -403,7 +409,7 @@ class StorageService {
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
       if (id && !id.startsWith('case-')) {
-        await supabase.from(TABLE_NAMES.CASES).update(payload).eq('id', id);
+        await supabase.from(TABLE_NAMES.CASES).update(payload).eq('id', id).eq('user_id', userId);
         this.logActivity(`Atualizou processo: ${legalCase.title}`);
       } else {
         await supabase.from(TABLE_NAMES.CASES).insert([{ id, ...payload }]);
@@ -430,7 +436,8 @@ class StorageService {
 
   async deleteCase(id: string) {
     if (isSupabaseConfigured && supabase) {
-      await supabase.from(TABLE_NAMES.CASES).delete().eq('id', id);
+      const userId = await this.getUserId();
+      await supabase.from(TABLE_NAMES.CASES).delete().eq('id', id).eq('user_id', userId);
     } else {
       const list = await this.getCases();
       const caseTitle = list.find(c => c.id === id)?.title || 'Processo';
@@ -453,9 +460,11 @@ class StorageService {
   async getTasks(): Promise<Task[]> {
     if (isSupabaseConfigured && supabase) {
       try {
+        const userId = await this.getUserId();
         const { data } = await supabase
           .from(TABLE_NAMES.TASKS)
-          .select('id, title, dueDate, priority, status, assignedTo, caseId, clientId, clientName, description');
+          .select('id, title, dueDate, priority, status, assignedTo, caseId, clientId, clientName, description')
+          .eq('user_id', userId);
         return (data || []) as Task[];
       } catch { return []; }
     } else {
@@ -465,7 +474,8 @@ class StorageService {
 
   async getTasksByCaseId(caseId: string): Promise<Task[]> {
     if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('caseId', caseId);
+        const userId = await this.getUserId();
+        const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('caseId', caseId).eq('user_id', userId);
         return (data || []) as Task[];
     } else {
         const tasks = await this.getTasks();
@@ -479,7 +489,7 @@ class StorageService {
       const { id, ...rest } = task;
       const payload = { ...rest, user_id: userId };
       if (id && !id.startsWith('task-')) {
-        await supabase.from(TABLE_NAMES.TASKS).update(payload).eq('id', id);
+        await supabase.from(TABLE_NAMES.TASKS).update(payload).eq('id', id).eq('user_id', userId);
       } else {
         await supabase.from(TABLE_NAMES.TASKS).insert([{ id, ...payload }]);
       }
@@ -498,7 +508,8 @@ class StorageService {
   
   async deleteTask(id: string) {
     if (isSupabaseConfigured && supabase) {
-      await supabase.from(TABLE_NAMES.TASKS).delete().eq('id', id);
+      const userId = await this.getUserId();
+      await supabase.from(TABLE_NAMES.TASKS).delete().eq('id', id).eq('user_id', userId);
     } else {
       const list = await this.getTasks();
       localStorage.setItem(LOCAL_KEYS.TASKS, JSON.stringify(list.filter(i => i.id !== id)));
@@ -509,7 +520,8 @@ class StorageService {
   async getFinancials(): Promise<FinancialRecord[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('id, title, amount, type, category, status, dueDate, paymentDate, clientId, clientName, installment');
+        const userId = await this.getUserId();
+        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('id, title, amount, type, category, status, dueDate, paymentDate, clientId, clientName, installment').eq('user_id', userId);
         return (data || []) as FinancialRecord[];
       } catch { return []; }
     } else {
@@ -519,7 +531,8 @@ class StorageService {
 
   async getFinancialsByCaseId(caseId: string): Promise<FinancialRecord[]> {
     if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('caseId', caseId);
+        const userId = await this.getUserId();
+        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('caseId', caseId).eq('user_id', userId);
         return (data || []) as FinancialRecord[];
     } else {
         const fins = await this.getFinancials();
@@ -533,7 +546,7 @@ class StorageService {
       const { id, ...rest } = record;
       const payload = { ...rest, user_id: userId };
       if (id && !id.startsWith('trans-')) {
-        await supabase.from(TABLE_NAMES.FINANCIAL).update(payload).eq('id', id);
+        await supabase.from(TABLE_NAMES.FINANCIAL).update(payload).eq('id', id).eq('user_id', userId);
       } else {
         await supabase.from(TABLE_NAMES.FINANCIAL).insert([{ id, ...payload }]);
       }
@@ -554,7 +567,8 @@ class StorageService {
   async getDocuments(): Promise<SystemDocument[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*');
+        const userId = await this.getUserId();
+        const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('user_id', userId);
         return (data || []) as SystemDocument[];
       } catch { return []; }
     } else {
@@ -564,7 +578,8 @@ class StorageService {
 
   async getDocumentsByCaseId(caseId: string): Promise<SystemDocument[]> {
     if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('caseId', caseId);
+        const userId = await this.getUserId();
+        const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('caseId', caseId).eq('user_id', userId);
         return (data || []) as SystemDocument[];
     } else {
         const docs = await this.getDocuments();
@@ -588,7 +603,8 @@ class StorageService {
 
   async deleteDocument(id: string) {
     if (isSupabaseConfigured && supabase) {
-      await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id);
+      const userId = await this.getUserId();
+      await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id).eq('user_id', userId);
     } else {
       const list = await this.getDocuments();
       localStorage.setItem(LOCAL_KEYS.DOCUMENTS, JSON.stringify(list.filter(i => i.id !== id)));
