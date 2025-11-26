@@ -678,6 +678,36 @@ class StorageService {
      return true; 
   }
 
+  async deleteAccount() {
+    const userId = await this.getUserId();
+    
+    if (isSupabaseConfigured && supabase) {
+      if (!userId) return;
+      
+      // Attempt to delete data from all related tables
+      const tables = [
+        TABLE_NAMES.LOGS,
+        TABLE_NAMES.FINANCIAL,
+        TABLE_NAMES.TASKS,
+        TABLE_NAMES.DOCUMENTS,
+        TABLE_NAMES.CASES,
+        TABLE_NAMES.CLIENTS,
+        TABLE_NAMES.PROFILES
+      ];
+
+      for (const table of tables) {
+        try {
+            await supabase.from(table).delete().eq('user_id', userId);
+        } catch (e) {
+            console.error(`Error deleting from ${table}`, e);
+        }
+      }
+      
+    } else {
+      localStorage.clear();
+    }
+  }
+
   // --- Utils & Logs ---
   getLogs(): ActivityLog[] { 
     try { return JSON.parse(localStorage.getItem(LOCAL_KEYS.LOGS) || '[]'); } catch { return []; }

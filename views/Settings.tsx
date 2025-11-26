@@ -1,14 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
@@ -173,6 +162,25 @@ export const Settings: React.FC = () => {
           logout();
           window.location.reload();
         }, 1500);
+      }
+    });
+  };
+
+  const handleDeleteAccount = () => {
+    setDeleteConfirmationInput('');
+    setConfirmModal({
+      open: true,
+      action: async () => {
+        try {
+            await storageService.deleteAccount();
+            addToast('Conta e dados excluídos permanentemente.', 'success');
+            setTimeout(() => {
+              logout();
+              window.location.reload();
+            }, 1500);
+        } catch (error) {
+            addToast('Erro ao excluir conta.', 'error');
+        }
       }
     });
   };
@@ -758,6 +766,16 @@ export const Settings: React.FC = () => {
                       </div>
                       <button onClick={handleFactoryReset} className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition-colors shadow-lg shadow-rose-500/20">
                          Resetar Tudo
+                      </button>
+                   </div>
+
+                   <div className="flex items-center justify-between p-4 border border-rose-500/50 bg-rose-500/10 rounded-xl">
+                      <div>
+                         <h4 className="text-rose-200 font-medium text-sm">Excluir Conta</h4>
+                         <p className="text-xs text-rose-300/70">Apaga permanentemente sua conta e todos os dados associados (clientes, processos, financeiro). Esta ação não pode ser desfeita.</p>
+                      </div>
+                      <button onClick={handleDeleteAccount} className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition-colors shadow-lg shadow-rose-500/20">
+                         Excluir Conta
                       </button>
                    </div>
                 </div>
