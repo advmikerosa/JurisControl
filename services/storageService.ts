@@ -502,7 +502,8 @@ class StorageService {
     }
   }
 
-  async createOffice(officeData: Partial<Office>): Promise<Office> {
+  585
+  (officeData: Partial<Office>): Promise<Office> {
     const userId = await this.getUserId();
     // Fallback if user is null in localStorage (prevents crash)
     const userStr = localStorage.getItem('@JurisControl:user');
@@ -627,7 +628,7 @@ class StorageService {
 
         const userId = await this.getUserId();
         const userStr = localStorage.getItem('@JurisControl:user');
-        const user = userStr ? JSON.parse(userStr) : { name: 'Novo Membro', email: '', avatar: '' };
+        const user = userStr ? JSON.parse(userStr) : { name: 'Novo Membro', email: '', avatar: '', id: 'temp-id', username: '', provider: 'email', offices: [], twoFactorEnabled: false, emailVerified: false, phone: '', oab: '', role: 'Advogado' };
         
         if (!targetOffice.members.some(m => m.userId === userId)) {
            targetOffice.members.push({
