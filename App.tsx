@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, Component, ReactNode, ErrorInfo } from 'react';
+import React, { Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Layout } from './components/Layout';
@@ -39,7 +39,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -119,10 +119,6 @@ const AppRoutes: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Intercepta o redirect do Supabase no HashRouter.
-    // O Supabase retorna algo como: http://localhost:3000/#access_token=...
-    // O HashRouter interpreta "access_token=..." como se fosse o caminho da rota.
-    // Detectamos isso e redirecionamos para a página amigável de callback.
     if (location.pathname.includes('access_token=') || (location.hash && location.hash.includes('access_token='))) {
       navigate('/auth/callback', { replace: true });
     }
