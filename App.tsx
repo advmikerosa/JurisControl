@@ -1,4 +1,4 @@
-import React, { Component, Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
+import React, { Suspense, useEffect, ReactNode, ErrorInfo, Component } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Layout } from './components/Layout';
@@ -40,7 +40,12 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = { hasError: false, error: null };
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+    this.handleReload = this.handleReload.bind(this);
+    this.handleReset = this.handleReset.bind(this);
+  }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -50,17 +55,17 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     console.error("App Error:", error, errorInfo);
   }
 
-  handleReload = () => {
+  handleReload() {
     this.setState({ hasError: false, error: null });
     window.location.reload();
-  };
+  }
 
-  handleReset = () => {
+  handleReset() {
     if (window.confirm("Isso apagará os dados locais. Continuar?")) {
       localStorage.clear();
       window.location.reload();
     }
-  };
+  }
 
   render() {
     if (this.state.hasError) {

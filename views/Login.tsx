@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase, X, Loader2, Building, AtSign, Users } from 'lucide-react';
+import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase, Loader2, Building, AtSign, Users } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { Logo } from '../components/Logo';
 import { Modal } from '../components/ui/Modal';
@@ -84,14 +84,10 @@ export const Login: React.FC = () => {
       }
     } catch (err: any) {
       let errorMessage = err.message || 'Ocorreu um erro.';
-      
-      // Customize specific error messages
       if (errorMessage === 'Invalid login credentials') {
-        errorMessage = 'E-mail ou senha incorretos. Por favor, verifique suas credenciais.';
-        addToast(errorMessage, 'error', 6000); // Show for 6 seconds
-      } else {
-        addToast(errorMessage, 'error');
+        errorMessage = 'E-mail ou senha incorretos.';
       }
+      addToast(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -117,122 +113,113 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-y-auto py-10 px-4 bg-[#0f172a]">
-      {/* Dark Mode Background Effects */}
+    <div className="min-h-screen w-full flex items-center justify-center bg-[#0f172a] relative overflow-hidden px-4">
+      {/* Background Gradients */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-indigo-900/30 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-violet-900/30 rounded-full blur-[120px]" />
+        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/20 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-600/20 rounded-full blur-[120px]" />
       </div>
 
       <motion.div 
-        layout
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
-        className="w-full max-w-md p-8 md:p-10 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl z-10 relative overflow-hidden my-auto"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-md bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl p-8 relative z-10"
       >
-        {/* Header & Toggle */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-6">
-            <div className="shadow-[0_0_30px_rgba(99,102,241,0.3)] rounded-2xl bg-indigo-950/50 p-1 border border-white/10">
-              <Logo size={64} />
-            </div>
+        {/* Header */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="p-3 bg-indigo-500/10 rounded-2xl mb-4 border border-indigo-500/20 shadow-glow">
+            <Logo size={48} />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-8 tracking-tight">JurisControl</h1>
-          
-          {/* Toggle Switch */}
-          <div className="bg-black/30 p-1.5 rounded-xl flex relative border border-white/5">
-            <motion.div 
-              layoutId="tab-bg"
-              className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-white/10 rounded-lg border border-white/10 ${mode === 'login' ? 'left-1.5' : 'left-[calc(50%+3px)]'}`}
-              transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-            />
-            <button 
-              onClick={() => setMode('login')}
-              className={`flex-1 py-2.5 text-sm font-bold relative z-10 transition-colors ${mode === 'login' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              Entrar
-            </button>
-            <button 
-              onClick={() => setMode('register')}
-              className={`flex-1 py-2.5 text-sm font-bold relative z-10 transition-colors ${mode === 'register' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              Criar Conta
-            </button>
-          </div>
+          <h1 className="text-3xl font-bold text-white tracking-tight">JurisControl</h1>
+          <p className="text-slate-400 text-sm mt-2">Acesse seu escritório digital</p>
+        </div>
+
+        {/* Toggle Switch */}
+        <div className="bg-black/20 p-1 rounded-xl flex relative border border-white/5 mb-6">
+          <motion.div 
+            layoutId="tab-bg"
+            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white/10 rounded-lg border border-white/10 ${mode === 'login' ? 'left-1' : 'left-[calc(50%+2px)]'}`}
+            transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+          />
+          <button 
+            onClick={() => setMode('login')}
+            className={`flex-1 py-2 text-sm font-bold relative z-10 transition-colors ${mode === 'login' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            Entrar
+          </button>
+          <button 
+            onClick={() => setMode('register')}
+            className={`flex-1 py-2 text-sm font-bold relative z-10 transition-colors ${mode === 'register' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            Criar Conta
+          </button>
         </div>
 
         {/* Forms */}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <AnimatePresence mode="wait">
             {mode === 'register' && (
-              <>
-                <motion.div
-                  key="name-field"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-2 overflow-hidden"
-                >
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">Nome Completo</label>
-                  <div className="relative">
-                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-4 overflow-hidden"
+              >
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome Completo</label>
+                  <div className="relative group">
+                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
                     <input 
                       type="text" 
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all text-sm"
                       placeholder="Dr. João Silva"
                     />
                   </div>
-                </motion.div>
+                </div>
 
-                <motion.div
-                  key="oab-field"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-2 overflow-hidden"
-                >
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">Número OAB (Opcional)</label>
-                  <div className="relative">
-                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">OAB (Opcional)</label>
+                  <div className="relative group">
+                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
                     <input 
                       type="text" 
                       value={oab}
                       onChange={handleOabChange}
-                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all text-sm"
                       placeholder="UF/000.000"
                     />
                   </div>
-                </motion.div>
-              </>
+                </div>
+              </motion.div>
             )}
           </AnimatePresence>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">E-mail</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-400 uppercase ml-1">E-mail</label>
+            <div className="relative group">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
               <input 
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all"
+                className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all text-sm"
                 placeholder="nome@escritorio.com"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">Senha</label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Senha</label>
+            <div className="relative group">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
               <input 
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-black/20 border border-white/10 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all"
+                className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none transition-all text-sm"
                 placeholder="••••••••"
               />
             </div>
@@ -240,79 +227,68 @@ export const Login: React.FC = () => {
 
           <AnimatePresence mode="wait">
             {mode === 'register' && (
-              <>
-                <motion.div
-                  key="confirm-pass-field"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-2 overflow-hidden"
-                >
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide ml-2">Confirmar Senha</label>
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-4 overflow-hidden pt-1"
+              >
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">Confirmar Senha</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
                     <input 
                       type="password" 
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`w-full bg-black/20 border rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-slate-600 focus:outline-none transition-all ${
+                      className={`w-full bg-black/20 border rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:outline-none transition-all text-sm ${
                         confirmPassword && confirmPassword !== password ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'
                       }`}
                       placeholder="••••••••"
                     />
                     {confirmPassword && confirmPassword === password && (
-                      <Check className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500" size={18} />
+                      <Check className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" size={16} />
                     )}
                   </div>
-                </motion.div>
+                </div>
 
-                {/* --- Office Registration Section --- */}
-                <motion.div
-                  key="office-section"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-4 pt-4 border-t border-white/10 mt-4"
-                >
-                   <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-2">
-                      <Building size={16} className="text-indigo-400" /> Dados do Escritório
+                {/* Office Setup */}
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4 mt-2">
+                   <h3 className="text-xs font-bold text-white flex items-center gap-2 mb-3 uppercase tracking-wide">
+                      <Building size={14} className="text-indigo-400" /> Configuração do Escritório
                    </h3>
                    
-                   <div className="flex p-1 bg-black/20 rounded-lg border border-white/5">
+                   <div className="flex bg-black/20 rounded-lg p-1 mb-3">
                       <button 
                         type="button"
                         onClick={() => setOfficeMode('create')}
-                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${officeMode === 'create' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors ${officeMode === 'create' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
                       >
                         Criar Novo
                       </button>
                       <button 
                         type="button"
                         onClick={() => setOfficeMode('join')}
-                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-colors ${officeMode === 'join' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                        className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors ${officeMode === 'join' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
                       >
-                        Entrar em Existente
+                        Entrar
                       </button>
                    </div>
 
                    {officeMode === 'create' ? (
-                      <motion.div 
-                        initial={{ opacity: 0 }} 
-                        animate={{ opacity: 1 }}
-                        className="space-y-3"
-                      >
+                      <div className="space-y-3">
                           <div className="space-y-1">
-                             <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome do Escritório</label>
+                             <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Nome do Escritório</label>
                              <input 
                                 type="text" 
                                 value={officeName}
                                 onChange={(e) => setOfficeName(e.target.value)}
-                                placeholder="Ex: Silva Advogados Associados"
-                                className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 px-4 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                placeholder="Ex: Silva Advogados"
+                                className="w-full bg-black/20 border border-white/10 rounded-lg py-2 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
                              />
                           </div>
                           <div className="space-y-1">
-                             <label className="text-xs font-bold text-slate-400 uppercase ml-1">Identificador Único (@handle)</label>
+                             <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Identificador (@handle)</label>
                              <div className="relative">
                                 <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
                                 <input 
@@ -320,46 +296,38 @@ export const Login: React.FC = () => {
                                     value={officeHandle}
                                     onChange={handleOfficeHandleChange}
                                     placeholder="@silva_adv"
-                                    className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-9 pr-4 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                    className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
                                 />
                              </div>
-                             <p className="text-[10px] text-slate-500 ml-1">Seus sócios usarão isso para entrar.</p>
                           </div>
-                      </motion.div>
+                      </div>
                    ) : (
-                      <motion.div 
-                        initial={{ opacity: 0 }} 
-                        animate={{ opacity: 1 }}
-                        className="space-y-3"
-                      >
-                          <div className="space-y-1">
-                             <label className="text-xs font-bold text-slate-400 uppercase ml-1">Identificador do Escritório</label>
-                             <div className="relative">
-                                <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
-                                <input 
-                                    type="text" 
-                                    value={officeHandle}
-                                    onChange={handleOfficeHandleChange}
-                                    placeholder="@exemplo_adv"
-                                    className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-9 pr-4 text-sm text-white focus:border-indigo-500 focus:outline-none"
-                                />
-                             </div>
-                             <p className="text-[10px] text-slate-500 ml-1">Peça o handle ao administrador do escritório.</p>
-                          </div>
-                      </motion.div>
+                      <div className="space-y-1">
+                         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Identificador do Escritório</label>
+                         <div className="relative">
+                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                            <input 
+                                type="text" 
+                                value={officeHandle}
+                                onChange={handleOfficeHandleChange}
+                                placeholder="@exemplo_adv"
+                                className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                            />
+                         </div>
+                      </div>
                    )}
-                </motion.div>
-              </>
+                </div>
+              </motion.div>
             )}
           </AnimatePresence>
 
           <button 
             type="submit"
             disabled={loading}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed mt-6 hover:scale-[1.02] active:scale-[0.98]"
+            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed mt-4 hover:scale-[1.02] active:scale-[0.98]"
           >
             {loading ? (
-              <span className="animate-pulse">Processando...</span>
+              <span className="flex items-center gap-2"><Loader2 className="animate-spin" size={20} /> Processando...</span>
             ) : (
               <>
                 {mode === 'login' ? 'Entrar no Sistema' : 'Criar Minha Conta'}
@@ -370,7 +338,7 @@ export const Login: React.FC = () => {
         </form>
 
         {mode === 'login' && (
-          <div className="mt-8 text-center">
+          <div className="mt-6 text-center">
             <button 
               type="button"
               onClick={() => setShowForgotModal(true)}

@@ -18,18 +18,15 @@ export const CookieConsent: React.FC = () => {
         return () => clearTimeout(timer);
       }
 
-      // Handle potential legacy string values ('accepted'/'rejected')
       if (storedConsent === 'accepted' || storedConsent === 'rejected') {
         return;
       }
 
-      // Validate JSON structure
       const consent = JSON.parse(storedConsent);
       if (typeof consent.accepted !== 'boolean') {
         setIsVisible(true);
       }
     } catch (e) {
-      // On error (e.g. corrupted JSON), show modal to reset
       setIsVisible(true);
     }
   }, []);
@@ -50,7 +47,7 @@ export const CookieConsent: React.FC = () => {
           initial={{ y: 100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
-          className="fixed bottom-4 right-4 z-[90] flex justify-end max-w-sm w-full"
+          className="fixed bottom-6 right-6 z-[200] flex justify-end max-w-xs w-full"
         >
           <div className="bg-[#1e293b]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-5 flex flex-col gap-4">
             <div className="flex items-start gap-4">
