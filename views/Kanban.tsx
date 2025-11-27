@@ -58,7 +58,7 @@ const Column = ({ title, statusKey, color, tasks, availableCases, onAddTask, onE
   };
 
   // Drag and Drop Handlers
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     setIsOver(true);
@@ -68,7 +68,7 @@ const Column = ({ title, statusKey, color, tasks, availableCases, onAddTask, onE
     setIsOver(false);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsOver(false);
     const taskId = e.dataTransfer.getData("text/plain");
@@ -627,7 +627,7 @@ export const Kanban: React.FC = () => {
            </div>
 
            {/* Seção de Vínculo */}
-           <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl p-5 space-y-4">
+           <div className="bg-slate-5 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl p-5 space-y-4">
                <div className="flex items-center justify-between">
                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                       <LinkIcon size={16} className="text-indigo-500 dark:text-indigo-400" /> Vínculo (Opcional)

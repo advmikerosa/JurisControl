@@ -1,6 +1,5 @@
-
 import React, { Component, Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Layout } from './components/Layout';
 import { CookieConsent } from './components/CookieConsent';
@@ -28,6 +27,7 @@ const EmailConfirmation = React.lazy(() => import('./views/EmailConfirmation').t
 const Documents = React.lazy(() => import('./views/Documents').then(m => ({ default: m.Documents })));
 const PrivacyPolicy = React.lazy(() => import('./views/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
 const TermsOfUse = React.lazy(() => import('./views/TermsOfUse').then(m => ({ default: m.TermsOfUse })));
+const AuthCallback = React.lazy(() => import('./views/AuthCallback').then(m => ({ default: m.AuthCallback })));
 
 // Error Boundary
 interface ErrorBoundaryProps {
@@ -113,11 +113,25 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 const AppRoutes: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Intercepta o redirect do Supabase no HashRouter.
+    // O Supabase retorna algo como: http://localhost:3000/#access_token=...
+    // O HashRouter interpreta "access_token=..." como se fosse o caminho da rota.
+    // Detectamos isso e redirecionamos para a página amigável de callback.
+    if (location.pathname.includes('access_token=') || (location.hash && location.hash.includes('access_token='))) {
+      navigate('/auth/callback', { replace: true });
+    }
+  }, [location, navigate]);
+
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
         <Route path="/login" element={<Login />} />
         <Route path="/confirm-email" element={<EmailConfirmation />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        
         <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute><CalendarView /></ProtectedRoute>} />
         <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />

@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storageService } from '../services/storageService';
@@ -9,10 +7,7 @@ import { ArrowLeft, Calendar, User, DollarSign, Plus, Paperclip, Clock, CheckCir
 import { LegalCase, Task, FinancialRecord, SystemDocument, CaseMovement, CasePhase } from '../types';
 import { useToast } from '../context/ToastContext';
 import { CaseFormModal } from '../components/CaseFormModal';
-
-const CASE_PHASES: CasePhase[] = [
-  'Distributivo', 'Conhecimento', 'Instrução', 'Julgamento', 'Recurso', 'Execução', 'Encerrado'
-];
+import { CASE_PHASES } from '../utils/constants';
 
 export const CaseDetails: React.FC = () => {
   const { id } = useParams();

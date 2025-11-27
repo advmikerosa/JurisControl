@@ -7,6 +7,7 @@ import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase, X, Loader2,
 import { useToast } from '../context/ToastContext';
 import { Logo } from '../components/Logo';
 import { Modal } from '../components/ui/Modal';
+import { masks } from '../utils/formatters';
 
 export const Login: React.FC = () => {
   const { login, register, recoverPassword } = useAuth();
@@ -32,25 +33,7 @@ export const Login: React.FC = () => {
   const [officeHandle, setOfficeHandle] = useState('');
 
   const handleOabChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let v = e.target.value.toUpperCase();
-    // Remove everything that is not alphanumeric
-    v = v.replace(/[^A-Z0-9]/g, '');
-    
-    // Logic for UF/Number: UF/123.456
-    if (v.length > 2) {
-      v = v.substring(0, 2) + '/' + v.substring(2);
-    }
-    if (v.length > 6) { // 2 (UF) + 1 (/) + 3 (Nums) = 6 chars before dot
-      const uf = v.substring(0, 2);
-      const slash = v.substring(2, 3);
-      const numPart = v.substring(3);
-      
-      if (numPart.length > 3) {
-         v = `${uf}${slash}${numPart.substring(0,3)}.${numPart.substring(3)}`;
-      }
-    }
-    // Limit length (UF/123.456) = 10 chars
-    setOab(v.substring(0, 10));
+    setOab(masks.oab(e.target.value));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

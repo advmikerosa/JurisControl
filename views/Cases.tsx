@@ -11,12 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { LegalCase, Client, CaseStatus, LegalCategory } from '../types';
 import { CaseFormModal } from '../components/CaseFormModal';
 import { masks, formatCurrency } from '../utils/formatters';
-
-const LEGAL_CATEGORIES: LegalCategory[] = [
-  'Administrativo', 'Cível', 'Comercial/Empresarial', 'Consumidor', 
-  'Família', 'Trabalhista', 'Imobiliário', 'Tributário', 
-  'Penal', 'Previdenciário', 'Outro'
-];
+import { LEGAL_CATEGORIES } from '../utils/constants';
 
 const CaseListItem = React.memo(({ c, onDelete, onEdit, onNavigate, openActionId, setOpenActionId }: any) => {
   return (

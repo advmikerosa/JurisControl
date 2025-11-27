@@ -1,11 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
 import { User, Search, CheckSquare, AlertCircle, Briefcase, ChevronRight, Info, Scale, Users, HelpCircle, ChevronLeft, Save, Loader2, Download, Check } from 'lucide-react';
-import { Client, LegalCase, LegalCategory, CasePhase, CaseStatus, CaseMovement } from '../types';
+import { Client, LegalCase, LegalCategory, CasePhase, CaseStatus } from '../types';
 import { storageService } from '../services/storageService';
 import { dataJudService } from '../services/dataJudService';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { LEGAL_CATEGORIES, CASE_PHASES } from '../utils/constants';
 
 interface CaseFormModalProps {
   isOpen: boolean;
@@ -14,16 +16,6 @@ interface CaseFormModalProps {
   initialData?: LegalCase | null;
   preSelectedClientId?: string;
 }
-
-const LEGAL_CATEGORIES: LegalCategory[] = [
-  'Administrativo', 'Cível', 'Comercial/Empresarial', 'Consumidor', 
-  'Família', 'Trabalhista', 'Imobiliário', 'Tributário', 
-  'Penal', 'Previdenciário', 'Outro'
-];
-
-const CASE_PHASES: CasePhase[] = [
-  'Distributivo', 'Conhecimento', 'Instrução', 'Julgamento', 'Recurso', 'Execução', 'Encerrado'
-];
 
 export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, onSave, initialData, preSelectedClientId }) => {
   const { user } = useAuth();
