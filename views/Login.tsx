@@ -36,6 +36,12 @@ export const Login: React.FC = () => {
     setOab(masks.oab(e.target.value));
   };
 
+  const handleOfficeHandleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.toLowerCase().replace(/[^a-z0-9_@]/g, '');
+    if (!val.startsWith('@') && val.length > 0) val = '@' + val;
+    setOfficeHandle(val);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -57,7 +63,11 @@ export const Login: React.FC = () => {
             if (!officeHandle) throw new Error('Crie um identificador (@handle) para o escritório.');
         }
         if (!officeHandle && officeMode === 'join') throw new Error('Digite o identificador do escritório para entrar.');
-        if (officeHandle && !officeHandle.startsWith('@')) throw new Error('O identificador do escritório deve começar com @.');
+        
+        // Final Handle validation
+        if (officeHandle && !/^@[a-z0-9_]{3,}$/.test(officeHandle)) {
+             throw new Error('O identificador do escritório deve começar com @ e ter pelo menos 3 caracteres (letras, números, underline).');
+        }
 
         const needsVerification = await register(name, email, password, oab, {
             mode: officeMode,
@@ -308,11 +318,7 @@ export const Login: React.FC = () => {
                                 <input 
                                     type="text" 
                                     value={officeHandle}
-                                    onChange={(e) => {
-                                      let val = e.target.value.toLowerCase();
-                                      if (!val.startsWith('@') && val.length > 0) val = '@' + val;
-                                      setOfficeHandle(val);
-                                    }}
+                                    onChange={handleOfficeHandleChange}
                                     placeholder="@silva_adv"
                                     className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-9 pr-4 text-sm text-white focus:border-indigo-500 focus:outline-none"
                                 />
@@ -333,11 +339,7 @@ export const Login: React.FC = () => {
                                 <input 
                                     type="text" 
                                     value={officeHandle}
-                                    onChange={(e) => {
-                                      let val = e.target.value.toLowerCase();
-                                      if (!val.startsWith('@') && val.length > 0) val = '@' + val;
-                                      setOfficeHandle(val);
-                                    }}
+                                    onChange={handleOfficeHandleChange}
                                     placeholder="@exemplo_adv"
                                     className="w-full bg-black/20 border border-white/10 rounded-xl py-2.5 pl-9 pr-4 text-sm text-white focus:border-indigo-500 focus:outline-none"
                                 />

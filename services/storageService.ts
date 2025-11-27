@@ -40,13 +40,9 @@ class StorageService {
     return stored ? JSON.parse(stored).id : 'local-user';
   }
 
-  private getCurrentUser(): User | null {
-    try {
-      const stored = localStorage.getItem('@JurisControl:user');
-      return stored ? JSON.parse(stored) : null;
-    } catch { return null; }
-  }
-
+  // ... (existing methods for Clients, Cases, Tasks, Financial, Documents kept same, skipping for brevity until Offices) ...
+  // [Preserve all methods from getClients to deleteDocument]
+  
   // --- Clientes ---
   async getClients(): Promise<Client[]> {
     if (isSupabaseConfigured && supabase) {
@@ -628,7 +624,8 @@ class StorageService {
             logo_url: office.logoUrl,
             created_at: office.createdAt,
             area_of_activity: office.areaOfActivity,
-            members: office.members
+            members: office.members,
+            social: office.social
         };
         
         await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
@@ -644,8 +641,14 @@ class StorageService {
     }
   }
 
-  async createOffice(officeData: Partial<Office>): Promise<Office> {
-    const userId = await this.getUserId();
+  /**
+   * createOffice
+   * @param officeData Partial office data
+   * @param explicitOwnerId (Optional) Use this ID instead of fetching from session. Useful during registration.
+   */
+  async createOffice(officeData: Partial<Office>, explicitOwnerId?: string): Promise<Office> {
+    // If explicitOwnerId is provided, we use it directly. Otherwise, try to fetch from session.
+    const userId = explicitOwnerId || await this.getUserId();
     const userStr = localStorage.getItem('@JurisControl:user');
     const user = userStr ? JSON.parse(userStr) : { name: 'Admin', email: 'admin@email.com', avatar: '' };
 
@@ -656,6 +659,7 @@ class StorageService {
         if (!userId) throw new Error("Usuário não autenticado para criar escritório");
         
         try {
+            // Check for handle availability first
             const { count } = await supabase.from(TABLE_NAMES.OFFICES).select('id', { count: 'exact', head: true }).eq('handle', handle);
             if (count && count > 0) throw new Error("Este identificador (@handle) já está em uso.");
 
@@ -672,7 +676,8 @@ class StorageService {
                     avatarUrl: user?.avatar || '',
                     role: 'Admin',
                     permissions: { financial: true, cases: true, documents: true, settings: true }
-                }]
+                }],
+                social: {}
             };
 
             const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
@@ -692,7 +697,8 @@ class StorageService {
                 location: data.location,
                 ownerId: data.owner_id,
                 createdAt: data.created_at,
-                members: data.members
+                members: data.members,
+                social: data.social
             } as Office;
 
         } catch (err: any) {
@@ -722,7 +728,8 @@ class StorageService {
               permissions: { financial: true, cases: true, documents: true, settings: true }
             }
           ],
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          social: {}
         };
 
         const updatedOffices = [...offices, newOffice];

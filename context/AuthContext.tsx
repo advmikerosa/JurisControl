@@ -203,16 +203,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // If session is created (auto-confirm enabled or mock), we can proceed to create/join office
-      if (data.session && officeData) {
+      if (data.user && officeData) {
           try {
               // Handle Office Logic
               if (officeData.mode === 'create' && officeData.name) {
-                  // Storage service uses the current authenticated user from supabase client
+                  // NOTE: Passing data.user.id explicitly because the session might not be fully established in storageService context yet
                   const newOffice = await storageService.createOffice({
                       name: officeData.name,
                       handle: officeData.handle,
                       location: 'Brasil'
-                  });
+                  }, data.user.id);
+                  
                   // Update user metadata with the new office
                   await supabase.auth.updateUser({
                       data: { 
