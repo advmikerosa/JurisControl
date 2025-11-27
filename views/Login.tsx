@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -57,16 +56,14 @@ export const Login: React.FC = () => {
         if (password !== confirmPassword) throw new Error('As senhas não coincidem.');
         if (password.length < 6) throw new Error('A senha deve ter no mínimo 6 caracteres.');
         
-        // Validate Office Fields
         if (officeMode === 'create') {
             if (!officeName) throw new Error('Digite o nome do seu escritório.');
             if (!officeHandle) throw new Error('Crie um identificador (@handle) para o escritório.');
         }
         if (!officeHandle && officeMode === 'join') throw new Error('Digite o identificador do escritório para entrar.');
         
-        // Final Handle validation
         if (officeHandle && !/^@[a-z0-9_]{3,}$/.test(officeHandle)) {
-             throw new Error('O identificador do escritório deve começar com @ e ter pelo menos 3 caracteres (letras, números, underline).');
+             throw new Error('O identificador do escritório deve começar com @ e ter pelo menos 3 caracteres.');
         }
 
         const needsVerification = await register(name, email, password, oab, {
@@ -113,7 +110,7 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#0f172a] relative overflow-hidden px-4">
+    <div className="min-h-[100dvh] w-full flex items-center justify-center bg-[#0f172a] relative overflow-hidden px-4">
       {/* Background Gradients */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/20 rounded-full blur-[120px]" />
@@ -131,24 +128,26 @@ export const Login: React.FC = () => {
           <div className="p-3 bg-indigo-500/10 rounded-2xl mb-4 border border-indigo-500/20 shadow-glow">
             <Logo size={48} />
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">JurisControl</h1>
-          <p className="text-slate-400 text-sm mt-2">Acesse seu escritório digital</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight text-center">JurisControl</h1>
+          <p className="text-slate-400 text-sm mt-2 text-center">Acesse seu escritório digital</p>
         </div>
 
         {/* Toggle Switch */}
         <div className="bg-black/20 p-1 rounded-xl flex relative border border-white/5 mb-6">
           <motion.div 
             layoutId="tab-bg"
-            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white/10 rounded-lg border border-white/10 ${mode === 'login' ? 'left-1' : 'left-[calc(50%+2px)]'}`}
+            className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white/10 rounded-lg border border-white/10 shadow-sm ${mode === 'login' ? 'left-1' : 'left-[calc(50%+2px)]'}`}
             transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
           />
           <button 
+            type="button"
             onClick={() => setMode('login')}
             className={`flex-1 py-2 text-sm font-bold relative z-10 transition-colors ${mode === 'login' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
           >
             Entrar
           </button>
           <button 
+            type="button"
             onClick={() => setMode('register')}
             className={`flex-1 py-2 text-sm font-bold relative z-10 transition-colors ${mode === 'register' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
           >

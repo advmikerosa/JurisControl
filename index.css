@@ -1,23 +1,23 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* 
+  As diretivas @tailwind foram removidas pois o Tailwind está sendo carregado via CDN no index.html 
+  para garantir a renderização da interface.
+*/
 
 body {
-  /* Default Light Mode (Comfort) */
   background-color: #F8FAFC; 
   color: #1e293b;
   min-height: 100vh;
+  font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Dark Mode via class */
 .dark body {
   background-color: #0f172a;
   color: #f1f5f9;
 }
 
-/* Scrollbar Theme */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
