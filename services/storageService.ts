@@ -117,7 +117,6 @@ class StorageService {
           alerts: client.alerts,
           documents: client.documents,
           history: client.history
-          // created_at is handled by DB default on insert
       };
 
       if (client.id && !client.id.startsWith('cli-')) {
@@ -514,7 +513,16 @@ class StorageService {
         const userId = await this.getUserId();
         if (!userId) return [];
         const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('user_id', userId);
-        return (data || []) as SystemDocument[];
+        return (data || []).map((d: any) => ({
+            id: d.id,
+            name: d.name,
+            size: d.size,
+            type: d.type,
+            date: d.date,
+            category: d.category,
+            caseId: d.case_id,
+            userId: d.user_id
+        })) as SystemDocument[];
       } catch { return []; }
     } else {
       return JSON.parse(localStorage.getItem(LOCAL_KEYS.DOCUMENTS) || '[]');
@@ -670,7 +678,6 @@ class StorageService {
             const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
             
             if (error) {
-                // Handle missing table error specifically
                 if (error.code === '42P01') {
                     throw new Error("Erro Crítico: Tabelas do banco de dados não encontradas. Por favor, execute o script 'supabase_schema.sql' no painel do Supabase.");
                 }
