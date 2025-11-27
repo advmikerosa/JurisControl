@@ -90,7 +90,15 @@ export const Login: React.FC = () => {
         }
       }
     } catch (err: any) {
-      addToast(err.message || 'Ocorreu um erro.', 'error');
+      let errorMessage = err.message || 'Ocorreu um erro.';
+      
+      // Customize specific error messages
+      if (errorMessage === 'Invalid login credentials') {
+        errorMessage = 'E-mail ou senha incorretos. Por favor, verifique suas credenciais.';
+        addToast(errorMessage, 'error', 6000); // Show for 6 seconds
+      } else {
+        addToast(errorMessage, 'error');
+      }
     } finally {
       setLoading(false);
     }

@@ -11,7 +11,7 @@ interface Toast {
 }
 
 interface ToastContextData {
-  addToast: (message: string, type?: ToastType) => void;
+  addToast: (message: string, type?: ToastType, duration?: number) => void;
 }
 
 const ToastContext = createContext<ToastContextData>({} as ToastContextData);
@@ -19,14 +19,14 @@ const ToastContext = createContext<ToastContextData>({} as ToastContextData);
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = useCallback((message: string, type: ToastType = 'info') => {
+  const addToast = useCallback((message: string, type: ToastType = 'info', duration: number = 4000) => {
     const id = Math.random().toString(36).substring(2, 9);
     setToasts((state) => [...state, { id, message, type }]);
 
-    // Auto remove after 4 seconds
+    // Auto remove after specified duration (default 4s)
     setTimeout(() => {
       setToasts((state) => state.filter((toast) => toast.id !== id));
-    }, 4000);
+    }, duration);
   }, []);
 
   const removeToast = (id: string) => {
