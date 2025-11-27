@@ -175,7 +175,6 @@ const Column = ({ title, statusKey, color, tasks, availableCases, onAddTask, onE
                 exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
                 draggable
                 onDragStart={(e) => {
-                  // Fix: Cast event to React.DragEvent to resolve TS2339 error
                   const event = e as unknown as React.DragEvent<HTMLDivElement>;
                   event.dataTransfer.setData("text/plain", task.id);
                   event.dataTransfer.effectAllowed = "move";
@@ -770,19 +769,9 @@ export const Kanban: React.FC = () => {
                     type="text" 
                     value={formData.assignedTo} 
                     onChange={(e) => setFormData({...formData, assignedTo: e.target.value})}
-                    className="w-full bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded-lg p-3 text-slate-900 dark:text-slate-200 focus:border-indigo-500 focus:outline-none transition-all placeholder:text-slate-400" 
+                    className="w-full bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded-lg p-3 text-slate-900 dark:text-slate-200 focus:border-indigo-500 focus:outline-none transition-all placeholder:text-slate-400"
                     placeholder="Nome do responsável"
                   />
-               </div>
-               <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Descrição / Observações</label>
-                  <textarea 
-                    rows={3} 
-                    value={formData.description} 
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    className="w-full bg-white dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded-lg p-3 text-slate-900 dark:text-slate-200 focus:border-indigo-500 focus:outline-none resize-none transition-all placeholder:text-slate-400 leading-relaxed"
-                    placeholder="Detalhes adicionais sobre a tarefa..."
-                  ></textarea>
                </div>
            </div>
         </form>

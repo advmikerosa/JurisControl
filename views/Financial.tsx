@@ -14,25 +14,9 @@ import { useToast } from '../context/ToastContext';
 import { Modal } from '../components/ui/Modal';
 import { FinancialRecord, Client, FinancialStatus } from '../types';
 import { motion } from 'framer-motion';
+import { formatCurrency, formatDate } from '../utils/formatters';
 
 const COLORS = ['#818cf8', '#fb7185', '#38bdf8', '#a78bfa', '#34d399', '#f472b6'];
-
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(value);
-};
-
-const formatDate = (dateString: string) => {
-  if(!dateString) return '-';
-  // Handle various formats
-  if (dateString.includes('T')) dateString = dateString.split('T')[0];
-  if (dateString.includes('/')) return dateString; // Already formatted
-  
-  const [year, month, day] = dateString.split('-');
-  return `${day}/${month}/${year}`;
-};
 
 export const Financial: React.FC = () => {
   const { addToast } = useToast();
@@ -136,11 +120,37 @@ export const Financial: React.FC = () => {
       return;
     }
 
-    // Secure parsing for "1.000,00" format (Remove dots, replace comma with dot)
-    const baseAmount = parseFloat(formData.amount.replace(/\./g, '').replace(',', '.'));
+    // Advanced Robust Parsing for BRL and US formats
+    let val = formData.amount.trim();
+    let cleanAmount;
+
+    // Check for Brazilian format (1.000,00 or 1000,00)
+    if (val.includes(',') && !val.includes('.')) {
+        // Simple comma decimal: 100,50 -> 100.50
+        cleanAmount = val.replace(',', '.');
+    } else if (val.includes('.') && val.includes(',')) {
+        // Mixed: 1.000,00 (BRL) or 1,000.00 (US)
+        const lastDot = val.lastIndexOf('.');
+        const lastComma = val.lastIndexOf(',');
+        if (lastComma > lastDot) {
+            // 1.000,00 -> remove dots, replace comma with dot
+            cleanAmount = val.replace(/\./g, '').replace(',', '.');
+        } else {
+            // 1,000.00 -> remove commas
+            cleanAmount = val.replace(/,/g, '');
+        }
+    } else {
+        // Only dots or no separators (1000 or 1000.00)
+        cleanAmount = val; 
+    }
+    
+    // Remove any non-numeric except dot
+    cleanAmount = cleanAmount.replace(/[^0-9.]/g, '');
+    
+    const baseAmount = parseFloat(cleanAmount);
     
     if (isNaN(baseAmount)) {
-      addToast('Valor inválido. Use formato 0,00.', 'error');
+      addToast('Valor inválido. Use formato 0,00', 'error');
       return;
     }
 

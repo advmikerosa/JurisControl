@@ -10,11 +10,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { LegalCase, Client, CaseStatus, LegalCategory } from '../types';
 import { CaseFormModal } from '../components/CaseFormModal';
-
-const masks = {
-  cpf: (v: string) => v.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2').substring(0, 14),
-  cnpj: (v: string) => v.replace(/\D/g, '').replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d)/, '$1-$2').substring(0, 18),
-};
+import { masks, formatCurrency } from '../utils/formatters';
 
 const LEGAL_CATEGORIES: LegalCategory[] = [
   'Administrativo', 'Cível', 'Comercial/Empresarial', 'Consumidor', 
@@ -23,10 +19,6 @@ const LEGAL_CATEGORIES: LegalCategory[] = [
 ];
 
 const CaseListItem = React.memo(({ c, onDelete, onEdit, onNavigate, openActionId, setOpenActionId }: any) => {
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
-
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
       <GlassCard className="p-0 hover:border-indigo-500/30 transition-colors group bg-slate-100 dark:bg-[#1e293b]/80 dark:bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] dark:from-white/5 dark:to-transparent">

@@ -8,32 +8,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { Client, LegalCase, ClientInteraction, ClientDocument, ClientType, ClientAlert } from '../types';
 import { Modal } from '../components/ui/Modal';
-
-// Validators
-const isValidCPF = (cpf: string) => {
-  if (!cpf) return false;
-  cpf = cpf.replace(/[^\d]+/g, '');
-  if (cpf.length !== 11 || !!cpf.match(/(\d)\1{10}/)) return false;
-  let sum = 0; let remainder;
-  for (let i = 1; i <= 9; i++) sum = sum + parseInt(cpf.substring(i - 1, i)) * (11 - i);
-  remainder = (sum * 10) % 11;
-  if ((remainder === 10) || (remainder === 11)) remainder = 0;
-  if (remainder !== parseInt(cpf.substring(9, 10))) return false;
-  sum = 0;
-  for (let i = 1; i <= 10; i++) sum = sum + parseInt(cpf.substring(i - 1, i)) * (12 - i);
-  remainder = (sum * 10) % 11;
-  if ((remainder === 10) || (remainder === 11)) remainder = 0;
-  if (remainder !== parseInt(cpf.substring(10, 11))) return false;
-  return true;
-};
-
-const isValidCNPJ = (cnpj: string) => {
-  if (!cnpj) return false;
-  cnpj = cnpj.replace(/[^\d]+/g, '');
-  if (cnpj.length !== 14) return false;
-  if (!!cnpj.match(/(\d)\1{13}/)) return false;
-  return true;
-};
+import { isValidCPF, isValidCNPJ } from '../utils/validators';
 
 export const ClientDetails: React.FC = () => {
   const { id } = useParams();

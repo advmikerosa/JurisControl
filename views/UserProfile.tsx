@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ActivityLog, DataRequest } from '../types';
+import { masks } from '../utils/formatters';
 
 // Mock Data for Data Requests (Translated)
 const MOCK_DATA_REQUESTS: DataRequest[] = [
@@ -91,30 +92,6 @@ export const UserProfile: React.FC = () => {
     // Load Logs
     setLogs(storageService.getLogs());
   }, [user]);
-
-  // Masks and Validations
-  const masks = {
-    phone: (value: string) => {
-      return value
-        .replace(/\D/g, '')
-        .replace(/^(\d{2})(\d)/, '($1) $2')
-        .replace(/(\d{5})(\d)/, '$1-$2')
-        .substring(0, 15);
-    },
-    oab: (value: string) => {
-      // Formato esperado: UF/000.000 ou apenas números
-      let v = value.toUpperCase().replace(/[^A-Z0-9]/g, ''); 
-      if (v.length > 2 && /^[A-Z]{2}/.test(v)) {
-         v = v.replace(/^([A-Z]{2})(\d)/, '$1/$2');
-      }
-      return v.substring(0, 10);
-    },
-    username: (value: string) => {
-      // Apenas letras minúsculas, números, . e _
-      let v = value.toLowerCase().replace(/[^a-z0-9._]/g, '');
-      return v ? '@' + v.replace(/^@/, '') : '';
-    }
-  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;

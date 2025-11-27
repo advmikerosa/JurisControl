@@ -8,84 +8,8 @@ import { motion } from 'framer-motion';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
 import { Client, ClientType, ClientStatus } from '../types';
-
-// Masks
-const masks = {
-  cpf: (v: string) => v.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2').substring(0, 14),
-  cnpj: (v: string) => v.replace(/\D/g, '').replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d)/, '$1-$2').substring(0, 18),
-  phone: (v: string) => {
-    const r = v.replace(/\D/g, '');
-    if (r.length > 10) return r.replace(/^(\d\d)(\d{5})(\d{4}).*/, '($1) $2-$3');
-    if (r.length > 5) return r.replace(/^(\d\d)(\d{4})(\d{0,4}).*/, '($1) $2-$3');
-    if (r.length > 2) return r.replace(/^(\d\d)(\d{0,5}).*/, '($1) $2');
-    return r.replace(/^(\d*)/, '($1');
-  },
-  cep: (v: string) => v.replace(/\D/g, '').replace(/(\d{5})(\d)/, '$1-$2').substring(0, 9)
-};
-
-// Strict Algorithmic Validation (Mod 11)
-const isValidCPF = (cpf: string) => {
-  if (!cpf) return false;
-  cpf = cpf.replace(/[^\d]+/g, '');
-  if (cpf.length !== 11 || !!cpf.match(/(\d)\1{10}/)) return false;
-  
-  let sum = 0;
-  let remainder;
-  
-  for (let i = 1; i <= 9; i++) sum = sum + parseInt(cpf.substring(i - 1, i)) * (11 - i);
-  remainder = (sum * 10) % 11;
-  
-  if ((remainder === 10) || (remainder === 11)) remainder = 0;
-  if (remainder !== parseInt(cpf.substring(9, 10))) return false;
-  
-  sum = 0;
-  for (let i = 1; i <= 10; i++) sum = sum + parseInt(cpf.substring(i - 1, i)) * (12 - i);
-  remainder = (sum * 10) % 11;
-  
-  if ((remainder === 10) || (remainder === 11)) remainder = 0;
-  if (remainder !== parseInt(cpf.substring(10, 11))) return false;
-  
-  return true;
-};
-
-const isValidCNPJ = (cnpj: string) => {
-  if (!cnpj) return false;
-  cnpj = cnpj.replace(/[^\d]+/g, '');
-  
-  if (cnpj.length !== 14) return false;
-  // Elimina CNPJs invalidos conhecidos
-  if (!!cnpj.match(/(\d)\1{13}/)) return false;
-
-  // Valida DVs
-  let tamanho = cnpj.length - 2;
-  let numeros = cnpj.substring(0, tamanho);
-  let digitos = cnpj.substring(tamanho);
-  let soma = 0;
-  let pos = tamanho - 7;
-  
-  for (let i = tamanho; i >= 1; i--) {
-    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
-    if (pos < 2) pos = 9;
-  }
-  
-  let resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
-  if (resultado !== parseInt(digitos.charAt(0))) return false;
-  
-  tamanho = tamanho + 1;
-  numeros = cnpj.substring(0, tamanho);
-  soma = 0;
-  pos = tamanho - 7;
-  
-  for (let i = tamanho; i >= 1; i--) {
-    soma += parseInt(numeros.charAt(tamanho - i)) * pos--;
-    if (pos < 2) pos = 9;
-  }
-  
-  resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
-  if (resultado !== parseInt(digitos.charAt(1))) return false;
-  
-  return true;
-};
+import { masks } from '../utils/formatters';
+import { isValidCPF, isValidCNPJ } from '../utils/validators';
 
 export const Clients: React.FC = () => {
   const navigate = useNavigate();
@@ -168,7 +92,6 @@ export const Clients: React.FC = () => {
 
     if (Object.keys(errors).length > 0) {
         setFormErrors(errors);
-        // Visual feedback handled by rendering error messages
         addToast('Corrija os campos destacados em vermelho.', 'error');
         return;
     }
