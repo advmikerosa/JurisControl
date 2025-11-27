@@ -56,12 +56,33 @@ class StorageService {
 
         const { data, error } = await supabase
           .from(TABLE_NAMES.CLIENTS)
-          .select('id, name, type, status, email, phone, city, state, avatarUrl, cpf, cnpj, corporateName, createdAt, tags, alerts, notes, documents, history')
+          .select('*') // Select all columns to map correctly
           .eq('user_id', userId)
           .order('name');
         
         if (error) throw error;
-        return (data as unknown) as Client[];
+        
+        // Map snake_case from DB to camelCase for frontend
+        return (data || []).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            type: c.type,
+            status: c.status,
+            email: c.email,
+            phone: c.phone,
+            city: c.city,
+            state: c.state,
+            avatarUrl: c.avatar_url,
+            cpf: c.cpf,
+            cnpj: c.cnpj,
+            corporateName: c.corporate_name,
+            createdAt: c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '',
+            tags: c.tags || [],
+            alerts: c.alerts || [],
+            notes: c.notes,
+            documents: c.documents || [],
+            history: c.history || []
+        })) as Client[];
       } catch (error) { 
         console.error("Supabase Error (getClients):", error); 
         return []; 
@@ -76,13 +97,33 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
       if (!userId) throw new Error("Usuário não autenticado");
-      const payload = { ...client, user_id: userId };
-      const { id, ...insertPayload } = payload;
       
-      if (id && !id.startsWith('cli-')) {
+      const payload = {
+          id: client.id && !client.id.startsWith('cli-') ? client.id : client.id, // Use existing ID if valid
+          user_id: userId,
+          name: client.name,
+          type: client.type,
+          status: client.status,
+          email: client.email,
+          phone: client.phone,
+          city: client.city,
+          state: client.state,
+          avatar_url: client.avatarUrl,
+          cpf: client.cpf,
+          cnpj: client.cnpj,
+          corporate_name: client.corporateName,
+          notes: client.notes,
+          tags: client.tags,
+          alerts: client.alerts,
+          documents: client.documents,
+          history: client.history
+          // created_at is handled by DB default on insert
+      };
+
+      if (client.id && !client.id.startsWith('cli-')) {
         await supabase.from(TABLE_NAMES.CLIENTS).upsert(payload);
       } else {
-        await supabase.from(TABLE_NAMES.CLIENTS).insert([insertPayload]);
+        await supabase.from(TABLE_NAMES.CLIENTS).insert([payload]);
       }
       this.logActivity(`Salvou cliente: ${client.name}`);
     } else {
@@ -127,19 +168,43 @@ class StorageService {
 
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
-          .select(`*, client:clients(*)`)
+          .select(`
+            *,
+            client:clients!cases_client_id_fkey(*)
+          `)
           .eq('user_id', userId);
         if (error) throw error;
         
         const mappedData = (data || []).map((item: any) => {
-          const clientObj = Array.isArray(item.client) ? item.client[0] : item.client;
+          const clientData = item.client;
+          const mappedClient = clientData ? {
+              id: clientData.id,
+              name: clientData.name,
+              type: clientData.type,
+              avatarUrl: clientData.avatar_url
+          } : { id: 'unknown', name: 'Cliente Desconhecido', type: 'PF', avatarUrl: '' };
+
           return {
-            ...item,
-            client: clientObj || { id: 'unknown', name: 'Cliente Desconhecido', type: 'PF', avatarUrl: '' }
+            id: item.id,
+            cnj: item.cnj,
+            title: item.title,
+            status: item.status,
+            category: item.category,
+            phase: item.phase,
+            value: Number(item.value),
+            responsibleLawyer: item.responsible_lawyer,
+            court: item.court,
+            nextHearing: item.next_hearing,
+            distributionDate: item.created_at,
+            description: item.description,
+            movements: item.movements,
+            changeLog: item.change_log,
+            lastUpdate: item.last_update,
+            client: mappedClient
           };
         });
 
-        return mappedData as unknown as LegalCase[];
+        return mappedData as LegalCase[];
       } catch (e) { 
         console.error("Supabase Error (getCases):", e); 
         return []; 
@@ -157,19 +222,41 @@ class StorageService {
 
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
-          .select(`*, client:clients(*)`)
+          .select(`*, client:clients!cases_client_id_fkey(*)`)
           .eq('id', id)
           .eq('user_id', userId)
           .single();
         
         if (error) throw error;
         
-        const mappedItem = {
-            ...data,
-            client: Array.isArray(data.client) ? data.client[0] : (data.client || { id: 'unknown', name: 'Cliente Desconhecido' })
-        };
+        const clientData = data.client;
+        const mappedClient = clientData ? {
+            id: clientData.id,
+            name: clientData.name,
+            type: clientData.type,
+            avatarUrl: clientData.avatar_url,
+            email: clientData.email,
+            phone: clientData.phone
+        } : { id: 'unknown', name: 'Cliente Desconhecido' };
 
-        return mappedItem as unknown as LegalCase;
+        return {
+            id: data.id,
+            cnj: data.cnj,
+            title: data.title,
+            status: data.status,
+            category: data.category,
+            phase: data.phase,
+            value: Number(data.value),
+            responsibleLawyer: data.responsible_lawyer,
+            court: data.court,
+            nextHearing: data.next_hearing,
+            distributionDate: data.created_at,
+            description: data.description,
+            movements: data.movements,
+            changeLog: data.change_log,
+            lastUpdate: data.last_update,
+            client: mappedClient
+        } as LegalCase;
       } catch (e) { 
         return null; 
       }
@@ -187,72 +274,34 @@ class StorageService {
     categoryFilter: string | null = null, 
     dateRange: { start: string, end: string } | null = null
   ): Promise<{ data: LegalCase[], total: number }> {
-    const start = (page - 1) * limit;
-    const end = start + limit - 1;
+    // Reusing getCases for simplicity in this implementation phase as full backend pagination requires exact count
+    // In production, this would be a specific RPC or complex query
+    const allCases = await this.getCases();
+    
+    let filtered = allCases;
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const userId = await this.getUserId();
-        if (!userId) return { data: [], total: 0 };
-
-        let query = supabase
-          .from(TABLE_NAMES.CASES)
-          .select(`*, client:clients!inner(id, name, type, avatarUrl)`, { count: 'exact' })
-          .eq('user_id', userId);
-
-        if (searchTerm) {
-          query = query.or(`title.ilike.%${searchTerm}%,cnj.ilike.%${searchTerm}%,client.name.ilike.%${searchTerm}%`);
-        }
-        if (statusFilter && statusFilter !== 'Todos') {
-          query = query.eq('status', statusFilter);
-        }
-        if (categoryFilter && categoryFilter !== 'Todos') {
-          query = query.eq('category', categoryFilter);
-        }
-        if (dateRange && dateRange.start && dateRange.end) {
-           query = query.gte('lastUpdate', dateRange.start).lte('lastUpdate', dateRange.end);
-        }
-
-        const { data, count, error } = await query.range(start, end).order('lastUpdate', { ascending: false });
-        
-        if (error) return { data: [], total: 0 };
-        
-        const mappedData = (data || []).map((item: any) => {
-            const c = Array.isArray(item.client) ? item.client[0] : item.client;
-            return {
-                ...item,
-                client: c || { id: 'unknown', name: 'Cliente Removido', type: 'PF', avatarUrl: '' }
-            };
-        });
-
-        return { data: mappedData as unknown as LegalCase[], total: count || 0 };
-      } catch {
-        return { data: [], total: 0 };
-      }
-    } else {
-      try {
-        let allCases = JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]') as LegalCase[];
-        if (searchTerm) {
-          const lowerSearch = searchTerm.toLowerCase();
-          allCases = allCases.filter(c => 
-            c.title.toLowerCase().includes(lowerSearch) || 
-            c.cnj.includes(lowerSearch) ||
-            c.client.name.toLowerCase().includes(lowerSearch)
-          );
-        }
-        if (statusFilter && statusFilter !== 'Todos') allCases = allCases.filter(c => c.status === statusFilter);
-        if (categoryFilter && categoryFilter !== 'Todos') allCases = allCases.filter(c => c.category === categoryFilter);
-        if (dateRange && dateRange.start && dateRange.end) {
-          allCases = allCases.filter(c => {
-             if (!c.lastUpdate) return false;
-             const dateStr = c.lastUpdate.split('T')[0];
-             return dateStr >= dateRange.start && dateStr <= dateRange.end;
-          });
-        }
-        allCases.sort((a, b) => new Date(b.lastUpdate || 0).getTime() - new Date(a.lastUpdate || 0).getTime());
-        return { data: allCases.slice(start, end + 1), total: allCases.length };
-      } catch { return { data: [], total: 0 }; }
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      filtered = filtered.filter(c => 
+        c.title.toLowerCase().includes(lower) || 
+        c.cnj.includes(lower) || 
+        c.client.name.toLowerCase().includes(lower)
+      );
     }
+    if (statusFilter && statusFilter !== 'Todos') filtered = filtered.filter(c => c.status === statusFilter);
+    if (categoryFilter && categoryFilter !== 'Todos') filtered = filtered.filter(c => c.category === categoryFilter);
+    if (dateRange && dateRange.start && dateRange.end) {
+        filtered = filtered.filter(c => {
+            const d = c.lastUpdate ? c.lastUpdate.split('T')[0] : '';
+            return d >= dateRange.start && d <= dateRange.end;
+        });
+    }
+
+    const start = (page - 1) * limit;
+    return {
+        data: filtered.slice(start, start + limit),
+        total: filtered.length
+    };
   }
 
   async saveCase(legalCase: LegalCase) {
@@ -261,19 +310,30 @@ class StorageService {
     
     if (isSupabaseConfigured && supabase) {
       if (!userId) throw new Error("Usuário não autenticado");
-      const { id, client, ...rest } = legalCase;
+      
       const payload: any = {
-        ...rest,
+        id: legalCase.id && !legalCase.id.startsWith('case-') ? legalCase.id : legalCase.id,
         user_id: userId,
-        client_id: client.id,
+        client_id: legalCase.client.id,
+        cnj: legalCase.cnj,
+        title: legalCase.title,
+        status: legalCase.status,
+        category: legalCase.category,
+        phase: legalCase.phase,
+        value: legalCase.value,
+        responsible_lawyer: legalCase.responsibleLawyer,
+        court: legalCase.court,
+        next_hearing: legalCase.nextHearing,
+        description: legalCase.description,
+        movements: legalCase.movements,
+        change_log: legalCase.changeLog,
+        last_update: legalCase.lastUpdate
       };
       
-      if (id && !id.startsWith('case-')) {
-        await supabase.from(TABLE_NAMES.CASES).upsert({ id, ...payload });
+      if (legalCase.id && !legalCase.id.startsWith('case-')) {
+        await supabase.from(TABLE_NAMES.CASES).upsert(payload);
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { id: tempId, ...insertPayload } = payload;
-        await supabase.from(TABLE_NAMES.CASES).insert([insertPayload]);
+        await supabase.from(TABLE_NAMES.CASES).insert([payload]);
       }
       this.logActivity(`Salvou processo: ${legalCase.title}`);
     } else {
@@ -309,7 +369,19 @@ class StorageService {
         const userId = await this.getUserId();
         if (!userId) return [];
         const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('user_id', userId);
-        return (data || []) as Task[];
+        return (data || []).map((t: any) => ({
+            id: t.id,
+            title: t.title,
+            dueDate: t.due_date,
+            priority: t.priority,
+            status: t.status,
+            assignedTo: t.assigned_to,
+            description: t.description,
+            caseId: t.case_id,
+            caseTitle: t.case_title,
+            clientId: t.client_id,
+            clientName: t.client_name
+        })) as Task[];
       } catch { return []; }
     } else {
       return JSON.parse(localStorage.getItem(LOCAL_KEYS.TASKS) || '[]');
@@ -317,25 +389,30 @@ class StorageService {
   }
 
   async getTasksByCaseId(caseId: string): Promise<Task[]> {
-    if (isSupabaseConfigured && supabase) {
-        const userId = await this.getUserId();
-        if (!userId) return [];
-        const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('caseId', caseId).eq('user_id', userId);
-        return (data || []) as Task[];
-    } else {
-        const tasks = await this.getTasks();
-        return tasks.filter(t => t.caseId === caseId);
-    }
+    const tasks = await this.getTasks();
+    return tasks.filter(t => t.caseId === caseId);
   }
   
   async saveTask(task: Task) {
     const userId = await this.getUserId();
     if (isSupabaseConfigured && supabase) {
       if (!userId) throw new Error("Usuário não autenticado");
-      const { id, ...rest } = task;
-      const payload = { ...rest, user_id: userId };
-      if (id && !id.startsWith('task-')) {
-        await supabase.from(TABLE_NAMES.TASKS).upsert({ id, ...payload });
+      const payload = { 
+          id: task.id && !task.id.startsWith('task-') ? task.id : task.id,
+          user_id: userId,
+          title: task.title,
+          due_date: task.dueDate,
+          priority: task.priority,
+          status: task.status,
+          assigned_to: task.assignedTo,
+          description: task.description,
+          case_id: task.caseId,
+          case_title: task.caseTitle,
+          client_id: task.clientId,
+          client_name: task.clientName
+      };
+      if (task.id && !task.id.startsWith('task-')) {
+        await supabase.from(TABLE_NAMES.TASKS).upsert(payload);
       } else {
         await supabase.from(TABLE_NAMES.TASKS).insert([payload]);
       }
@@ -369,7 +446,20 @@ class StorageService {
         const userId = await this.getUserId();
         if (!userId) return [];
         const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('user_id', userId);
-        return (data || []) as FinancialRecord[];
+        return (data || []).map((f: any) => ({
+            id: f.id,
+            title: f.title,
+            amount: Number(f.amount),
+            type: f.type,
+            category: f.category,
+            status: f.status,
+            dueDate: f.due_date,
+            paymentDate: f.payment_date,
+            clientId: f.client_id,
+            clientName: f.client_name,
+            caseId: f.case_id,
+            installment: f.installment
+        })) as FinancialRecord[];
       } catch { return []; }
     } else {
       return JSON.parse(localStorage.getItem(LOCAL_KEYS.FINANCIAL) || '[]');
@@ -377,25 +467,31 @@ class StorageService {
   }
 
   async getFinancialsByCaseId(caseId: string): Promise<FinancialRecord[]> {
-    if (isSupabaseConfigured && supabase) {
-        const userId = await this.getUserId();
-        if (!userId) return [];
-        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('caseId', caseId).eq('user_id', userId);
-        return (data || []) as FinancialRecord[];
-    } else {
-        const fins = await this.getFinancials();
-        return fins.filter(f => f.caseId === caseId);
-    }
+    const fins = await this.getFinancials();
+    return fins.filter(f => f.caseId === caseId);
   }
   
   async saveFinancial(record: FinancialRecord) {
     const userId = await this.getUserId();
     if (isSupabaseConfigured && supabase) {
       if (!userId) throw new Error("Usuário não autenticado");
-      const { id, ...rest } = record;
-      const payload = { ...rest, user_id: userId };
-      if (id && !id.startsWith('trans-')) {
-        await supabase.from(TABLE_NAMES.FINANCIAL).upsert({ id, ...payload });
+      const payload = {
+          id: record.id && !record.id.startsWith('trans-') ? record.id : record.id,
+          user_id: userId,
+          title: record.title,
+          amount: record.amount,
+          type: record.type,
+          category: record.category,
+          status: record.status,
+          due_date: record.dueDate,
+          payment_date: record.paymentDate,
+          client_id: record.clientId,
+          client_name: record.clientName,
+          case_id: record.caseId,
+          installment: record.installment
+      };
+      if (record.id && !record.id.startsWith('trans-')) {
+        await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
       } else {
         await supabase.from(TABLE_NAMES.FINANCIAL).insert([payload]);
       }
@@ -426,24 +522,25 @@ class StorageService {
   }
 
   async getDocumentsByCaseId(caseId: string): Promise<SystemDocument[]> {
-    if (isSupabaseConfigured && supabase) {
-        const userId = await this.getUserId();
-        if (!userId) return [];
-        const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('caseId', caseId).eq('user_id', userId);
-        return (data || []) as SystemDocument[];
-    } else {
-        const docs = await this.getDocuments();
-        return docs.filter(d => d.caseId === caseId);
-    }
+    const docs = await this.getDocuments();
+    return docs.filter(d => d.caseId === caseId);
   }
 
   async saveDocument(docData: SystemDocument) {
     const userId = await this.getUserId();
     if (isSupabaseConfigured && supabase) {
       if (!userId) throw new Error("Usuário não autenticado");
-      const { id, ...rest } = docData;
-      const payload = { ...rest, user_id: userId };
-      await supabase.from(TABLE_NAMES.DOCUMENTS).insert([{ id, ...payload }]);
+      const payload = { 
+          id: docData.id,
+          user_id: userId,
+          name: docData.name,
+          size: docData.size,
+          type: docData.type,
+          date: docData.date,
+          category: docData.category,
+          case_id: docData.caseId
+      };
+      await supabase.from(TABLE_NAMES.DOCUMENTS).insert([payload]);
     } else {
       const list = await this.getDocuments();
       list.unshift({ ...docData, userId: userId || 'local' });
@@ -466,17 +563,25 @@ class StorageService {
   // --- Escritórios (Office Management) ---
   async getOffices(): Promise<Office[]> {
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
-      if (error) return [];
+      try {
+          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
+          if (error) throw error;
 
-      return (data || []).map((o: any) => ({
-          ...o,
-          ownerId: o.owner_id,
-          logoUrl: o.logo_url,
-          createdAt: o.created_at,
-          areaOfActivity: o.area_of_activity,
-          members: o.members || []
-      }));
+          return (data || []).map((o: any) => ({
+              id: o.id,
+              name: o.name,
+              handle: o.handle,
+              location: o.location,
+              ownerId: o.owner_id,
+              logoUrl: o.logo_url,
+              createdAt: o.created_at,
+              areaOfActivity: o.area_of_activity,
+              members: o.members || []
+          }));
+      } catch (e) {
+          console.error("Error fetching offices:", e);
+          return [];
+      }
     } else {
       return JSON.parse(localStorage.getItem(LOCAL_KEYS.OFFICES) || '[]');
     }
@@ -484,16 +589,21 @@ class StorageService {
 
   async getOfficeById(id: string): Promise<Office | undefined> {
     if (isSupabaseConfigured && supabase) {
-       const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', id).single();
-       if (error || !data) return undefined;
-       return {
-          ...data,
-          ownerId: data.owner_id,
-          logoUrl: data.logo_url,
-          createdAt: data.created_at,
-          areaOfActivity: data.area_of_activity,
-          members: data.members || []
-       };
+       try {
+           const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', id).single();
+           if (error || !data) return undefined;
+           return {
+              id: data.id,
+              name: data.name,
+              handle: data.handle,
+              location: data.location,
+              ownerId: data.owner_id,
+              logoUrl: data.logo_url,
+              createdAt: data.created_at,
+              areaOfActivity: data.area_of_activity,
+              members: data.members || []
+           };
+       } catch { return undefined; }
     }
     const offices = await this.getOffices();
     return offices.find(o => o.id === id);
@@ -501,15 +611,16 @@ class StorageService {
   
   async saveOffice(office: Office): Promise<void> {
     if (isSupabaseConfigured && supabase) {
-        const { id, ownerId, logoUrl, createdAt, areaOfActivity, members, ...rest } = office;
         const payload = {
-            ...rest,
-            id,
-            owner_id: ownerId,
-            logo_url: logoUrl,
-            created_at: createdAt,
-            area_of_activity: areaOfActivity,
-            members: members
+            id: office.id,
+            name: office.name,
+            handle: office.handle,
+            location: office.location,
+            owner_id: office.ownerId,
+            logo_url: office.logoUrl,
+            created_at: office.createdAt,
+            area_of_activity: office.areaOfActivity,
+            members: office.members
         };
         
         await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
@@ -527,7 +638,6 @@ class StorageService {
 
   async createOffice(officeData: Partial<Office>): Promise<Office> {
     const userId = await this.getUserId();
-    // Fallback if user is null in localStorage (prevents crash)
     const userStr = localStorage.getItem('@JurisControl:user');
     const user = userStr ? JSON.parse(userStr) : { name: 'Admin', email: 'admin@email.com', avatar: '' };
 
@@ -537,35 +647,51 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
         if (!userId) throw new Error("Usuário não autenticado para criar escritório");
         
-        const { count } = await supabase.from(TABLE_NAMES.OFFICES).select('id', { count: 'exact', head: true }).eq('handle', handle);
-        if (count && count > 0) throw new Error("Este identificador (@handle) já está em uso.");
+        try {
+            const { count } = await supabase.from(TABLE_NAMES.OFFICES).select('id', { count: 'exact', head: true }).eq('handle', handle);
+            if (count && count > 0) throw new Error("Este identificador (@handle) já está em uso.");
 
-        const newOffice = {
-            name: officeData.name || 'Novo Escritório',
-            handle: handle,
-            location: officeData.location || 'Brasil',
-            owner_id: userId,
-            created_at: new Date().toISOString(),
-            members: [{
-                userId: userId,
-                name: user?.name || 'User',
-                email: user?.email || '',
-                avatarUrl: user?.avatar || '',
-                role: 'Admin',
-                permissions: { financial: true, cases: true, documents: true, settings: true }
-            }]
-        };
+            const newOffice = {
+                name: officeData.name || 'Novo Escritório',
+                handle: handle,
+                location: officeData.location || 'Brasil',
+                owner_id: userId,
+                created_at: new Date().toISOString(),
+                members: [{
+                    userId: userId,
+                    name: user?.name || 'User',
+                    email: user?.email || '',
+                    avatarUrl: user?.avatar || '',
+                    role: 'Admin',
+                    permissions: { financial: true, cases: true, documents: true, settings: true }
+                }]
+            };
 
-        const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
-        if (error) throw new Error(error.message);
-        
-        this.logActivity(`Criou novo escritório (Supabase): ${newOffice.name}`);
-        return {
-            ...data,
-            ownerId: data.owner_id,
-            createdAt: data.created_at,
-            members: data.members
-        } as Office;
+            const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
+            
+            if (error) {
+                // Handle missing table error specifically
+                if (error.code === '42P01') {
+                    throw new Error("Erro Crítico: Tabelas do banco de dados não encontradas. Por favor, execute o script 'supabase_schema.sql' no painel do Supabase.");
+                }
+                throw new Error(error.message);
+            }
+            
+            this.logActivity(`Criou novo escritório (Supabase): ${newOffice.name}`);
+            return {
+                id: data.id,
+                name: data.name,
+                handle: data.handle,
+                location: data.location,
+                ownerId: data.owner_id,
+                createdAt: data.created_at,
+                members: data.members
+            } as Office;
+
+        } catch (err: any) {
+            console.error("Failed to create office:", err);
+            throw new Error(err.message || "Erro ao criar escritório.");
+        }
 
     } else {
         const offices = await this.getOffices();
@@ -611,11 +737,18 @@ class StorageService {
         const u = session?.user?.user_metadata || {};
 
         const members = office.members || [];
-        if (members.some((m: any) => m.userId === userId)) {
-            return {
-                ...office,
+        // Check if already a member to prevent duplicates
+        const existingMember = members.find((m: any) => m.userId === userId);
+        if (existingMember) {
+             return {
+                id: office.id,
+                name: office.name,
+                handle: office.handle,
+                location: office.location,
                 ownerId: office.owner_id,
+                logoUrl: office.logo_url,
                 createdAt: office.created_at,
+                areaOfActivity: office.area_of_activity,
                 members
             };
         }
@@ -640,9 +773,14 @@ class StorageService {
 
         this.logActivity(`Entrou no escritório: ${office.name}`);
         return {
-            ...office,
+            id: office.id,
+            name: office.name,
+            handle: office.handle,
+            location: office.location,
             ownerId: office.owner_id,
+            logoUrl: office.logo_url,
             createdAt: office.created_at,
+            areaOfActivity: office.area_of_activity,
             members: updatedMembers
         };
 
@@ -675,6 +813,7 @@ class StorageService {
   async inviteUserToOffice(officeId: string, userHandle: string): Promise<boolean> {
      if (!userHandle.startsWith('@')) throw new Error("O nome de usuário deve começar com @.");
      await new Promise(resolve => setTimeout(resolve, 800));
+     // Here you would implement logic to find the user by handle and add them to office members
      return true; 
   }
 
@@ -722,7 +861,8 @@ class StorageService {
                     action,
                     status,
                     device: navigator.userAgent,
-                    ip: 'IP_PLACEHOLDER'
+                    ip: 'IP_PLACEHOLDER',
+                    date: new Date().toLocaleString('pt-BR')
                 }]).then(({ error }) => {
                     if(error) console.warn("Failed to log to Supabase", error);
                 });
@@ -767,7 +907,7 @@ class StorageService {
       if (isSupabaseConfigured && supabase) {
           this.getUserId().then(uid => {
               if (uid) {
-                  supabase!.from(TABLE_NAMES.PROFILES).update({ settings }).eq('id', uid);
+                  supabase!.from(TABLE_NAMES.PROFILES).upsert({ id: uid, settings });
               }
           });
       }
