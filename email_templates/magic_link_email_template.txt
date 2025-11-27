@@ -1,0 +1,1 @@
+Subject: Your Magic Link for JurisControl\n\nHello,\n\nTo access your JurisControl account, please click the link below:\n\n[Magic Link](https://example.com/magic-link)\n\nThis link is valid for 15 minutes. If you did not request this link, please ignore this email.\n\nBest Regards,\nThe JurisControl Team
