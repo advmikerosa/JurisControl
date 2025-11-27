@@ -1,3 +1,4 @@
+
 import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { notificationService } from './notificationService';
@@ -32,17 +33,18 @@ class StorageService {
   
   private async getUserId(): Promise<string | null> {
     if (isSupabaseConfigured && supabase) {
-      const { data } = await supabase.auth.getSession();
-      // Retorna ID apenas se houver sessão, caso contrário null para evitar erro 400 (invalid input syntax for type uuid)
-      return data.session?.user?.id || null; 
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error || !data.session) return null;
+        return data.session.user.id;
+      } catch {
+        return null;
+      }
     }
     const stored = localStorage.getItem('@JurisControl:user');
     return stored ? JSON.parse(stored).id : 'local-user';
   }
 
-  // ... (existing methods for Clients, Cases, Tasks, Financial, Documents kept same, skipping for brevity until Offices) ...
-  // [Preserve all methods from getClients to deleteDocument]
-  
   // --- Clientes ---
   async getClients(): Promise<Client[]> {
     if (isSupabaseConfigured && supabase) {
@@ -659,9 +661,9 @@ class StorageService {
         if (!userId) throw new Error("Usuário não autenticado para criar escritório");
         
         try {
-            // Check for handle availability first
-            const { count } = await supabase.from(TABLE_NAMES.OFFICES).select('id', { count: 'exact', head: true }).eq('handle', handle);
-            if (count && count > 0) throw new Error("Este identificador (@handle) já está em uso.");
+            // FIX: Removed the specific 'select' check for handle availability to prevent triggering "infinite recursion" 
+            // in RLS policies when the user is not yet a member of the office they are trying to create.
+            // We rely on the DB unique constraint on 'handle' to fail the insert if needed.
 
             const newOffice = {
                 name: officeData.name || 'Novo Escritório',
@@ -683,8 +685,11 @@ class StorageService {
             const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
             
             if (error) {
+                if (error.code === '23505') { // Unique violation
+                    throw new Error("Este identificador (@handle) já está em uso. Escolha outro.");
+                }
                 if (error.code === '42P01') {
-                    throw new Error("Erro Crítico: Tabelas do banco de dados não encontradas. Por favor, execute o script 'supabase_schema.sql' no painel do Supabase.");
+                    throw new Error("Erro Crítico: Tabelas do banco de dados não encontradas.");
                 }
                 throw new Error(error.message);
             }
@@ -741,8 +746,14 @@ class StorageService {
 
   async joinOffice(officeHandle: string): Promise<Office> {
     if (isSupabaseConfigured && supabase) {
+        // Warning: This query might fail if RLS prevents reading offices user is not a member of.
+        // It depends on the public RLS policy for offices table.
         const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', officeHandle).single();
-        if (error || !office) throw new Error("Escritório não encontrado.");
+        
+        if (error || !office) {
+            // Provide a clearer error message for potential RLS blocks or not found
+            throw new Error("Escritório não encontrado ou acesso restrito. Verifique o identificador.");
+        }
 
         const userId = await this.getUserId();
         if (!userId) throw new Error("Usuário não autenticado para entrar em escritório");

@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { User, AuthProvider as AuthProviderType } from '../types';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
@@ -98,11 +99,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkSession = async () => {
       try {
         if (isSupabaseConfigured && supabase) {
-          const { data: { session } } = await supabase.auth.getSession();
+          const { data, error } = await supabase.auth.getSession();
           
+          if (error) {
+            console.error("Session Check Error:", error.message);
+            if (mounted) {
+              logout(false); // Force clean state
+              setIsLoading(false);
+            }
+            return;
+          }
+
           if (mounted) {
-              if (session?.user) {
-                mapSupabaseUserToContext(session.user);
+              if (data.session?.user) {
+                mapSupabaseUserToContext(data.session.user);
               } else {
                 setUser(null);
                 setIsAuthenticated(false);
@@ -133,7 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } catch (error) {
-        console.error("Session check failed:", error);
+        console.error("Session check failed unexpected:", error);
         if (mounted) {
           setUser(null);
           setIsAuthenticated(false);
@@ -230,9 +240,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       }
                   });
               }
-          } catch (officeError) {
+          } catch (officeError: any) {
               console.error("Office registration failed:", officeError);
-              // Don't fail the whole registration, but maybe warn user
+              // Don't fail the whole registration, but warn user via logs. 
+              // The user will exist, but without office association.
           }
       }
 

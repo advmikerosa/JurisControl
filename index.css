@@ -1,8 +1,3 @@
-/* 
-  As diretivas @tailwind foram removidas pois o Tailwind está sendo carregado via CDN no index.html 
-  para garantir a renderização da interface.
-*/
-
 body {
   background-color: #F8FAFC; 
   color: #1e293b;

@@ -1,13 +1,11 @@
-import React, { Suspense, useEffect, ReactNode, ErrorInfo } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import React, { Component, Suspense, ReactNode, ErrorInfo } from 'react';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { CookieConsent } from './components/CookieConsent';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { storageService } from './services/storageService';
 import { Logo } from './components/Logo';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 
@@ -30,149 +28,144 @@ const TermsOfUse = React.lazy(() => import('./views/TermsOfUse').then(m => ({ de
 const AuthCallback = React.lazy(() => import('./views/AuthCallback').then(m => ({ default: m.AuthCallback })));
 
 // Error Boundary
-interface ErrorBoundaryProps {
-  children?: ReactNode;
-}
+class ErrorBoundary extends Component<{ children?: ReactNode }, { hasError: boolean; error: Error | null }> {
+  public state = { hasError: false, error: null as Error | null };
 
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
-
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
+  constructor(props: { children?: ReactNode }) {
     super(props);
-    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("App Error:", error, errorInfo);
+    console.error("Uncaught error:", error, errorInfo);
   }
 
-  handleReload = () => {
-    this.setState({ hasError: false, error: null });
-    window.location.reload();
-  };
-
   handleReset = () => {
-    if (window.confirm("Isso apagará os dados locais. Continuar?")) {
-      localStorage.clear();
-      window.location.reload();
-    }
+    localStorage.clear();
+    window.location.reload();
   };
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-slate-200 p-6">
-          <div className="max-w-md w-full bg-white/5 border border-white/10 rounded-3xl p-8 text-center backdrop-blur-2xl shadow-xl">
-            <div className="w-16 h-16 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-              <AlertTriangle className="text-rose-500" size={32} />
+        <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white p-6">
+          <div className="max-w-md w-full bg-white/5 border border-white/10 rounded-2xl p-8 shadow-2xl text-center">
+            <div className="w-16 h-16 bg-rose-500/20 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle size={32} />
             </div>
-            <h2 className="text-xl font-bold mb-2 text-white">Ops! Algo deu errado.</h2>
-            <p className="text-slate-400 mb-6 text-sm">O sistema encontrou um erro inesperado.</p>
-            <div className="bg-black/30 p-3 rounded-lg text-left mb-6 overflow-hidden max-h-24 overflow-y-auto">
-               <code className="text-xs text-rose-400 font-mono">{this.state.error?.message}</code>
+            <h1 className="text-2xl font-bold mb-2">Algo deu errado</h1>
+            <p className="text-slate-400 mb-6 text-sm">
+              O sistema encontrou um erro inesperado. Tente recarregar ou resetar a aplicação se o problema persistir.
+            </p>
+            <div className="bg-black/20 p-4 rounded-lg mb-6 text-left overflow-auto max-h-32">
+              <code className="text-xs text-rose-300 font-mono">
+                {this.state.error?.message || 'Erro desconhecido'}
+              </code>
             </div>
-            <div className="flex gap-3">
-              <button onClick={this.handleReload} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2">
-                <RefreshCw size={16} /> Tentar Novamente
+            <div className="flex gap-3 justify-center">
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold transition-colors flex items-center gap-2"
+              >
+                <RefreshCw size={18} /> Recarregar
               </button>
-              <button onClick={this.handleReset} className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl font-medium text-sm flex items-center justify-center gap-2">
-                <Trash2 size={16} /> Resetar
+              <button 
+                onClick={this.handleReset}
+                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-bold transition-colors flex items-center gap-2"
+              >
+                <Trash2 size={18} /> Resetar App
               </button>
             </div>
           </div>
         </div>
       );
     }
+
     return this.props.children;
   }
 }
 
+// Loading Spinner
 const LoadingScreen = () => (
-  <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-[#0f172a] transition-colors">
-    <Logo size={48} className="animate-pulse mb-4" />
-    <div className="h-1 w-24 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-        <div className="h-full bg-indigo-600 animate-progress w-full origin-left"></div>
+  <div className="min-h-screen flex flex-col items-center justify-center bg-[#0f172a]">
+    <div className="relative">
+      <div className="w-16 h-16 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <Logo size={24} />
+      </div>
     </div>
-    <style>{`@keyframes progress { 0% { transform: scaleX(0); } 50% { transform: scaleX(0.7); } 100% { transform: scaleX(1); } } .animate-progress { animation: progress 1s ease-in-out infinite; }`}</style>
+    <p className="mt-4 text-slate-400 font-medium animate-pulse">Carregando JurisControl...</p>
   </div>
 );
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// Protected Route Component
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
-  if (isLoading) return <LoadingScreen />;
-  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
-  
-  return <Layout>{children}</Layout>;
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
 };
 
-const AppRoutes: React.FC = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (location.pathname.includes('access_token=') || (location.hash && location.hash.includes('access_token='))) {
-      navigate('/auth/callback', { replace: true });
-    }
-  }, [location, navigate]);
+// Main App Component
+const AppContent = () => {
+  const { isAuthenticated } = useAuth();
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        <Route path="/login" element={<Login />} />
-        <Route path="/confirm-email" element={<EmailConfirmation />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
-        
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/calendar" element={<ProtectedRoute><CalendarView /></ProtectedRoute>} />
-        <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
-        <Route path="/clients/:id" element={<ProtectedRoute><ClientDetails /></ProtectedRoute>} />
-        <Route path="/cases" element={<ProtectedRoute><Cases /></ProtectedRoute>} />
-        <Route path="/cases/:id" element={<ProtectedRoute><CaseDetails /></ProtectedRoute>} />
-        <Route path="/crm" element={<ProtectedRoute><Kanban /></ProtectedRoute>} />
-        <Route path="/financial" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
-        <Route path="/documents" element={<ProtectedRoute><Documents /></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
-        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
-        <Route path="/terms" element={<TermsOfUse />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AnimatePresence>
+    <Router>
+      <Suspense fallback={<LoadingScreen />}>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" replace />} />
+          <Route path="/confirm-email" element={<EmailConfirmation />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfUse />} />
+
+          {/* Protected Routes */}
+          <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
+          <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarView /></Layout></ProtectedRoute>} />
+          <Route path="/cases" element={<ProtectedRoute><Layout><Cases /></Layout></ProtectedRoute>} />
+          <Route path="/cases/:id" element={<ProtectedRoute><Layout><CaseDetails /></Layout></ProtectedRoute>} />
+          <Route path="/crm" element={<ProtectedRoute><Layout><Kanban /></Layout></ProtectedRoute>} />
+          <Route path="/financial" element={<ProtectedRoute><Layout><Financial /></Layout></ProtectedRoute>} />
+          <Route path="/clients" element={<ProtectedRoute><Layout><Clients /></Layout></ProtectedRoute>} />
+          <Route path="/clients/:id" element={<ProtectedRoute><Layout><ClientDetails /></Layout></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Layout><UserProfile /></Layout></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
+          <Route path="/documents" element={<ProtectedRoute><Layout><Documents /></Layout></ProtectedRoute>} />
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        <CookieConsent />
+      </Suspense>
+    </Router>
   );
 };
 
-const App: React.FC = () => {
-  useEffect(() => {
-    storageService.runAutomations();
-  }, []);
-
+export default function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
         <ToastProvider>
-          <AuthProvider>
-            <NotificationProvider>
-              <Router>
-                <Suspense fallback={<LoadingScreen />}>
-                   <AppRoutes />
-                   <CookieConsent />
-                </Suspense>
-              </Router>
-            </NotificationProvider>
-          </AuthProvider>
+          <NotificationProvider>
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
+          </NotificationProvider>
         </ToastProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
-};
-
-export default App;
+}
