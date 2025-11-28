@@ -1,31 +1,31 @@
 import React, { Component, Suspense, ReactNode, ErrorInfo } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { Layout } from './components/Layout';
-import { CookieConsent } from './components/CookieConsent';
-import { ToastProvider } from './context/ToastContext';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { NotificationProvider } from './context/NotificationContext';
-import { ThemeProvider } from './context/ThemeContext';
-import { Logo } from './components/Logo';
+import { Layout } from '@/components/Layout';
+import { CookieConsent } from '@/components/CookieConsent';
+import { ToastProvider } from '@/context/ToastContext';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { NotificationProvider } from '@/context/NotificationContext';
+import { ThemeProvider } from '@/context/ThemeContext';
+import { Logo } from '@/components/Logo';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 
-// Lazy Loading Views
-const Dashboard = React.lazy(() => import('./views/Dashboard').then(m => ({ default: m.Dashboard })));
-const CalendarView = React.lazy(() => import('./views/CalendarView').then(m => ({ default: m.CalendarView })));
-const Cases = React.lazy(() => import('./views/Cases').then(m => ({ default: m.Cases })));
-const CaseDetails = React.lazy(() => import('./views/CaseDetails').then(m => ({ default: m.CaseDetails })));
-const Kanban = React.lazy(() => import('./views/Kanban').then(m => ({ default: m.Kanban })));
-const Financial = React.lazy(() => import('./views/Financial').then(m => ({ default: m.Financial })));
-const Clients = React.lazy(() => import('./views/Clients').then(m => ({ default: m.Clients })));
-const ClientDetails = React.lazy(() => import('./views/ClientDetails').then(m => ({ default: m.ClientDetails })));
-const UserProfile = React.lazy(() => import('./views/UserProfile').then(m => ({ default: m.UserProfile })));
-const Settings = React.lazy(() => import('./views/Settings').then(m => ({ default: m.Settings })));
-const Login = React.lazy(() => import('./views/Login').then(m => ({ default: m.Login })));
-const EmailConfirmation = React.lazy(() => import('./views/EmailConfirmation').then(m => ({ default: m.EmailConfirmation })));
-const Documents = React.lazy(() => import('./views/Documents').then(m => ({ default: m.Documents })));
-const PrivacyPolicy = React.lazy(() => import('./views/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
-const TermsOfUse = React.lazy(() => import('./views/TermsOfUse').then(m => ({ default: m.TermsOfUse })));
-const AuthCallback = React.lazy(() => import('./views/AuthCallback').then(m => ({ default: m.AuthCallback })));
+// Lazy Loading Views with Absolute Paths
+const Dashboard = React.lazy(() => import('@/views/Dashboard').then(m => ({ default: m.Dashboard })));
+const CalendarView = React.lazy(() => import('@/views/CalendarView').then(m => ({ default: m.CalendarView })));
+const Cases = React.lazy(() => import('@/views/Cases').then(m => ({ default: m.Cases })));
+const CaseDetails = React.lazy(() => import('@/views/CaseDetails').then(m => ({ default: m.CaseDetails })));
+const Kanban = React.lazy(() => import('@/views/Kanban').then(m => ({ default: m.Kanban })));
+const Financial = React.lazy(() => import('@/views/Financial').then(m => ({ default: m.Financial })));
+const Clients = React.lazy(() => import('@/views/Clients').then(m => ({ default: m.Clients })));
+const ClientDetails = React.lazy(() => import('@/views/ClientDetails').then(m => ({ default: m.ClientDetails })));
+const UserProfile = React.lazy(() => import('@/views/UserProfile').then(m => ({ default: m.UserProfile })));
+const Settings = React.lazy(() => import('@/views/Settings').then(m => ({ default: m.Settings })));
+const Login = React.lazy(() => import('@/views/Login').then(m => ({ default: m.Login })));
+const EmailConfirmation = React.lazy(() => import('@/views/EmailConfirmation').then(m => ({ default: m.EmailConfirmation })));
+const Documents = React.lazy(() => import('@/views/Documents').then(m => ({ default: m.Documents })));
+const PrivacyPolicy = React.lazy(() => import('@/views/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
+const TermsOfUse = React.lazy(() => import('@/views/TermsOfUse').then(m => ({ default: m.TermsOfUse })));
+const AuthCallback = React.lazy(() => import('@/views/AuthCallback').then(m => ({ default: m.AuthCallback })));
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -39,8 +39,6 @@ interface ErrorBoundaryState {
 // Error Boundary
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = { hasError: false, error: null };
-  // Explicitly declare props to avoid TS error
-  declare props: Readonly<ErrorBoundaryProps>;
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
