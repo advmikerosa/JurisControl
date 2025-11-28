@@ -44,7 +44,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ isOpen, onClose }) => 
     setInput('');
     setIsLoading(true);
 
-    // Prepare history for API
+    // Prepare history for API (map local state to API format)
     const history = messages.map(m => ({
       role: m.role,
       parts: [{ text: m.text }]
@@ -71,7 +71,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ isOpen, onClose }) => 
       setMessages(prev => [...prev, { 
         id: Date.now().toString(), 
         role: 'model', 
-        text: 'Desculpe, encontrei um erro ao processar sua solicitação. Tente novamente.' 
+        text: 'Desculpe, encontrei um erro ao processar sua solicitação. Verifique sua conexão ou tente novamente.' 
       }]);
     } finally {
       setIsLoading(false);

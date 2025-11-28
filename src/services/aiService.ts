@@ -5,6 +5,7 @@ class AiService {
   private model: string = "gemini-2.5-flash";
 
   constructor() {
+    // process.env.API_KEY is defined in vite.config.ts and declared in vite-env.d.ts
     this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
