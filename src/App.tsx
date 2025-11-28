@@ -39,12 +39,6 @@ interface ErrorBoundaryState {
 // Error Boundary
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = { hasError: false, error: null };
-  readonly props: Readonly<ErrorBoundaryProps>;
-
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.props = props;
-  }
 
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
