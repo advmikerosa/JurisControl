@@ -13,6 +13,8 @@ export default defineConfig(({ mode }) => {
       // Map system variables (Vercel) to Vite variables expected by the app
       'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(env.SUPABASE_URL || env.VITE_SUPABASE_URL),
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY),
+      // Polyfill process.env.API_KEY for @google/genai SDK
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || ''),
     },
     build: {
       outDir: 'dist',
@@ -50,4 +52,3 @@ export default defineConfig(({ mode }) => {
     }
   };
 });
-    
