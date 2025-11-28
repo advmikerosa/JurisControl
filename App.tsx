@@ -30,9 +30,11 @@ const AuthCallback = React.lazy(() => import('./views/AuthCallback').then(m => (
 // Error Boundary
 class ErrorBoundary extends Component<{ children?: ReactNode }, { hasError: boolean; error: Error | null }> {
   public state = { hasError: false, error: null as Error | null };
+  readonly props: { children?: ReactNode };
 
   constructor(props: { children?: ReactNode }) {
     super(props);
+    this.props = props;
   }
 
   static getDerivedStateFromError(error: Error) {
@@ -102,7 +104,7 @@ const LoadingScreen = () => (
 );
 
 // Protected Route Component
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 

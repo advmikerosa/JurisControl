@@ -23,7 +23,8 @@ import {
   Loader2,
   Sun,
   Moon,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storageService } from '../services/storageService';
@@ -34,6 +35,7 @@ import { useTheme } from '../context/ThemeContext';
 import { Logo } from './Logo';
 import { SearchResult, Office } from '../types';
 import { Breadcrumbs } from './Breadcrumbs';
+import { AiAssistant } from './AiAssistant';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -56,6 +58,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isFabOpen, setIsFabOpen] = useState(false);
+  const [isAiOpen, setIsAiOpen] = useState(false);
 
   // Search States
   const [globalSearch, setGlobalSearch] = useState('');
@@ -391,6 +394,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           {/* Right Side Actions */}
           <div className="flex items-center gap-3 md:gap-6 ml-auto">
             
+            {/* AI Assistant Toggle */}
+            <button
+              onClick={() => setIsAiOpen(!isAiOpen)}
+              className={`p-2 rounded-lg transition-colors relative ${isAiOpen ? 'bg-indigo-500/10 text-indigo-500 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'}`}
+              title="Assistente JurisAI"
+            >
+              <Sparkles size={20} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-500 rounded-full animate-pulse shadow-glow" />
+            </button>
+
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
@@ -609,6 +622,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Plus size={28} strokeWidth={2.5} />
         </button>
       </div>
+
+      {/* AI Assistant Component */}
+      <AiAssistant isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
     </div>
   );
 };

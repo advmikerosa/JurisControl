@@ -28,7 +28,7 @@ const TermsOfUse = React.lazy(() => import('./views/TermsOfUse').then(m => ({ de
 const AuthCallback = React.lazy(() => import('./views/AuthCallback').then(m => ({ default: m.AuthCallback })));
 
 interface ErrorBoundaryProps {
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -39,9 +39,11 @@ interface ErrorBoundaryState {
 // Error Boundary
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = { hasError: false, error: null };
+  readonly props: ErrorBoundaryProps;
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    this.props = props;
   }
 
   static getDerivedStateFromError(error: Error) {
@@ -111,7 +113,7 @@ const LoadingScreen = () => (
 );
 
 interface ProtectedRouteProps {
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 // Protected Route Component
