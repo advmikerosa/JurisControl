@@ -39,11 +39,9 @@ interface ErrorBoundaryState {
 // Error Boundary
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = { hasError: false, error: null };
-  readonly props: ErrorBoundaryProps;
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.props = props;
   }
 
   static getDerivedStateFromError(error: Error) {
@@ -112,12 +110,8 @@ const LoadingScreen = () => (
   </div>
 );
 
-interface ProtectedRouteProps {
-  children?: ReactNode;
-}
-
 // Protected Route Component
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
