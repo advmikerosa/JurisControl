@@ -9,7 +9,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { Logo } from './components/Logo';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 
-// Lazy Loading Views with Relative Paths
+// Lazy Loading Views
 const Dashboard = React.lazy(() => import('./views/Dashboard').then(m => ({ default: m.Dashboard })));
 const CalendarView = React.lazy(() => import('./views/CalendarView').then(m => ({ default: m.CalendarView })));
 const Cases = React.lazy(() => import('./views/Cases').then(m => ({ default: m.Cases })));
