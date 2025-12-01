@@ -174,12 +174,13 @@ class StorageService {
         
         return (data || []).map((item: any) => {
           const clientData = item.client;
-          const mappedClient = clientData ? {
+          // Cast partial client data to Client type to satisfy interface
+          const mappedClient = (clientData ? {
               id: clientData.id,
               name: clientData.name,
               type: clientData.type,
               avatarUrl: clientData.avatar_url
-          } : { id: 'unknown', name: 'Cliente Desconhecido', type: 'PF', avatarUrl: '' };
+          } : { id: 'unknown', name: 'Cliente Desconhecido', type: 'PF', avatarUrl: '' }) as Client;
 
           return {
             id: item.id,
@@ -216,9 +217,9 @@ class StorageService {
         if (error) throw error;
         
         const clientData = data.client;
-        const mappedClient = clientData ? {
+        const mappedClient = (clientData ? {
             id: clientData.id, name: clientData.name, type: clientData.type, avatarUrl: clientData.avatar_url, email: clientData.email, phone: clientData.phone
-        } : { id: 'unknown', name: 'Cliente Desconhecido' };
+        } : { id: 'unknown', name: 'Cliente Desconhecido' }) as Client;
 
         return {
             id: data.id, cnj: data.cnj, title: data.title, status: data.status, category: data.category, phase: data.phase, value: Number(data.value),
@@ -381,7 +382,7 @@ class StorageService {
       const payload = {
           id: record.id && !record.id.startsWith('trans-') ? record.id : record.id,
           user_id: userId, title: record.title, amount: record.amount, type: record.type, category: record.category,
-          status: record.status, due_date: record.dueDate, payment_date: record.paymentDate, client_id: record.clientId,
+          status: record.status, due_date: record.dueDate, payment_date: record.payment_date, client_id: record.clientId,
           client_name: record.clientName, case_id: record.caseId, installment: record.installment
       };
       if (record.id && !record.id.startsWith('trans-')) await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);

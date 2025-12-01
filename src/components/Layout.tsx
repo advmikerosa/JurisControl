@@ -36,6 +36,7 @@ import { Logo } from './Logo';
 import { SearchResult, Office } from '../types';
 import { Breadcrumbs } from './Breadcrumbs';
 import { AiAssistant } from './AiAssistant';
+import { SystemNotification } from '../services/notificationService';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -505,7 +506,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     </div>
                     <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
                       {notifications.length > 0 ? (
-                        notifications.map((n) => (
+                        notifications.map((n: SystemNotification) => (
                           <div 
                             key={n.id} 
                             onClick={() => markAsRead(n.id)}
