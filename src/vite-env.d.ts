@@ -1,15 +1,11 @@
+
+// Removed reference to vite/client to fix type error
 interface ImportMetaEnv {
-  readonly VITE_SUPABASE_URL: string
-  readonly VITE_SUPABASE_ANON_KEY: string
+  readonly VITE_API_KEY: string;
+  // Add your own backend URL variables here when ready
+  // readonly VITE_BACKEND_URL: string;
 }
 
 interface ImportMeta {
   readonly env: ImportMetaEnv
-}
-
-declare namespace NodeJS {
-  interface ProcessEnv {
-    API_KEY: string;
-    [key: string]: string | undefined;
-  }
 }

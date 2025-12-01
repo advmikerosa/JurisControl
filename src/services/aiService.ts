@@ -6,8 +6,9 @@ class AiService {
   private model: string = "gemini-2.5-flash";
 
   constructor() {
-    // process.env.API_KEY is defined in vite.config.ts and declared in vite-env.d.ts
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Uses VITE_API_KEY if present, otherwise expects a key to be provided elsewhere or fails gracefully
+    const apiKey = import.meta.env.VITE_API_KEY || ''; 
+    this.ai = new GoogleGenAI({ apiKey });
   }
 
   async sendMessageStream(history: { role: string; parts: { text: string }[] }[], message: string) {
