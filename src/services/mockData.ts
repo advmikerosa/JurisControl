@@ -1,3 +1,4 @@
+
 import { Client, FinancialRecord, LegalCase, Office, Task, Lead } from '../types';
 
 export const MOCK_OFFICES: Office[] = [];
