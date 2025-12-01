@@ -534,6 +534,10 @@ class StorageService {
         };
         const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
         if (error) {
+            // Enhanced error detection for missing table
+            if (error.code === '42P01') {
+                throw new Error("Tabela 'offices' não encontrada no banco de dados. Execute o script SQL de migração.");
+            }
             if (error.code === '23505') throw new Error("Identificador em uso.");
             throw new Error(error.message);
         }
