@@ -50,7 +50,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  // Office State Management
+  // Office State Management - Initialize as null to prevent crash
   const [currentOffice, setCurrentOffice] = useState<Office | null>(null);
   const [userOffices, setUserOffices] = useState<Office[]>([]);
   const [isOfficeMenuOpen, setIsOfficeMenuOpen] = useState(false);
