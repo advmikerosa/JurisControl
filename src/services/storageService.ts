@@ -675,9 +675,6 @@ class StorageService {
             social: office.social
         };
         await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
-        
-        // Note: Full member synchronization (add/remove/update roles) should ideally be handled 
-        // by separate logic or diffing, but for this context we focus on preventing the schema error.
     } else {
         const offices = await this.getOffices();
         const index = offices.findIndex(o => o.id === office.id);
@@ -720,6 +717,7 @@ class StorageService {
             social: {}
         };
         
+        // Ensure RLS for INSERT allows this user
         const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
         
         if (error) {
