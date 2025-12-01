@@ -69,6 +69,16 @@ class StorageService {
     }
   }
 
+  private generateUUID(): string {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
   // --- Clientes ---
   async getClients(): Promise<Client[]> {
     if (isSupabaseConfigured && supabase) {
@@ -753,7 +763,11 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase && userId) {
         try {
+            // FIX: Generate ID client-side to allow sequential inserts and avoid recursion
+            const officeId = this.generateUUID();
+
             const newOffice = {
+                id: officeId,
                 name: officeData.name || 'Novo Escritório',
                 handle: handle,
                 location: officeData.location || 'Brasil',
@@ -762,7 +776,9 @@ class StorageService {
                 social: {}
             };
 
-            const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
+            // FIX: Do NOT chain .select() here. This avoids triggering RLS policies that check 
+            // for membership (which doesn't exist yet)
+            const { error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice);
             
             if (error) {
                 if (error.code === '23505') throw new Error("Identificador em uso.");
@@ -770,7 +786,7 @@ class StorageService {
             }
 
             const adminMember = {
-                office_id: data.id,
+                office_id: officeId,
                 user_id: userId,
                 name: userName,
                 email: userEmail,
@@ -782,20 +798,21 @@ class StorageService {
             await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert(adminMember);
 
             this.logActivity(`Criou novo escritório (Supabase): ${newOffice.name}`);
+            
+            // Construct and return office object
             return {
-                id: data.id,
-                name: data.name,
-                handle: data.handle,
-                location: data.location,
-                ownerId: data.owner_id,
-                createdAt: data.created_at,
+                id: officeId,
+                name: newOffice.name,
+                handle: newOffice.handle,
+                location: newOffice.location,
+                ownerId: newOffice.owner_id,
+                createdAt: newOffice.created_at,
                 members: [{ userId: userId, name: userName, email: userEmail, avatarUrl: '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }],
-                social: data.social || {}
+                social: newOffice.social || {}
             } as Office;
 
         } catch (err: any) {
             console.error("Failed to create office:", err);
-            // Don't fallback automatically for creation to avoid sync issues, throw error
             throw new Error(err.message || "Erro ao criar escritório.");
         }
 
