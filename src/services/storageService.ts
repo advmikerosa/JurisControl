@@ -10,6 +10,7 @@ const TABLE_NAMES = {
   FINANCIAL: 'financial',
   DOCUMENTS: 'documents',
   OFFICES: 'offices',
+  OFFICE_MEMBERS: 'office_members',
   PROFILES: 'profiles',
   LOGS: 'activity_logs',
 };
@@ -303,8 +304,9 @@ class StorageService {
     } else {
       const list = await this.getCases();
       const idx = list.findIndex(i => i.id === legalCase.id);
-      if (idx >= 0) list[idx] = legalCase;
-      else {
+      if (idx >= 0) {
+          list[idx] = legalCase;
+      } else {
           if (!legalCase.id || legalCase.id.startsWith('new')) legalCase.id = `case-${Date.now()}`;
           list.push({ ...legalCase, userId: userId || 'local' });
       }
@@ -484,9 +486,10 @@ class StorageService {
       try {
           const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
           if (error) throw error;
+          
           return (data || []).map((o: any) => ({
               id: o.id, name: o.name, handle: o.handle, location: o.location, ownerId: o.owner_id, logoUrl: o.logo_url,
-              createdAt: o.created_at, areaOfActivity: o.area_of_activity, members: o.members || []
+              createdAt: o.created_at, areaOfActivity: o.area_of_activity, members: []
           }));
       } catch { return []; }
     }
@@ -494,17 +497,51 @@ class StorageService {
   }
 
   async getOfficeById(id: string): Promise<Office | undefined> {
+    if (isSupabaseConfigured && supabase) {
+       try {
+           const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', id).single();
+           if (error || !data) return undefined;
+           
+           // Fetch members from relation table
+           const { data: membersData } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).select('*').eq('office_id', id);
+           
+           const mappedMembers: OfficeMember[] = (membersData || []).map((m: any) => ({
+               userId: m.user_id,
+               name: m.name,
+               email: m.email,
+               avatarUrl: m.avatar_url,
+               role: m.role,
+               permissions: m.permissions
+           }));
+
+           return {
+              id: data.id,
+              name: data.name,
+              handle: data.handle,
+              location: data.location,
+              ownerId: data.owner_id,
+              logoUrl: data.logo_url,
+              createdAt: data.created_at,
+              areaOfActivity: data.area_of_activity,
+              members: mappedMembers
+           };
+       } catch { return undefined; }
+    }
     const offices = await this.getOffices();
     return offices.find(o => o.id === id);
   }
   
   async saveOffice(office: Office): Promise<void> {
     if (isSupabaseConfigured && supabase) {
+        // Update basic office info
         const payload = {
             id: office.id, name: office.name, handle: office.handle, location: office.location, owner_id: office.ownerId,
-            logo_url: office.logoUrl, created_at: office.createdAt, area_of_activity: office.areaOfActivity, members: office.members, social: office.social
+            logo_url: office.logoUrl, created_at: office.createdAt, area_of_activity: office.areaOfActivity, social: office.social
         };
         await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
+        
+        // Note: Members updates are typically handled via specific add/remove actions using the office_members table
+        // to maintain relational integrity, rather than bulk updating the office object.
     } else {
         const offices = await this.getOffices();
         const index = offices.findIndex(o => o.id === office.id);
@@ -519,12 +556,10 @@ class StorageService {
   async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, ownerDetails?: { name: string, email: string }): Promise<Office> {
     const userId = explicitOwnerId || await this.getUserId();
     
-    // Obter dados do usuário para o membro Admin
     let userName = ownerDetails?.name || 'Admin';
     let userEmail = ownerDetails?.email || 'admin@email.com';
     
     if (!ownerDetails) {
-        // Tenta fallback via local storage se já estiver logado
         const userStr = localStorage.getItem('@JurisControl:user');
         const user = userStr ? JSON.parse(userStr) : null;
         if (user) {
@@ -538,22 +573,45 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
         if (!userId) throw new Error("Usuário não autenticado");
+        
+        // 1. Create Office without members column (Correct Relational Pattern)
         const newOffice = {
-            name: officeData.name || 'Novo Escritório', handle: handle, location: officeData.location || 'Brasil', owner_id: userId,
+            name: officeData.name || 'Novo Escritório', 
+            handle: handle, 
+            location: officeData.location || 'Brasil', 
+            owner_id: userId,
             created_at: new Date().toISOString(),
-            members: [{ userId: userId, name: userName, email: userEmail, avatarUrl: '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }],
             social: {}
+            // members field removed intentionally
         };
+        
         const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
         if (error) {
             if (error.code === '42P01') {
-                throw new Error("Tabela 'offices' não encontrada. Verifique o Script SQL.");
+                throw new Error("Tabela 'offices' não encontrada. Verifique o Schema do Supabase.");
             }
             if (error.code === '23505') throw new Error("Identificador em uso.");
             throw new Error(error.message);
         }
+
+        // 2. Insert Admin Member into relation table
+        const adminMember = {
+            office_id: data.id,
+            user_id: userId,
+            name: userName,
+            email: userEmail,
+            avatar_url: '',
+            role: 'Admin',
+            permissions: { financial: true, cases: true, documents: true, settings: true }
+        };
+        
+        await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert(adminMember);
+
         return {
-            id: data.id, name: data.name, handle: data.handle, location: data.location, ownerId: data.owner_id, createdAt: data.created_at, members: data.members, social: data.social
+            id: data.id, name: data.name, handle: data.handle, location: data.location, ownerId: data.owner_id, 
+            createdAt: data.created_at, 
+            members: [{ userId: userId, name: userName, email: userEmail, avatarUrl: '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }], 
+            social: data.social
         } as Office;
     } else {
         const offices = await this.getOffices();
@@ -574,18 +632,39 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
         const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', officeHandle).single();
         if (error || !office) throw new Error("Escritório não encontrado ou acesso restrito.");
+        
         const userId = await this.getUserId();
         if (!userId) throw new Error("Usuário não autenticado");
+        
+        // Check if member already exists
+        const { data: existingMember } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS)
+            .select('*')
+            .eq('office_id', office.id)
+            .eq('user_id', userId)
+            .single();
+            
+        if (existingMember) {
+             // Return office with members (re-fetch to be clean)
+             return (await this.getOfficeById(office.id))!;
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         const u = session?.user?.user_metadata || {};
-        const members = office.members || [];
-        if (members.find((m: any) => m.userId === userId)) return { id: office.id, name: office.name, handle: office.handle, location: office.location, ownerId: office.owner_id, logoUrl: office.logo_url, createdAt: office.created_at, areaOfActivity: office.area_of_activity, members };
         
-        const newMember: OfficeMember = { userId: userId, name: u.full_name || 'Novo Membro', email: session?.user?.email || '', avatarUrl: u.avatar_url || '', role: 'Advogado', permissions: { financial: false, cases: true, documents: true, settings: false } };
-        const updatedMembers = [...members, newMember];
-        await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', office.id);
+        const newMember = { 
+            office_id: office.id,
+            user_id: userId, 
+            name: u.full_name || 'Novo Membro', 
+            email: session?.user?.email || '', 
+            avatar_url: u.avatar_url || '', 
+            role: 'Advogado', 
+            permissions: { financial: false, cases: true, documents: true, settings: false } 
+        };
+        
+        await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert(newMember);
+        
         this.logActivity(`Entrou no escritório: ${office.name}`);
-        return { id: office.id, name: office.name, handle: office.handle, location: office.location, ownerId: office.owner_id, logoUrl: office.logo_url, createdAt: office.created_at, areaOfActivity: office.area_of_activity, members: updatedMembers };
+        return (await this.getOfficeById(office.id))!;
     } else {
         const offices = await this.getOffices();
         const targetOffice = offices.find(o => o.handle.toLowerCase() === officeHandle.toLowerCase());
@@ -608,7 +687,16 @@ class StorageService {
   async deleteAccount() {
     const userId = await this.getUserId();
     if (isSupabaseConfigured && supabase && userId) {
-      const tables = [TABLE_NAMES.LOGS, TABLE_NAMES.FINANCIAL, TABLE_NAMES.TASKS, TABLE_NAMES.DOCUMENTS, TABLE_NAMES.CASES, TABLE_NAMES.CLIENTS, TABLE_NAMES.PROFILES];
+      const tables = [
+          TABLE_NAMES.LOGS, 
+          TABLE_NAMES.FINANCIAL, 
+          TABLE_NAMES.TASKS, 
+          TABLE_NAMES.DOCUMENTS, 
+          TABLE_NAMES.CASES, 
+          TABLE_NAMES.CLIENTS, 
+          TABLE_NAMES.PROFILES,
+          TABLE_NAMES.OFFICE_MEMBERS // Delete membership as well
+      ];
       for (const table of tables) { try { await supabase.from(table).delete().eq('user_id', userId); } catch {} }
     } else {
       localStorage.clear();
