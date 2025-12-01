@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storageService } from '../services/storageService';
@@ -55,7 +54,7 @@ export const ClientDetails: React.FC = () => {
             setNoteText(client.notes || '');
             // Load Cases
             const allCases = await storageService.getCases();
-            setClientCases(allCases.filter(c => c.client.id === id));
+            setClientCases(allCases.filter((c: LegalCase) => c.client.id === id));
         } else {
             addToast('Cliente não encontrado.', 'error');
             navigate('/clients');

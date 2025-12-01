@@ -77,8 +77,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         
         // Filter offices for the current user
         // Logic: Office ID is in user.offices OR user is a member in the office members list
-        const myOffices = user 
-            ? allOffices.filter(o => 
+        const myOffices: Office[] = user 
+            ? allOffices.filter((o: Office) => 
                 (user.offices && user.offices.includes(o.id)) || 
                 (o.members && o.members.some(m => m.userId === user.id))
               )
@@ -89,7 +89,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         if (myOffices.length > 0) {
             // Prefer the office set in user profile, otherwise first one
             const selected = user?.currentOfficeId 
-                ? myOffices.find(o => o.id === user.currentOfficeId) 
+                ? myOffices.find((o: Office) => o.id === user.currentOfficeId) 
                 : myOffices[0];
             setCurrentOffice(selected || myOffices[0]);
         } else {

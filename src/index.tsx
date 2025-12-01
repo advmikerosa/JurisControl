@@ -6,6 +6,7 @@ import './index.css';
 const container = document.getElementById('root');
 
 if (container) {
+  // React 18 strict mode safe mounting
   const root = ReactDOM.createRoot(container);
   root.render(
     <React.StrictMode>

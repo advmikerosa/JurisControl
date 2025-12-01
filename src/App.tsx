@@ -27,20 +27,11 @@ const PrivacyPolicy = React.lazy(() => import('./views/PrivacyPolicy').then(m =>
 const TermsOfUse = React.lazy(() => import('./views/TermsOfUse').then(m => ({ default: m.TermsOfUse })));
 const AuthCallback = React.lazy(() => import('./views/AuthCallback').then(m => ({ default: m.AuthCallback })));
 
-interface ErrorBoundaryProps {
-  children?: ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
-
 // Error Boundary
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = { hasError: false, error: null };
+class ErrorBoundary extends Component<{ children?: ReactNode }, { hasError: boolean; error: Error | null }> {
+  public state = { hasError: false, error: null as Error | null };
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
   }
 

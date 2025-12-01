@@ -146,10 +146,10 @@ export const Cases: React.FC = () => {
           categoryFilter,
           (dateRange.start && dateRange.end) ? dateRange : null
       );
-      let fetchedData = response.data;
+      let fetchedData: LegalCase[] = response.data;
 
       if (showOnlyMyCases && user?.name) {
-        fetchedData = fetchedData.filter(c => c.responsibleLawyer.toLowerCase().includes(user.name.toLowerCase()));
+        fetchedData = fetchedData.filter((c: LegalCase) => c.responsibleLawyer.toLowerCase().includes(user.name.toLowerCase()));
       }
 
       fetchedData.sort((a, b) => {
