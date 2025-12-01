@@ -26,6 +26,24 @@ const LOCAL_KEYS = {
   LOGS: '@JurisControl:logs',
 };
 
+// Fallback seguro para evitar quebra de tipagem se o relacionamento vier nulo
+const FALLBACK_CLIENT: Client = {
+  id: 'unknown',
+  name: 'Cliente Desconhecido',
+  type: 'PF',
+  status: 'Ativo',
+  email: '',
+  phone: '',
+  avatarUrl: '',
+  address: '',
+  city: '',
+  state: '',
+  createdAt: new Date().toISOString(),
+  documents: [],
+  history: [],
+  alerts: []
+};
+
 class StorageService {
   
   private async getUserId(): Promise<string | null> {
@@ -175,12 +193,15 @@ class StorageService {
         return (data || []).map((item: any) => {
           const clientData = item.client;
           // Cast partial client data to Client type to satisfy interface
-          const mappedClient = (clientData ? {
+          const mappedClient: Client = clientData ? {
+              ...FALLBACK_CLIENT,
               id: clientData.id,
               name: clientData.name,
               type: clientData.type,
-              avatarUrl: clientData.avatar_url
-          } : { id: 'unknown', name: 'Cliente Desconhecido', type: 'PF', avatarUrl: '' }) as Client;
+              avatarUrl: clientData.avatar_url || '',
+              email: clientData.email || '',
+              phone: clientData.phone || ''
+          } : FALLBACK_CLIENT;
 
           return {
             id: item.id,
@@ -217,9 +238,15 @@ class StorageService {
         if (error) throw error;
         
         const clientData = data.client;
-        const mappedClient = (clientData ? {
-            id: clientData.id, name: clientData.name, type: clientData.type, avatarUrl: clientData.avatar_url, email: clientData.email, phone: clientData.phone
-        } : { id: 'unknown', name: 'Cliente Desconhecido' }) as Client;
+        const mappedClient: Client = clientData ? {
+            ...FALLBACK_CLIENT,
+            id: clientData.id, 
+            name: clientData.name, 
+            type: clientData.type, 
+            avatarUrl: clientData.avatar_url, 
+            email: clientData.email, 
+            phone: clientData.phone
+        } : FALLBACK_CLIENT;
 
         return {
             id: data.id, cnj: data.cnj, title: data.title, status: data.status, category: data.category, phase: data.phase, value: Number(data.value),
@@ -363,7 +390,9 @@ class StorageService {
         const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('user_id', userId);
         return (data || []).map((f: any) => ({
             id: f.id, title: f.title, amount: Number(f.amount), type: f.type, category: f.category, status: f.status,
-            dueDate: f.due_date, paymentDate: f.payment_date, clientId: f.client_id, clientName: f.client_name, caseId: f.case_id, installment: f.installment
+            dueDate: f.due_date, paymentDate: f.payment_date, clientId: f.client_id, clientName: f.client_name, 
+            caseId: f.case_id, // Fixed mapping
+            installment: f.installment
         })) as FinancialRecord[];
       } catch { return []; }
     }
@@ -382,7 +411,9 @@ class StorageService {
       const payload = {
           id: record.id && !record.id.startsWith('trans-') ? record.id : record.id,
           user_id: userId, title: record.title, amount: record.amount, type: record.type, category: record.category,
-          status: record.status, due_date: record.dueDate, payment_date: record.payment_date, client_id: record.clientId,
+          status: record.status, due_date: record.dueDate, 
+          payment_date: record.paymentDate, // Fixed property name
+          client_id: record.clientId,
           client_name: record.clientName, case_id: record.caseId, installment: record.installment
       };
       if (record.id && !record.id.startsWith('trans-')) await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
