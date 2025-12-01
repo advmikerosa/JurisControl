@@ -1,1 +1,2 @@
-// Arquivo descontinuado. Removido.
+// Este arquivo foi descontinuado. O sistema utiliza Supabase ou LocalStorage (storageService.ts).
+export {};
