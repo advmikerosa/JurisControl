@@ -218,7 +218,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       name: officeData.name,
                       handle: officeData.handle,
                       location: 'Brasil'
-                  }, data.user.id);
+                  }, data.user.id, { name, email });
                   
                   await supabase.auth.updateUser({
                       data: { 

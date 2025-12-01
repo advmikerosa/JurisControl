@@ -516,10 +516,22 @@ class StorageService {
     this.logActivity(`Atualizou escritório: ${office.name}`);
   }
 
-  async createOffice(officeData: Partial<Office>, explicitOwnerId?: string): Promise<Office> {
+  async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, ownerDetails?: { name: string, email: string }): Promise<Office> {
     const userId = explicitOwnerId || await this.getUserId();
-    const userStr = localStorage.getItem('@JurisControl:user');
-    const user = userStr ? JSON.parse(userStr) : { name: 'Admin', email: 'admin@email.com', avatar: '' };
+    
+    // Obter dados do usuário para o membro Admin
+    let userName = ownerDetails?.name || 'Admin';
+    let userEmail = ownerDetails?.email || 'admin@email.com';
+    
+    if (!ownerDetails) {
+        // Tenta fallback via local storage se já estiver logado
+        const userStr = localStorage.getItem('@JurisControl:user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        if (user) {
+            userName = user.name;
+            userEmail = user.email;
+        }
+    }
 
     let handle = officeData.handle || `@office${Date.now()}`;
     if (!handle.startsWith('@')) handle = '@' + handle;
@@ -529,14 +541,13 @@ class StorageService {
         const newOffice = {
             name: officeData.name || 'Novo Escritório', handle: handle, location: officeData.location || 'Brasil', owner_id: userId,
             created_at: new Date().toISOString(),
-            members: [{ userId: userId, name: user?.name || 'User', email: user?.email || '', avatarUrl: user?.avatar || '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }],
+            members: [{ userId: userId, name: userName, email: userEmail, avatarUrl: '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }],
             social: {}
         };
         const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
         if (error) {
-            // Enhanced error detection for missing table
             if (error.code === '42P01') {
-                throw new Error("Tabela 'offices' não encontrada no banco de dados. Execute o script SQL de migração.");
+                throw new Error("Tabela 'offices' não encontrada. Verifique o Script SQL.");
             }
             if (error.code === '23505') throw new Error("Identificador em uso.");
             throw new Error(error.message);
@@ -549,7 +560,7 @@ class StorageService {
         if (offices.some(o => o.handle.toLowerCase() === handle.toLowerCase())) throw new Error("Este identificador já está em uso.");
         const newOffice: Office = {
           id: `office-${Date.now()}`, name: officeData.name || 'Novo Escritório', handle: handle, location: officeData.location || 'Brasil', ownerId: userId || 'local',
-          members: [{ userId: userId || 'local', name: user?.name || 'User', email: user?.email || '', avatarUrl: user?.avatar || '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }],
+          members: [{ userId: userId || 'local', name: userName, email: userEmail, avatarUrl: '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }],
           createdAt: new Date().toISOString(), social: {}
         };
         offices.push(newOffice);
