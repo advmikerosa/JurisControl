@@ -96,7 +96,7 @@ export const authMockService = {
   async loginSocial(provider: AuthProvider): Promise<User> {
     await delay(2000); // OAuth redirects take time
 
-    const names = {
+    const names: Record<string, string> = {
       'google': 'Usuário via Google',
       'apple': 'Usuário via Apple',
       'microsoft': 'Usuário via Microsoft'

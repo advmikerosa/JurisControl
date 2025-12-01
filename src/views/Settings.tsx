@@ -403,7 +403,6 @@ export const Settings: React.FC = () => {
            {/* --- EMAIL NOTIFICATIONS TAB --- */}
            {activeTab === 'emails' && settings.emailPreferences && (
              <div className="space-y-8 animate-fade-in">
-                {/* ... (Previous code remains the same for email tab) ... */}
                 <div className="flex items-center justify-between bg-white/5 p-6 rounded-xl border border-white/10">
                     <div>
                         <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -438,7 +437,6 @@ export const Settings: React.FC = () => {
                                     </div>
                                     <input type="checkbox" checked={settings.emailPreferences.categories.deadlines} onChange={() => toggleEmailSetting('cat_deadlines')} className="w-4 h-4 accent-indigo-500" />
                                 </label>
-                                {/* ... Repeat for other categories ... */}
                                 <label className="flex items-center justify-between p-3 bg-slate-900/50 border border-white/10 rounded-lg cursor-pointer hover:border-indigo-500/50 transition-colors">
                                     <div className="flex items-center gap-3">
                                         <List size={18} className="text-indigo-400" />

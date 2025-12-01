@@ -1,3 +1,4 @@
+
 import React, { Component, Suspense, ReactNode, ErrorInfo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -42,7 +43,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     hasError: false,
     error: null
   };
-  // Fix: Explicitly declare props to satisfy TS in strict environments
+  
   readonly props: Readonly<ErrorBoundaryProps>;
 
   constructor(props: ErrorBoundaryProps) {

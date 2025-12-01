@@ -192,7 +192,7 @@ class StorageService {
         
         return (data || []).map((item: any) => {
           const clientData = item.client;
-          // Cast partial client data to Client type to satisfy interface
+          // Cast partial client data to Client type to satisfy interface using fallback
           const mappedClient: Client = clientData ? {
               ...FALLBACK_CLIENT,
               id: clientData.id,
@@ -391,7 +391,7 @@ class StorageService {
         return (data || []).map((f: any) => ({
             id: f.id, title: f.title, amount: Number(f.amount), type: f.type, category: f.category, status: f.status,
             dueDate: f.due_date, paymentDate: f.payment_date, clientId: f.client_id, clientName: f.client_name, 
-            caseId: f.case_id, // Fixed mapping
+            caseId: f.case_id, 
             installment: f.installment
         })) as FinancialRecord[];
       } catch { return []; }
@@ -412,7 +412,7 @@ class StorageService {
           id: record.id && !record.id.startsWith('trans-') ? record.id : record.id,
           user_id: userId, title: record.title, amount: record.amount, type: record.type, category: record.category,
           status: record.status, due_date: record.dueDate, 
-          payment_date: record.paymentDate, // Fixed property name
+          payment_date: record.paymentDate, 
           client_id: record.clientId,
           client_name: record.clientName, case_id: record.caseId, installment: record.installment
       };
@@ -587,7 +587,6 @@ class StorageService {
   }
 
   async inviteUserToOffice(officeId: string, userHandle: string): Promise<boolean> {
-     // Simulação local ou implementação futura
      return true; 
   }
 
@@ -602,7 +601,7 @@ class StorageService {
   }
 
   getLogs(): ActivityLog[] { 
-    if (isSupabaseConfigured && supabase) return []; // Logs fetch async in dedicated component usually
+    if (isSupabaseConfigured && supabase) return []; 
     return this.getLocal<ActivityLog[]>(LOCAL_KEYS.LOGS, []);
   }
   
