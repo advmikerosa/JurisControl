@@ -1,5 +1,5 @@
 import React, { Component, Suspense, ReactNode, ErrorInfo } from 'react';
-import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { CookieConsent } from './components/CookieConsent';
 import { ToastProvider } from './context/ToastContext';
