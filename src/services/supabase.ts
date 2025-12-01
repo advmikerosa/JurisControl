@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // Acesso seguro às variáveis de ambiente
@@ -10,7 +11,8 @@ const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY;
 export const isSupabaseConfigured = 
   !!supabaseUrl && 
   !!supabaseAnonKey && 
-  !supabaseUrl.includes('seu-projeto'); // Evita placeholders
+  !supabaseUrl.includes('seu-projeto') &&
+  !supabaseUrl.includes('placeholder');
 
 // Cria o cliente Supabase apenas se as credenciais existirem
 export const supabase = isSupabaseConfigured 
@@ -18,7 +20,7 @@ export const supabase = isSupabaseConfigured
   : null;
 
 if (!isSupabaseConfigured) {
-  console.info("JurisControl: Modo Demo/Offline ativo. Supabase não configurado.");
+  console.warn("JurisControl: Supabase não configurado. O aplicativo rodará em Modo Demo/Offline usando LocalStorage.");
 } else {
   console.info("JurisControl: Conectado ao Supabase.");
 }

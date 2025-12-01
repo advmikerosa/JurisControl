@@ -97,6 +97,7 @@ class DataJudService {
       return true;
     } catch (error) {
       // Falha de rede (provável CORS em ambiente local), assumimos como "talvez válida" para não bloquear testes
+      // se a chave parecer ter um formato razoável
       return key.length > 20;
     }
   }
@@ -152,7 +153,8 @@ class DataJudService {
 
     } catch (error) {
       // Fallback silencioso para mock data se houver erro de rede/CORS
-      // Isso permite que o sistema funcione em localhost sem proxy
+      // Isso permite que o sistema funcione em localhost sem proxy e mostre resultados
+      console.warn("DataJud Fetch Error (Using Mock Fallback):", error);
       if (apiKey.length > 20) {
          return this.getMockData(cnj);
       }
@@ -192,7 +194,7 @@ class DataJudService {
   private getMockData(cnj: string): Partial<LegalCase> {
     return {
         cnj: cnj,
-        title: 'Ação Cível (Dados Simulados)',
+        title: 'Ação Cível (Dados Simulados via DataJud Mock)',
         category: 'Cível',
         court: 'TJSP - Foro Central Cível',
         distributionDate: new Date().toISOString(),
@@ -204,7 +206,7 @@ class DataJudService {
                 id: `mov-sim-${Date.now()}`,
                 title: 'Conclusos para Despacho (Simulado)',
                 date: new Date().toLocaleString('pt-BR'),
-                description: 'Simulação: Falha de conexão com DataJud (Provável bloqueio CORS no navegador). Dados fictícios carregados.',
+                description: 'Simulação: Conexão direta com DataJud bloqueada por CORS. Dados fictícios carregados para demonstração.',
                 type: 'Andamento',
                 author: 'Sistema'
             },

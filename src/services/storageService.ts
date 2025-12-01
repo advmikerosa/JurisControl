@@ -2,6 +2,7 @@
 import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { notificationService } from './notificationService';
+import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS, MOCK_OFFICES as MOCK_OFFICES_DATA } from './mockData';
 
 const TABLE_NAMES = {
   CLIENTS: 'clients',
@@ -32,6 +33,11 @@ export const MOCK_OFFICES: Office[] = [];
 
 class StorageService {
   
+  constructor() {
+    // Se não estiver conectado ao Supabase ou se for o primeiro uso, verifica se precisa semear o banco local
+    this.seedDatabase();
+  }
+
   private async getUserId(): Promise<string | null> {
     if (isSupabaseConfigured && supabase) {
       try {
@@ -99,8 +105,8 @@ class StorageService {
             history: c.history || []
         })) as Client[];
       } catch (error) { 
-        console.error("Supabase Error (getClients):", error); 
-        return []; 
+        console.warn("Supabase Error (getClients) - Fallback to local:", error);
+        return this.getLocal<Client[]>(LOCAL_KEYS.CLIENTS, []);
       }
     } else {
       return this.getLocal<Client[]>(LOCAL_KEYS.CLIENTS, []);
@@ -110,48 +116,49 @@ class StorageService {
   async saveClient(client: Client) {
     const userId = await this.getUserId();
 
-    if (isSupabaseConfigured && supabase) {
-      if (!userId) throw new Error("Usuário não autenticado");
-      
-      const payload = {
-          id: client.id && !client.id.startsWith('cli-') ? client.id : client.id,
-          user_id: userId,
-          name: client.name,
-          type: client.type,
-          status: client.status,
-          email: client.email,
-          phone: client.phone,
-          city: client.city,
-          state: client.state,
-          avatar_url: client.avatarUrl,
-          cpf: client.cpf,
-          cnpj: client.cnpj,
-          corporate_name: client.corporateName,
-          notes: client.notes,
-          tags: client.tags,
-          alerts: client.alerts,
-          documents: client.documents,
-          history: client.history
-      };
+    if (isSupabaseConfigured && supabase && userId) {
+      try {
+        const payload = {
+            id: client.id && !client.id.startsWith('cli-') ? client.id : undefined, // Let DB generate ID if it's new
+            user_id: userId,
+            name: client.name,
+            type: client.type,
+            status: client.status,
+            email: client.email,
+            phone: client.phone,
+            city: client.city,
+            state: client.state,
+            avatar_url: client.avatarUrl,
+            cpf: client.cpf,
+            cnpj: client.cnpj,
+            corporate_name: client.corporateName,
+            notes: client.notes,
+            tags: client.tags,
+            alerts: client.alerts,
+            documents: client.documents,
+            history: client.history
+        };
 
-      if (client.id && !client.id.startsWith('cli-')) {
-        await supabase.from(TABLE_NAMES.CLIENTS).upsert(payload);
-      } else {
-        await supabase.from(TABLE_NAMES.CLIENTS).insert([payload]);
+        const { error } = await supabase.from(TABLE_NAMES.CLIENTS).upsert(payload);
+        if (error) throw error;
+        this.logActivity(`Salvou cliente: ${client.name}`);
+        return;
+      } catch (e) {
+        console.error("Supabase Save Error, saving locally:", e);
       }
-      this.logActivity(`Salvou cliente: ${client.name}`);
-    } else {
-      const list = await this.getClients();
-      const idx = list.findIndex(i => i.id === client.id);
-      if (idx >= 0) {
-          list[idx] = client;
-      } else {
-          if (!client.id) client.id = `cli-${Date.now()}`;
-          list.unshift({ ...client, userId: userId || 'local' });
-      }
-      this.setLocal(LOCAL_KEYS.CLIENTS, list);
-      this.logActivity(`Salvou cliente: ${client.name}`);
     }
+    
+    // Fallback Local
+    const list = await this.getClients(); // Gets local if Supabase failed above
+    const idx = list.findIndex(i => i.id === client.id);
+    if (idx >= 0) {
+        list[idx] = client;
+    } else {
+        if (!client.id || !client.id.startsWith('cli-')) client.id = `cli-${Date.now()}`;
+        list.unshift({ ...client, userId: userId || 'local' });
+    }
+    this.setLocal(LOCAL_KEYS.CLIENTS, list);
+    this.logActivity(`Salvou cliente (Local): ${client.name}`);
   }
 
   async deleteClient(id: string) {
@@ -163,14 +170,22 @@ class StorageService {
     }
 
     if (isSupabaseConfigured && supabase) {
-      const userId = await this.getUserId();
-      if (!userId) return;
-      await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id).eq('user_id', userId);
-    } else {
-      const list = await this.getClients();
-      this.setLocal(LOCAL_KEYS.CLIENTS, list.filter(i => i.id !== id));
+      try {
+        const userId = await this.getUserId();
+        if (userId) {
+          const { error } = await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id).eq('user_id', userId);
+          if (error) throw error;
+          this.logActivity(`Excluiu cliente ID: ${id}`, 'Warning');
+          return;
+        }
+      } catch (e) {
+        console.error("Supabase Delete Error:", e);
+      }
     }
-    this.logActivity(`Excluiu cliente ID: ${id}`, 'Warning');
+    
+    const list = this.getLocal<Client[]>(LOCAL_KEYS.CLIENTS, []);
+    this.setLocal(LOCAL_KEYS.CLIENTS, list.filter(i => i.id !== id));
+    this.logActivity(`Excluiu cliente ID (Local): ${id}`, 'Warning');
   }
 
   // --- Processos (Cases) ---
@@ -220,8 +235,8 @@ class StorageService {
 
         return mappedData as LegalCase[];
       } catch (e) { 
-        console.error("Supabase Error (getCases):", e); 
-        return []; 
+        console.warn("Supabase Error (getCases) - Fallback to local:", e); 
+        return this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
       }
     } else {
       return this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
@@ -272,7 +287,9 @@ class StorageService {
             client: mappedClient
         } as LegalCase;
       } catch (e) { 
-        return null; 
+        // Fallback to local search if single fetch fails
+        const cases = this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
+        return cases.find(c => c.id === id) || null;
       }
     } else {
       const cases = await this.getCases();
@@ -320,58 +337,63 @@ class StorageService {
     const userId = await this.getUserId();
     legalCase.lastUpdate = new Date().toISOString();
     
-    if (isSupabaseConfigured && supabase) {
-      if (!userId) throw new Error("Usuário não autenticado");
-      
-      const payload: any = {
-        id: legalCase.id && !legalCase.id.startsWith('case-') ? legalCase.id : legalCase.id,
-        user_id: userId,
-        client_id: legalCase.client.id,
-        cnj: legalCase.cnj,
-        title: legalCase.title,
-        status: legalCase.status,
-        category: legalCase.category,
-        phase: legalCase.phase,
-        value: legalCase.value,
-        responsible_lawyer: legalCase.responsibleLawyer,
-        court: legalCase.court,
-        next_hearing: legalCase.nextHearing,
-        description: legalCase.description,
-        movements: legalCase.movements,
-        change_log: legalCase.changeLog,
-        last_update: legalCase.lastUpdate
-      };
-      
-      if (legalCase.id && !legalCase.id.startsWith('case-')) {
-        await supabase.from(TABLE_NAMES.CASES).upsert(payload);
-      } else {
-        await supabase.from(TABLE_NAMES.CASES).insert([payload]);
+    if (isSupabaseConfigured && supabase && userId) {
+      try {
+        const payload: any = {
+          id: legalCase.id && !legalCase.id.startsWith('case-') ? legalCase.id : undefined,
+          user_id: userId,
+          client_id: legalCase.client.id,
+          cnj: legalCase.cnj,
+          title: legalCase.title,
+          status: legalCase.status,
+          category: legalCase.category,
+          phase: legalCase.phase,
+          value: legalCase.value,
+          responsible_lawyer: legalCase.responsibleLawyer,
+          court: legalCase.court,
+          next_hearing: legalCase.nextHearing,
+          description: legalCase.description,
+          movements: legalCase.movements,
+          change_log: legalCase.changeLog,
+          last_update: legalCase.lastUpdate
+        };
+        
+        const { error } = await supabase.from(TABLE_NAMES.CASES).upsert(payload);
+        if (error) throw error;
+        this.logActivity(`Salvou processo: ${legalCase.title}`);
+        return;
+      } catch (e) {
+        console.error("Supabase Save Case Error:", e);
       }
-      this.logActivity(`Salvou processo: ${legalCase.title}`);
-    } else {
-      const list = await this.getCases();
-      const idx = list.findIndex(i => i.id === legalCase.id);
-      if (idx >= 0) {
-          list[idx] = legalCase;
-      } else {
-          if (!legalCase.id) legalCase.id = `case-${Date.now()}`;
-          list.push({ ...legalCase, userId: userId || 'local' });
-      }
-      this.setLocal(LOCAL_KEYS.CASES, list);
-      this.logActivity(`Salvou processo: ${legalCase.title}`);
     }
+    
+    const list = this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
+    const idx = list.findIndex(i => i.id === legalCase.id);
+    if (idx >= 0) {
+        list[idx] = legalCase;
+    } else {
+        if (!legalCase.id || !legalCase.id.startsWith('case-')) legalCase.id = `case-${Date.now()}`;
+        list.push({ ...legalCase, userId: userId || 'local' });
+    }
+    this.setLocal(LOCAL_KEYS.CASES, list);
+    this.logActivity(`Salvou processo (Local): ${legalCase.title}`);
   }
 
   async deleteCase(id: string) {
     if (isSupabaseConfigured && supabase) {
-      const userId = await this.getUserId();
-      if (!userId) return;
-      await supabase.from(TABLE_NAMES.CASES).delete().eq('id', id).eq('user_id', userId);
-    } else {
-      const list = await this.getCases();
-      this.setLocal(LOCAL_KEYS.CASES, list.filter(i => i.id !== id));
+      try {
+        const userId = await this.getUserId();
+        if (userId) {
+          await supabase.from(TABLE_NAMES.CASES).delete().eq('id', id).eq('user_id', userId);
+          this.logActivity(`Excluiu processo ID: ${id}`, 'Warning');
+          return;
+        }
+      } catch (e) { console.error(e); }
     }
-    this.logActivity(`Excluiu processo ID: ${id}`, 'Warning');
+    
+    const list = this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
+    this.setLocal(LOCAL_KEYS.CASES, list.filter(i => i.id !== id));
+    this.logActivity(`Excluiu processo ID (Local): ${id}`, 'Warning');
   }
 
   // --- Tarefas ---
@@ -380,7 +402,8 @@ class StorageService {
       try {
         const userId = await this.getUserId();
         if (!userId) return [];
-        const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('user_id', userId);
+        const { data, error } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('user_id', userId);
+        if (error) throw error;
         return (data || []).map((t: any) => ({
             id: t.id,
             title: t.title,
@@ -394,7 +417,10 @@ class StorageService {
             clientId: t.client_id,
             clientName: t.client_name
         })) as Task[];
-      } catch { return []; }
+      } catch (e) {
+        console.warn("Supabase Task Error - Fallback local:", e);
+        return this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []);
+      }
     } else {
       return this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []);
     }
@@ -407,48 +433,50 @@ class StorageService {
   
   async saveTask(task: Task) {
     const userId = await this.getUserId();
-    if (isSupabaseConfigured && supabase) {
-      if (!userId) throw new Error("Usuário não autenticado");
-      const payload = { 
-          id: task.id && !task.id.startsWith('task-') ? task.id : task.id,
-          user_id: userId,
-          title: task.title,
-          due_date: task.dueDate,
-          priority: task.priority,
-          status: task.status,
-          assigned_to: task.assignedTo,
-          description: task.description,
-          case_id: task.caseId,
-          case_title: task.caseTitle,
-          client_id: task.clientId,
-          client_name: task.clientName
-      };
-      if (task.id && !task.id.startsWith('task-')) {
-        await supabase.from(TABLE_NAMES.TASKS).upsert(payload);
-      } else {
-        await supabase.from(TABLE_NAMES.TASKS).insert([payload]);
-      }
-    } else {
-      const list = await this.getTasks();
-      const idx = list.findIndex(i => i.id === task.id);
-      if (idx >= 0) list[idx] = task;
-      else {
-          if(!task.id) task.id = `task-${Date.now()}`;
-          list.push(task);
-      }
-      this.setLocal(LOCAL_KEYS.TASKS, list);
+    if (isSupabaseConfigured && supabase && userId) {
+      try {
+        const payload = { 
+            id: task.id && !task.id.startsWith('task-') ? task.id : undefined,
+            user_id: userId,
+            title: task.title,
+            due_date: task.dueDate,
+            priority: task.priority,
+            status: task.status,
+            assigned_to: task.assignedTo,
+            description: task.description,
+            case_id: task.caseId,
+            case_title: task.caseTitle,
+            client_id: task.clientId,
+            client_name: task.clientName
+        };
+        const { error } = await supabase.from(TABLE_NAMES.TASKS).upsert(payload);
+        if (error) throw error;
+        return;
+      } catch (e) { console.error(e); }
     }
+    
+    const list = await this.getTasks(); // Local fallback logic
+    const idx = list.findIndex(i => i.id === task.id);
+    if (idx >= 0) list[idx] = task;
+    else {
+        if(!task.id) task.id = `task-${Date.now()}`;
+        list.push(task);
+    }
+    this.setLocal(LOCAL_KEYS.TASKS, list);
   }
   
   async deleteTask(id: string) {
     if (isSupabaseConfigured && supabase) {
-      const userId = await this.getUserId();
-      if (!userId) return;
-      await supabase.from(TABLE_NAMES.TASKS).delete().eq('id', id).eq('user_id', userId);
-    } else {
-      const list = await this.getTasks();
-      this.setLocal(LOCAL_KEYS.TASKS, list.filter(i => i.id !== id));
+      try {
+        const userId = await this.getUserId();
+        if (userId) {
+          await supabase.from(TABLE_NAMES.TASKS).delete().eq('id', id).eq('user_id', userId);
+          return;
+        }
+      } catch (e) { console.error(e); }
     }
+    const list = this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []);
+    this.setLocal(LOCAL_KEYS.TASKS, list.filter(i => i.id !== id));
   }
 
   // --- Financeiro ---
@@ -457,7 +485,8 @@ class StorageService {
       try {
         const userId = await this.getUserId();
         if (!userId) return [];
-        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('user_id', userId);
+        const { data, error } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('user_id', userId);
+        if (error) throw error;
         return (data || []).map((f: any) => ({
             id: f.id,
             title: f.title,
@@ -472,7 +501,10 @@ class StorageService {
             caseId: f.case_id,
             installment: f.installment
         })) as FinancialRecord[];
-      } catch { return []; }
+      } catch (e) {
+        console.warn("Supabase Financial Error - Fallback local:", e);
+        return this.getLocal<FinancialRecord[]>(LOCAL_KEYS.FINANCIAL, []);
+      }
     } else {
       return this.getLocal<FinancialRecord[]>(LOCAL_KEYS.FINANCIAL, []);
     }
@@ -485,38 +517,37 @@ class StorageService {
   
   async saveFinancial(record: FinancialRecord) {
     const userId = await this.getUserId();
-    if (isSupabaseConfigured && supabase) {
-      if (!userId) throw new Error("Usuário não autenticado");
-      const payload = {
-          id: record.id && !record.id.startsWith('trans-') ? record.id : record.id,
-          user_id: userId,
-          title: record.title,
-          amount: record.amount,
-          type: record.type,
-          category: record.category,
-          status: record.status,
-          due_date: record.dueDate,
-          payment_date: record.paymentDate,
-          client_id: record.clientId,
-          client_name: record.clientName,
-          case_id: record.caseId,
-          installment: record.installment
-      };
-      if (record.id && !record.id.startsWith('trans-')) {
-        await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
-      } else {
-        await supabase.from(TABLE_NAMES.FINANCIAL).insert([payload]);
-      }
-    } else {
-      const list = await this.getFinancials();
-      const idx = list.findIndex(i => i.id === record.id);
-      if (idx >= 0) list[idx] = record;
-      else {
-          if(!record.id) record.id = `trans-${Date.now()}`;
-          list.push(record);
-      }
-      this.setLocal(LOCAL_KEYS.FINANCIAL, list);
+    if (isSupabaseConfigured && supabase && userId) {
+      try {
+        const payload = {
+            id: record.id && !record.id.startsWith('trans-') ? record.id : undefined,
+            user_id: userId,
+            title: record.title,
+            amount: record.amount,
+            type: record.type,
+            category: record.category,
+            status: record.status,
+            due_date: record.dueDate,
+            payment_date: record.paymentDate,
+            client_id: record.clientId,
+            client_name: record.clientName,
+            case_id: record.caseId,
+            installment: record.installment
+        };
+        const { error } = await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
+        if (error) throw error;
+        return;
+      } catch (e) { console.error(e); }
     }
+    
+    const list = await this.getFinancials();
+    const idx = list.findIndex(i => i.id === record.id);
+    if (idx >= 0) list[idx] = record;
+    else {
+        if(!record.id) record.id = `trans-${Date.now()}`;
+        list.push(record);
+    }
+    this.setLocal(LOCAL_KEYS.FINANCIAL, list);
   }
 
   // --- Documentos ---
@@ -525,7 +556,8 @@ class StorageService {
       try {
         const userId = await this.getUserId();
         if (!userId) return [];
-        const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('user_id', userId);
+        const { data, error } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('user_id', userId);
+        if (error) throw error;
         return (data || []).map((d: any) => ({
             id: d.id,
             name: d.name,
@@ -536,7 +568,10 @@ class StorageService {
             caseId: d.case_id,
             userId: d.user_id
         })) as SystemDocument[];
-      } catch { return []; }
+      } catch (e) { 
+        console.warn("Supabase Docs Error - Fallback local:", e);
+        return this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []); 
+      }
     } else {
       return this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []);
     }
@@ -549,36 +584,42 @@ class StorageService {
 
   async saveDocument(docData: SystemDocument) {
     const userId = await this.getUserId();
-    if (isSupabaseConfigured && supabase) {
-      if (!userId) throw new Error("Usuário não autenticado");
-      const payload = { 
-          id: docData.id,
-          user_id: userId,
-          name: docData.name,
-          size: docData.size,
-          type: docData.type,
-          date: docData.date,
-          category: docData.category,
-          case_id: docData.caseId
-      };
-      await supabase.from(TABLE_NAMES.DOCUMENTS).insert([payload]);
-    } else {
-      const list = await this.getDocuments();
-      list.unshift({ ...docData, userId: userId || 'local' });
-      this.setLocal(LOCAL_KEYS.DOCUMENTS, list);
+    if (isSupabaseConfigured && supabase && userId) {
+      try {
+        const payload = { 
+            id: docData.id,
+            user_id: userId,
+            name: docData.name,
+            size: docData.size,
+            type: docData.type,
+            date: docData.date,
+            category: docData.category,
+            case_id: docData.caseId
+        };
+        await supabase.from(TABLE_NAMES.DOCUMENTS).insert([payload]);
+        this.logActivity(`Upload de documento: ${docData.name}`);
+        return;
+      } catch (e) { console.error(e); }
     }
-    this.logActivity(`Upload de documento: ${docData.name}`);
+    
+    const list = await this.getDocuments();
+    list.unshift({ ...docData, userId: userId || 'local' });
+    this.setLocal(LOCAL_KEYS.DOCUMENTS, list);
+    this.logActivity(`Upload de documento (Local): ${docData.name}`);
   }
 
   async deleteDocument(id: string) {
     if (isSupabaseConfigured && supabase) {
-      const userId = await this.getUserId();
-      if (!userId) return;
-      await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id).eq('user_id', userId);
-    } else {
-      const list = await this.getDocuments();
-      this.setLocal(LOCAL_KEYS.DOCUMENTS, list.filter(i => i.id !== id));
+      try {
+        const userId = await this.getUserId();
+        if (userId) {
+          await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id).eq('user_id', userId);
+          return;
+        }
+      } catch(e) { console.error(e); }
     }
+    const list = this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []);
+    this.setLocal(LOCAL_KEYS.DOCUMENTS, list.filter(i => i.id !== id));
   }
 
   // --- Offices ---
@@ -612,8 +653,8 @@ class StorageService {
               }))
           }));
       } catch (e) {
-          console.error("Error fetching offices:", e);
-          return [];
+          console.warn("Error fetching offices (Supabase), fallback to local:", e);
+          return this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
       }
     } else {
       return this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
@@ -661,31 +702,37 @@ class StorageService {
   
   async saveOffice(office: Office): Promise<void> {
     if (isSupabaseConfigured && supabase) {
-        // Do NOT send 'members' to the offices table.
-        // Update only office details
-        const payload = {
-            id: office.id,
-            name: office.name,
-            handle: office.handle,
-            location: office.location,
-            owner_id: office.ownerId,
-            logo_url: office.logoUrl,
-            created_at: office.createdAt,
-            area_of_activity: office.areaOfActivity,
-            social: office.social
-        };
-        await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
-    } else {
-        const offices = await this.getOffices();
-        const index = offices.findIndex(o => o.id === office.id);
-        if (index >= 0) {
-          offices[index] = office;
-          this.setLocal(LOCAL_KEYS.OFFICES, offices);
-        }
+        try {
+          const payload = {
+              id: office.id,
+              name: office.name,
+              handle: office.handle,
+              location: office.location,
+              owner_id: office.ownerId,
+              logo_url: office.logoUrl,
+              created_at: office.createdAt,
+              area_of_activity: office.areaOfActivity,
+              social: office.social
+          };
+          await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
+          this.logActivity(`Atualizou escritório: ${office.name}`);
+          return;
+        } catch (e) { console.error(e); }
+    } 
+    
+    // Fallback Local
+    const offices = await this.getOffices();
+    const index = offices.findIndex(o => o.id === office.id);
+    if (index >= 0) {
+      offices[index] = office;
+      this.setLocal(LOCAL_KEYS.OFFICES, offices);
+      this.logActivity(`Atualizou dados do escritório: ${office.name}`);
     }
-    this.logActivity(`Atualizou escritório: ${office.name}`);
   }
 
+  /**
+   * createOffice
+   */
   async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, ownerDetails?: { name: string, email: string }): Promise<Office> {
     const userId = explicitOwnerId || await this.getUserId();
     
@@ -704,50 +751,53 @@ class StorageService {
     let handle = officeData.handle || `@office${Date.now()}`;
     if (!handle.startsWith('@')) handle = '@' + handle;
 
-    if (isSupabaseConfigured && supabase) {
-        if (!userId) throw new Error("Usuário não autenticado");
-        
-        // 1. Insert Office (without members column)
-        const newOffice = {
-            name: officeData.name || 'Novo Escritório',
-            handle: handle,
-            location: officeData.location || 'Brasil',
-            owner_id: userId,
-            created_at: new Date().toISOString(),
-            social: {}
-        };
-        
-        // Ensure RLS for INSERT allows this user
-        const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
-        
-        if (error) {
-            if (error.code === '23505') throw new Error("Identificador em uso.");
-            throw new Error(error.message);
+    if (isSupabaseConfigured && supabase && userId) {
+        try {
+            const newOffice = {
+                name: officeData.name || 'Novo Escritório',
+                handle: handle,
+                location: officeData.location || 'Brasil',
+                owner_id: userId,
+                created_at: new Date().toISOString(),
+                social: {}
+            };
+
+            const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
+            
+            if (error) {
+                if (error.code === '23505') throw new Error("Identificador em uso.");
+                throw new Error(error.message);
+            }
+
+            const adminMember = {
+                office_id: data.id,
+                user_id: userId,
+                name: userName,
+                email: userEmail,
+                avatar_url: '',
+                role: 'Admin',
+                permissions: { financial: true, cases: true, documents: true, settings: true }
+            };
+            
+            await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert(adminMember);
+
+            this.logActivity(`Criou novo escritório (Supabase): ${newOffice.name}`);
+            return {
+                id: data.id,
+                name: data.name,
+                handle: data.handle,
+                location: data.location,
+                ownerId: data.owner_id,
+                createdAt: data.created_at,
+                members: [{ userId: userId, name: userName, email: userEmail, avatarUrl: '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }],
+                social: data.social || {}
+            } as Office;
+
+        } catch (err: any) {
+            console.error("Failed to create office:", err);
+            // Don't fallback automatically for creation to avoid sync issues, throw error
+            throw new Error(err.message || "Erro ao criar escritório.");
         }
-
-        // 2. Insert Admin Member
-        const adminMember = {
-            office_id: data.id,
-            user_id: userId,
-            name: userName,
-            email: userEmail,
-            avatar_url: '',
-            role: 'Admin',
-            permissions: { financial: true, cases: true, documents: true, settings: true }
-        };
-        
-        await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert(adminMember);
-
-        return {
-            id: data.id,
-            name: data.name,
-            handle: data.handle,
-            location: data.location,
-            ownerId: data.owner_id,
-            createdAt: data.created_at,
-            members: [{ userId: userId, name: userName, email: userEmail, avatarUrl: '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }],
-            social: data.social || {}
-        } as Office;
 
     } else {
         const offices = await this.getOffices();
@@ -784,7 +834,6 @@ class StorageService {
 
   async joinOffice(officeHandle: string): Promise<Office> {
     if (isSupabaseConfigured && supabase) {
-        // Find office by handle
         const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', officeHandle).single();
         
         if (error || !office) {
@@ -797,14 +846,12 @@ class StorageService {
         const { data: { session } } = await supabase.auth.getSession();
         const u = session?.user?.user_metadata || {};
 
-        // Check if member already
         const { data: existingMember } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).select('*').eq('office_id', office.id).eq('user_id', userId).single();
         
         if (existingMember) {
              return await this.getOfficeById(office.id) as Office;
         }
 
-        // Add member
         const newMember = {
              office_id: office.id,
              user_id: userId,
@@ -854,9 +901,7 @@ class StorageService {
   async deleteAccount() {
     const userId = await this.getUserId();
     
-    if (isSupabaseConfigured && supabase) {
-      if (!userId) return;
-      
+    if (isSupabaseConfigured && supabase && userId) {
       const tables = [
         TABLE_NAMES.LOGS,
         TABLE_NAMES.FINANCIAL,
@@ -875,10 +920,9 @@ class StorageService {
             console.error(`Error deleting from ${table}`, e);
         }
       }
-      
-    } else {
-      localStorage.clear();
     }
+    
+    localStorage.clear();
   }
 
   // --- Utils & Logs ---
@@ -1072,7 +1116,17 @@ class StorageService {
   }
 
   async seedDatabase() {
-    // void intentionally
+    // Populate LOCAL STORAGE with initial mock data if empty
+    // We do NOT seed Supabase automatically to avoid polluting production DBs for every new user blindly
+    const clients = this.getLocal(LOCAL_KEYS.CLIENTS, []);
+    if (clients.length === 0) {
+       console.info("Seeding LocalStorage with mock data...");
+       this.setLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS);
+       this.setLocal(LOCAL_KEYS.CASES, MOCK_CASES);
+       this.setLocal(LOCAL_KEYS.TASKS, MOCK_TASKS);
+       this.setLocal(LOCAL_KEYS.FINANCIAL, MOCK_FINANCIALS);
+       this.setLocal(LOCAL_KEYS.OFFICES, MOCK_OFFICES_DATA);
+    }
   }
 
   async runAutomations() {
