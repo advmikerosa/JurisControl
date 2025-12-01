@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
@@ -107,7 +108,9 @@ export const Settings: React.FC = () => {
   const toggleSetting = (section: keyof AppSettings, key: string) => {
     if (!settings) return;
     
-    const newValue = !((settings[section] as any)[key]);
+    // Type casting needed due to dynamic access of nested properties
+    const currentSection = settings[section] as any;
+    const newValue = !currentSection[key];
     
     // Logic for Desktop Permission
     if (section === 'notifications' && key === 'desktop' && newValue === true) {
@@ -117,7 +120,7 @@ export const Settings: React.FC = () => {
     setSettings({
         ...settings,
         [section]: {
-            ...settings[section],
+            ...currentSection,
             [key]: newValue
         }
     });
@@ -142,10 +145,11 @@ export const Settings: React.FC = () => {
 
   const updateSetting = (section: keyof AppSettings, key: string, value: any) => {
     if (!settings) return;
+    const currentSection = settings[section] as any;
     setSettings({
         ...settings,
         [section]: {
-            ...settings[section],
+            ...currentSection,
             [key]: value
         }
     });
@@ -560,4 +564,268 @@ export const Settings: React.FC = () => {
                     {/* Card Criar Novo */}
                     <div className="bg-white/5 hover:bg-white/10 transition-colors rounded-2xl p-6 border border-white/10 flex flex-col justify-between h-full">
                         <div>
-                            <div className
+                            <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center mb-4">
+                                <Plus size={24} className="text-indigo-400" />
+                            </div>
+                            <h3 className="text-lg font-medium text-white mb-2">Criar Novo Escritório</h3>
+                            <p className="text-slate-400 text-sm mb-4">
+                                Funde seu próprio escritório digital, convide membros e centralize sua gestão. Você será o administrador.
+                            </p>
+                        </div>
+                        <button 
+                            onClick={() => setIsCreatingOffice(true)}
+                            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/20 transition-all"
+                        >
+                            Criar Escritório
+                        </button>
+                    </div>
+
+                    {/* Card Entrar Existente */}
+                    <div className="bg-white/5 hover:bg-white/10 transition-colors rounded-2xl p-6 border border-white/10 flex flex-col justify-between h-full">
+                        <div>
+                            <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center mb-4">
+                                <LogIn size={24} className="text-emerald-400" />
+                            </div>
+                            <h3 className="text-lg font-medium text-white mb-2">Entrar em Existente</h3>
+                            <p className="text-slate-400 text-sm mb-4">
+                                Junte-se a uma equipe já existente usando o identificador único do escritório (ex: @silvaassociados).
+                            </p>
+                            <div className="relative mb-2">
+                                <AtSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                <input 
+                                    type="text" 
+                                    placeholder="@handle_do_escritorio"
+                                    value={joinOfficeHandle}
+                                    onChange={(e) => setJoinOfficeHandle(e.target.value)}
+                                    className="w-full bg-black/20 border border-white/10 rounded-lg p-2.5 pl-10 text-white focus:border-emerald-500 focus:outline-none text-sm"
+                                />
+                            </div>
+                        </div>
+                        <button 
+                            onClick={handleJoinOffice}
+                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium shadow-lg shadow-emerald-500/20 transition-all"
+                        >
+                            Entrar no Escritório
+                        </button>
+                    </div>
+                 </div>
+               ) : isCreatingOffice ? (
+                 <div className="bg-white/5 rounded-2xl p-6 border border-white/10 animate-fade-in max-w-2xl mx-auto">
+                    <h3 className="text-lg font-semibold text-white mb-4">Criar Novo Escritório</h3>
+                    <form onSubmit={handleCreateOffice} className="space-y-4">
+                       <div className="space-y-2">
+                          <label className="text-xs text-slate-400 font-medium ml-1">Nome do Escritório</label>
+                          <input 
+                             type="text" 
+                             placeholder="Ex: Silva & Associados"
+                             value={officeForm.name}
+                             onChange={(e) => setOfficeForm({...officeForm, name: e.target.value})}
+                             className="w-full bg-black/20 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 focus:outline-none"
+                          />
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-xs text-slate-400 font-medium ml-1">Identificador Único (@handle)</label>
+                          <div className="relative">
+                             <AtSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                             <input 
+                                type="text" 
+                                placeholder="@silvaassociados"
+                                value={officeForm.handle}
+                                onChange={(e) => {
+                                   let val = e.target.value;
+                                   if (!val.startsWith('@')) val = '@' + val;
+                                   setOfficeForm({...officeForm, handle: val.toLowerCase()})
+                                }}
+                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 pl-10 text-white focus:border-indigo-500 focus:outline-none"
+                             />
+                          </div>
+                          <p className="text-[10px] text-slate-500 ml-1">Use letras minúsculas, números e underline. Deve começar com @.</p>
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-xs text-slate-400 font-medium ml-1">Localização (Cidade/UF)</label>
+                          <div className="relative">
+                             <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                             <input 
+                                type="text" 
+                                placeholder="São Paulo - SP"
+                                value={officeForm.location}
+                                onChange={(e) => setOfficeForm({...officeForm, location: e.target.value})}
+                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 pl-10 text-white focus:border-indigo-500 focus:outline-none"
+                             />
+                          </div>
+                       </div>
+                       <div className="flex gap-3 justify-end pt-4">
+                          <button 
+                            type="button" 
+                            onClick={() => setIsCreatingOffice(false)}
+                            className="px-4 py-2 text-slate-400 hover:text-white"
+                          >
+                            Cancelar
+                          </button>
+                          <button 
+                            type="submit"
+                            className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium shadow-lg shadow-emerald-500/20"
+                          >
+                            Criar Perfil
+                          </button>
+                       </div>
+                    </form>
+                 </div>
+               ) : (
+                 <div className="space-y-6">
+                    {/* Exibição do Escritório */}
+                    <div className="bg-gradient-to-r from-indigo-900/40 to-slate-900/40 border border-indigo-500/30 rounded-2xl p-6 flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
+                       <div className="absolute top-0 right-0 p-32 bg-indigo-500/10 blur-3xl rounded-full -mr-10 -mt-10"></div>
+                       <div className="flex items-center gap-4 relative z-10">
+                          <div className="w-16 h-16 bg-indigo-600 rounded-xl flex items-center justify-center text-2xl font-bold text-white shadow-lg overflow-hidden">
+                             {myOffice?.logoUrl ? (
+                                <img src={myOffice.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                             ) : (
+                                myOffice?.name.charAt(0)
+                             )}
+                          </div>
+                          <div>
+                             <h3 className="text-xl font-bold text-white">{myOffice?.name}</h3>
+                             <p className="text-indigo-300 font-mono text-sm">{myOffice?.handle}</p>
+                             <p className="text-slate-400 text-xs flex items-center gap-1 mt-1"><MapPin size={10} /> {myOffice?.location}</p>
+                          </div>
+                       </div>
+                       <div className="flex gap-3 relative z-10">
+                          <button 
+                            onClick={() => setIsOfficeEditModalOpen(true)}
+                            className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Editar Perfil do Escritório
+                          </button>
+                       </div>
+                    </div>
+
+                    {/* Membros */}
+                    <div>
+                       <div className="flex justify-between items-center mb-3">
+                           <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2"><Users size={16} /> Equipe</h4>
+                           <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded">{myOffice.members.length} Membros</span>
+                       </div>
+                       <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                          {myOffice.members.map((member, idx) => (
+                              <div key={member.userId} className={`p-4 flex items-center justify-between ${idx !== myOffice.members.length - 1 ? 'border-b border-white/5' : ''}`}>
+                                  <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden">
+                                          {member.avatarUrl ? <img src={member.avatarUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white font-bold">{member.name.charAt(0)}</div>}
+                                      </div>
+                                      <div>
+                                          <p className="text-sm text-white font-medium">{member.name} {user?.id === member.userId && '(Você)'}</p>
+                                          <p className="text-xs text-slate-300">{member.role}</p>
+                                      </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                     <span className="text-[10px] text-slate-500 bg-black/20 px-2 py-0.5 rounded">
+                                        {Object.values(member.permissions).filter(Boolean).length} Permissões
+                                     </span>
+                                  </div>
+                              </div>
+                          ))}
+                          
+                          {/* Convite de Membro Rápido */}
+                          <div className="p-4 bg-black/20 border-t border-white/5">
+                             <div className="flex gap-3 items-center">
+                                <div className="relative flex-1">
+                                    <AtSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Convidar usuário por @handle"
+                                        value={inviteUserHandle}
+                                        onChange={(e) => setInviteUserHandle(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                                    />
+                                </div>
+                                <button 
+                                    onClick={handleInviteUser}
+                                    disabled={!inviteUserHandle}
+                                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 disabled:cursor-not-allowed text-white text-xs rounded-lg font-medium transition-colors"
+                                >
+                                    Enviar Convite
+                                </button>
+                             </div>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+               )}
+             </div>
+           )}
+
+           {/* --- DANGER ZONE TAB --- */}
+           {activeTab === 'danger' && (
+             <div>
+                <div className="mb-6 border-b border-white/10 pb-4">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2"><AlertTriangle size={24} className="text-rose-500" /> Zona de Perigo</h2>
+                  <p className="text-sm text-slate-400 mt-1">Ações irreversíveis.</p>
+                </div>
+                <div className="space-y-4">
+                   <div className="flex items-center justify-between p-4 border border-rose-500/50 bg-rose-500/10 rounded-xl">
+                      <div>
+                         <h4 className="text-rose-200 font-medium text-sm">Reset de Fábrica (Produção)</h4>
+                         <p className="text-xs text-rose-300/70">Apaga TODOS os clientes, processos e dados do LocalStorage. Como se fosse uma instalação limpa.</p>
+                      </div>
+                      <button onClick={handleFactoryReset} className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition-colors shadow-lg shadow-rose-500/20">
+                         Resetar Tudo
+                      </button>
+                   </div>
+
+                   <div className="flex items-center justify-between p-4 border border-rose-500/50 bg-rose-500/10 rounded-xl">
+                      <div>
+                         <h4 className="text-rose-200 font-medium text-sm">Excluir Conta</h4>
+                         <p className="text-xs text-rose-300/70">Apaga permanentemente sua conta e todos os dados associados (clientes, processos, financeiro). Esta ação não pode ser desfeita.</p>
+                      </div>
+                      <button onClick={handleDeleteAccount} className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition-colors shadow-lg shadow-rose-500/20">
+                         Excluir Conta
+                      </button>
+                   </div>
+                </div>
+             </div>
+           )}
+        </GlassCard>
+      </div>
+
+      {myOffice && (
+        <OfficeEditModal 
+            isOpen={isOfficeEditModalOpen} 
+            onClose={() => setIsOfficeEditModalOpen(false)} 
+            office={myOffice} 
+            onUpdate={handleOfficeUpdate}
+        />
+      )}
+
+      <Modal isOpen={confirmModal.open} onClose={() => setConfirmModal({ ...confirmModal, open: false })} title="Confirmar Ação Crítica">
+         <div className="text-center">
+             <div className="w-12 h-12 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                 <AlertTriangle className="text-rose-500" size={24} />
+             </div>
+             <p className="text-slate-300 mb-4 font-medium">
+                 Tem certeza absoluta? Esta ação é <strong className="text-rose-400">irreversível</strong>. 
+             </p>
+             <p className="text-sm text-slate-400 mb-6">
+                 Para confirmar, digite <strong>DELETAR</strong> abaixo:
+             </p>
+             <input 
+                type="text" 
+                placeholder="Digite DELETAR"
+                className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-center text-white font-bold mb-6 focus:border-rose-500 focus:outline-none uppercase"
+                onChange={(e) => setDeleteConfirmationInput(e.target.value)}
+             />
+             <div className="flex justify-end gap-3 w-full">
+               <button onClick={() => setConfirmModal({ ...confirmModal, open: false })} className="flex-1 px-4 py-2 text-slate-400 hover:bg-white/5 rounded-lg">Cancelar</button>
+               <button 
+                 onClick={() => { confirmModal.action(); setConfirmModal({ ...confirmModal, open: false }); }} 
+                 disabled={deleteConfirmationInput !== 'DELETAR'}
+                 className="flex-1 px-4 py-2 bg-rose-600 disabled:bg-rose-600/30 disabled:cursor-not-allowed text-white rounded-lg font-bold hover:bg-rose-700 transition-colors"
+               >
+                 Apagar Tudo
+               </button>
+             </div>
+         </div>
+      </Modal>
+    </div>
+  );
+};
