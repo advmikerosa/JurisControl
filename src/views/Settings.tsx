@@ -9,8 +9,8 @@ import { dataJudService } from '../services/dataJudService';
 import { emailService } from '../services/emailService';
 import { Modal } from '../components/ui/Modal';
 import { OfficeEditModal } from '../components/OfficeEditModal';
-import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, XCircle, Mail, Clock, List, Send, Calendar, DollarSign } from 'lucide-react';
-import { AppSettings, Office, EmailLog, MemberRole, OfficeMember } from '../types';
+import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Globe, Moon, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, Mail, Clock, List, Send, Calendar, DollarSign } from 'lucide-react';
+import { AppSettings, Office, EmailLog } from '../types';
 
 export const Settings: React.FC = () => {
   const { logout, user, updateProfile } = useAuth();
@@ -105,51 +105,53 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const toggleSetting = (section: keyof AppSettings, key: string) => {
+  // Type-safe update function
+  const toggleSetting = <K extends keyof AppSettings>(section: K, key: keyof AppSettings[K]) => {
     if (!settings) return;
     
-    // Type casting needed due to dynamic access of nested properties
-    const currentSection = settings[section] as any;
-    const newValue = !currentSection[key];
+    // Create a copy of the section
+    const currentSection = { ...settings[section] };
+    // Toggle the value safely
+    (currentSection as any)[key] = !(currentSection as any)[key];
     
     // Logic for Desktop Permission
-    if (section === 'notifications' && key === 'desktop' && newValue === true) {
+    if (section === 'notifications' && key === 'desktop' && (currentSection as any)[key] === true) {
       notificationService.requestDesktopPermission();
     }
 
     setSettings({
         ...settings,
-        [section]: {
-            ...currentSection,
-            [key]: newValue
-        }
+        [section]: currentSection
     });
   };
 
   const toggleEmailSetting = (key: string) => {
       if (!settings?.emailPreferences) return;
+      
+      let newPrefs = { ...settings.emailPreferences };
+
+      if (key === 'enabled') {
+          newPrefs.enabled = !newPrefs.enabled;
+      } else if (key.startsWith('cat_')) {
+          const catKey = key.replace('cat_', '') as keyof typeof newPrefs.categories;
+          newPrefs.categories = { ...newPrefs.categories, [catKey]: !newPrefs.categories[catKey] };
+      } else if (key.startsWith('alert_')) {
+          const alertKey = key.replace('alert_', '') as keyof typeof newPrefs.deadlineAlerts;
+          newPrefs.deadlineAlerts = { ...newPrefs.deadlineAlerts, [alertKey]: !newPrefs.deadlineAlerts[alertKey] };
+      }
+
       setSettings({
           ...settings,
-          emailPreferences: {
-              ...settings.emailPreferences,
-              enabled: key === 'enabled' ? !settings.emailPreferences.enabled : settings.emailPreferences.enabled,
-              categories: key.startsWith('cat_') 
-                ? { ...settings.emailPreferences.categories, [key.replace('cat_', '')]: !settings.emailPreferences.categories[key.replace('cat_', '') as keyof typeof settings.emailPreferences.categories] }
-                : settings.emailPreferences.categories,
-              deadlineAlerts: key.startsWith('alert_')
-                ? { ...settings.emailPreferences.deadlineAlerts, [key.replace('alert_', '')]: !settings.emailPreferences.deadlineAlerts[key.replace('alert_', '') as keyof typeof settings.emailPreferences.deadlineAlerts] }
-                : settings.emailPreferences.deadlineAlerts
-          }
+          emailPreferences: newPrefs
       });
   };
 
-  const updateSetting = (section: keyof AppSettings, key: string, value: any) => {
+  const updateSetting = <K extends keyof AppSettings>(section: K, key: keyof AppSettings[K], value: any) => {
     if (!settings) return;
-    const currentSection = settings[section] as any;
     setSettings({
         ...settings,
         [section]: {
-            ...currentSection,
+            ...settings[section],
             [key]: value
         }
     });
@@ -254,7 +256,6 @@ export const Settings: React.FC = () => {
 
   const handleOfficeUpdate = (updatedOffice: Office) => {
       setMyOffice(updatedOffice);
-      // Update global store logic here if necessary
   };
 
   if (!settings) return null;
@@ -402,6 +403,7 @@ export const Settings: React.FC = () => {
            {/* --- EMAIL NOTIFICATIONS TAB --- */}
            {activeTab === 'emails' && settings.emailPreferences && (
              <div className="space-y-8 animate-fade-in">
+                {/* ... (Previous code remains the same for email tab) ... */}
                 <div className="flex items-center justify-between bg-white/5 p-6 rounded-xl border border-white/10">
                     <div>
                         <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -436,6 +438,7 @@ export const Settings: React.FC = () => {
                                     </div>
                                     <input type="checkbox" checked={settings.emailPreferences.categories.deadlines} onChange={() => toggleEmailSetting('cat_deadlines')} className="w-4 h-4 accent-indigo-500" />
                                 </label>
+                                {/* ... Repeat for other categories ... */}
                                 <label className="flex items-center justify-between p-3 bg-slate-900/50 border border-white/10 rounded-lg cursor-pointer hover:border-indigo-500/50 transition-colors">
                                     <div className="flex items-center gap-3">
                                         <List size={18} className="text-indigo-400" />
@@ -460,6 +463,7 @@ export const Settings: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Deadline Config */}
                         <div className="space-y-4">
                             <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider border-b border-white/5 pb-2">Configuração de Prazos</h4>
                             <p className="text-xs text-slate-500 mb-2">Escolha com quanta antecedência você quer ser avisado sobre prazos fatais.</p>
@@ -506,6 +510,7 @@ export const Settings: React.FC = () => {
                             </button>
                         </div>
 
+                        {/* Email History Table */}
                         {emailHistory.length > 0 && (
                             <div className="mt-8">
                                 <h4 className="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-3">Histórico de Envios (Recentes)</h4>
@@ -613,6 +618,7 @@ export const Settings: React.FC = () => {
                  <div className="bg-white/5 rounded-2xl p-6 border border-white/10 animate-fade-in max-w-2xl mx-auto">
                     <h3 className="text-lg font-semibold text-white mb-4">Criar Novo Escritório</h3>
                     <form onSubmit={handleCreateOffice} className="space-y-4">
+                       {/* Office Creation Form */}
                        <div className="space-y-2">
                           <label className="text-xs text-slate-400 font-medium ml-1">Nome do Escritório</label>
                           <input 
@@ -704,11 +710,11 @@ export const Settings: React.FC = () => {
                     <div>
                        <div className="flex justify-between items-center mb-3">
                            <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2"><Users size={16} /> Equipe</h4>
-                           <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded">{myOffice?.members?.length || 0} Membros</span>
+                           <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded">{myOffice.members.length} Membros</span>
                        </div>
                        <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                          {myOffice?.members?.map((member, idx) => (
-                              <div key={member.userId} className={`p-4 flex items-center justify-between ${idx !== (myOffice?.members?.length || 0) - 1 ? 'border-b border-white/5' : ''}`}>
+                          {myOffice.members.map((member, idx) => (
+                              <div key={member.userId} className={`p-4 flex items-center justify-between ${idx !== myOffice.members.length - 1 ? 'border-b border-white/5' : ''}`}>
                                   <div className="flex items-center gap-3">
                                       <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden">
                                           {member.avatarUrl ? <img src={member.avatarUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white font-bold">{member.name.charAt(0)}</div>}

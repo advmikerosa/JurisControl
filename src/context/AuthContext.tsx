@@ -52,6 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const resetInactivityTimer = () => {
       const now = Date.now();
+      // Throttle updates to avoid excessive storage writes
       if (now - lastActivityUpdate.current > ACTIVITY_THROTTLE) {
           localStorage.setItem('@JurisControl:lastActivity', now.toString());
           lastActivityUpdate.current = now;
@@ -66,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
     
     const lastActivity = parseInt(localStorage.getItem('@JurisControl:lastActivity') || '0');
+    // Check if expired immediately on load/auth
     if (lastActivity > 0 && Date.now() - lastActivity > INACTIVITY_LIMIT) {
       logout(true);
     } else {
@@ -102,7 +104,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const register = useCallback(async (name: string, email: string, password: string, oab?: string, officeData?: OfficeRegistrationData): Promise<boolean> => {
+    // authMockService handles the office creation logic and returns the full user object
     const user = await authMockService.register(name, email, password, oab, officeData);
+    
+    // Set user state AFTER office creation is complete
     setUser(user);
     setIsAuthenticated(true);
     localStorage.setItem('@JurisControl:user', JSON.stringify(user));

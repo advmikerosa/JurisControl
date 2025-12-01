@@ -1,19 +1,19 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Chat } from "@google/genai";
 
 class AiService {
   private ai: GoogleGenAI;
   private model: string = "gemini-2.5-flash";
 
   constructor() {
-    // Uses VITE_API_KEY if present, otherwise expects a key to be provided elsewhere or fails gracefully
-    const apiKey = import.meta.env.VITE_API_KEY || ''; 
-    this.ai = new GoogleGenAI({ apiKey });
+    // Inicialização estrita conforme regras: usar process.env.API_KEY diretamente.
+    // Assume-se que o ambiente fornece essa variável injetada.
+    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
   async sendMessageStream(history: { role: string; parts: { text: string }[] }[], message: string) {
     try {
-      const chat = this.ai.chats.create({
+      const chat: Chat = this.ai.chats.create({
         model: this.model,
         history: history,
         config: {
@@ -23,7 +23,7 @@ class AiService {
 
       return await chat.sendMessageStream({ message });
     } catch (error) {
-      console.error("Erro ao comunicar com a IA:", error);
+      console.error("JurisAI: Erro de comunicação.", error);
       throw error;
     }
   }
