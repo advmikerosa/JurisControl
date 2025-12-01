@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storageService } from '../services/storageService';
@@ -389,4 +390,285 @@ export const ClientDetails: React.FC = () => {
            {/* Main Tabs */}
            <div className="lg:col-span-2">
                <GlassCard className="min-h-[500px] flex flex-col">
-                   <div className="flex border-b
+                   <div className="flex border-b border-white/10 mb-6 overflow-x-auto">
+                       <button onClick={() => setActiveTab('cases')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'cases' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                           <Briefcase size={16} /> Processos ({clientCases.length})
+                       </button>
+                       <button onClick={() => setActiveTab('timeline')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'timeline' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                           <Clock size={16} /> Histórico ({clientData.history?.length || 0})
+                       </button>
+                       <button onClick={() => setActiveTab('docs')} className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'docs' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                           <Paperclip size={16} /> Documentos
+                       </button>
+                   </div>
+
+                   <div className="flex-1">
+                       {activeTab === 'cases' && (
+                           <div className="space-y-4">
+                               <div className="flex justify-end">
+                                   <button onClick={() => navigate(`/cases?action=new&clientId=${clientData.id}`)} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors shadow-lg shadow-indigo-500/20">
+                                       <Plus size={12} /> Novo Processo
+                                   </button>
+                               </div>
+                               {clientCases.length > 0 ? (
+                                   <div className="grid gap-3">
+                                       {clientCases.map(c => (
+                                           <div key={c.id} onClick={() => navigate(`/cases/${c.id}`)} className="bg-white/5 border border-white/10 p-4 rounded-xl hover:bg-white/10 transition-colors cursor-pointer group">
+                                               <div className="flex justify-between items-start mb-1">
+                                                   <span className="text-xs font-mono text-slate-500 bg-black/20 px-1.5 py-0.5 rounded">{c.cnj}</span>
+                                                   <span className={`text-[10px] px-2 py-0.5 rounded border ${c.status === 'Ativo' ? 'border-indigo-500/30 text-indigo-300' : 'border-slate-500/30 text-slate-400'}`}>{c.status}</span>
+                                               </div>
+                                               <h4 className="text-white font-medium mb-1 group-hover:text-indigo-300 transition-colors">{c.title}</h4>
+                                               <div className="flex justify-between items-end mt-2">
+                                                   <p className="text-xs text-slate-400">{c.category}</p>
+                                                   <p className="text-sm font-bold text-emerald-400">R$ {c.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                               </div>
+                                           </div>
+                                       ))}
+                                   </div>
+                               ) : (
+                                   <div className="flex flex-col items-center justify-center h-48 text-slate-500 border-2 border-dashed border-white/5 rounded-xl">
+                                       <Scale size={32} className="mb-2 opacity-50" />
+                                       <p>Nenhum processo vinculado.</p>
+                                   </div>
+                               )}
+                           </div>
+                       )}
+
+                       {activeTab === 'timeline' && (
+                           <div className="space-y-6 animate-fade-in">
+                               <div className="bg-slate-900/50 p-4 rounded-xl border border-white/10">
+                                   <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+                                       {['Telefone', 'Email', 'Reunião', 'Whatsapp', 'Nota'].map((type) => (
+                                           <button 
+                                               key={type}
+                                               onClick={() => setInteractionType(type as any)}
+                                               className={`text-xs px-3 py-1.5 rounded-full transition-colors whitespace-nowrap flex items-center gap-1.5 ${interactionType === type ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                                           >
+                                               {getInteractionIcon(type)} {type}
+                                           </button>
+                                       ))}
+                                   </div>
+                                   <textarea 
+                                       value={interactionText}
+                                       onChange={(e) => setInteractionText(e.target.value)}
+                                       placeholder={`Registrar detalhes sobre ${interactionType.toLowerCase()}...`}
+                                       className="w-full bg-transparent text-sm text-white outline-none resize-none h-20 placeholder:text-slate-600"
+                                   />
+                                   <div className="flex justify-end mt-2 pt-2 border-t border-white/5">
+                                       <button onClick={handleAddInteraction} disabled={!interactionText.trim()} className="bg-white/10 hover:bg-white/20 text-white text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                           <Send size={12} /> Registrar Interação
+                                       </button>
+                                   </div>
+                               </div>
+
+                               <div className="space-y-4 pl-4 border-l border-white/10 ml-2">
+                                   {clientData.history && clientData.history.length > 0 ? (
+                                       clientData.history.map((item) => (
+                                           <div key={item.id} className="relative group">
+                                               <div className="absolute -left-[25px] top-0 w-6 h-6 rounded-full bg-slate-800 border-2 border-indigo-500/30 flex items-center justify-center text-indigo-400 text-[10px] z-10">
+                                                   {getInteractionIcon(item.type)}
+                                               </div>
+                                               <div className="bg-white/5 border border-white/5 p-3 rounded-xl hover:bg-white/10 transition-colors">
+                                                   <div className="flex justify-between items-start mb-1">
+                                                       <span className="text-xs font-bold text-indigo-300 uppercase flex items-center gap-1.5">
+                                                           {item.type}
+                                                       </span>
+                                                       <span className="text-[10px] text-slate-500">{item.date}</span>
+                                                   </div>
+                                                   <p className="text-sm text-slate-300 whitespace-pre-wrap">{item.description}</p>
+                                                   <p className="text-[10px] text-slate-600 mt-2 flex items-center gap-1"><User size={10}/> {item.author}</p>
+                                               </div>
+                                           </div>
+                                       ))
+                                   ) : (
+                                       <div className="text-slate-500 text-xs italic pl-2">Nenhuma interação registrada.</div>
+                                   )}
+                               </div>
+                           </div>
+                       )}
+
+                       {activeTab === 'docs' && (
+                           <div className="space-y-4">
+                               <div className="flex justify-end">
+                                   <button onClick={handleAddDocument} className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors">
+                                       <Plus size={12} /> Adicionar Documento
+                                   </button>
+                               </div>
+                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                   {clientData.documents && clientData.documents.length > 0 ? (
+                                       clientData.documents.map(doc => (
+                                           <div key={doc.id} className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl hover:border-indigo-500/30 transition-colors group cursor-pointer">
+                                               <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center text-indigo-400 group-hover:text-white group-hover:bg-indigo-600 transition-colors">
+                                                   <FileText size={20} />
+                                               </div>
+                                               <div className="min-w-0 flex-1">
+                                                   <p className="text-sm font-medium text-white truncate">{doc.title}</p>
+                                                   <p className="text-[10px] text-slate-500">{doc.uploadDate} • {doc.size}</p>
+                                               </div>
+                                           </div>
+                                       ))
+                                   ) : (
+                                       <div className="col-span-2 text-center py-10 text-slate-500 border-2 border-dashed border-white/5 rounded-xl">
+                                           <Paperclip className="mx-auto mb-2 opacity-50" />
+                                           <p>Pasta vazia.</p>
+                                       </div>
+                                   )}
+                               </div>
+                           </div>
+                       )}
+                   </div>
+               </GlassCard>
+           </div>
+       </div>
+
+       {/* Edit Modal */}
+       <Modal 
+           isOpen={isEditModalOpen} 
+           onClose={() => setIsEditModalOpen(false)} 
+           title="Editar Perfil do Cliente"
+           footer={
+               <div className="flex justify-end gap-3 w-full">
+                   <button onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white transition-colors">Cancelar</button>
+                   <button onClick={handleSaveClient} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-lg shadow-indigo-500/20">Salvar</button>
+               </div>
+           }
+       >
+           <div className="space-y-4">
+               <div>
+                   <label className="text-xs text-slate-400 block mb-1">Nome Completo / Razão Social</label>
+                   <input 
+                       type="text" 
+                       value={editForm.name || ''} 
+                       onChange={e => setEditForm({...editForm, name: e.target.value})}
+                       className={`w-full bg-black/20 border rounded-lg p-2.5 text-white outline-none focus:border-indigo-500 ${formErrors.name ? 'border-rose-500' : 'border-white/10'}`}
+                   />
+                   {formErrors.name && <span className="text-rose-400 text-xs">{formErrors.name}</span>}
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                   <div>
+                       <label className="text-xs text-slate-400 block mb-1">CPF</label>
+                       <input 
+                           type="text" 
+                           value={editForm.cpf || ''} 
+                           onChange={e => setEditForm({...editForm, cpf: e.target.value})}
+                           className={`w-full bg-black/20 border rounded-lg p-2.5 text-white outline-none focus:border-indigo-500 ${formErrors.cpf ? 'border-rose-500' : 'border-white/10'}`}
+                           disabled={clientData.type === 'PJ'}
+                       />
+                       {formErrors.cpf && <span className="text-rose-400 text-xs">{formErrors.cpf}</span>}
+                   </div>
+                   <div>
+                       <label className="text-xs text-slate-400 block mb-1">CNPJ</label>
+                       <input 
+                           type="text" 
+                           value={editForm.cnpj || ''} 
+                           onChange={e => setEditForm({...editForm, cnpj: e.target.value})}
+                           className={`w-full bg-black/20 border rounded-lg p-2.5 text-white outline-none focus:border-indigo-500 ${formErrors.cnpj ? 'border-rose-500' : 'border-white/10'}`}
+                           disabled={clientData.type === 'PF'}
+                       />
+                       {formErrors.cnpj && <span className="text-rose-400 text-xs">{formErrors.cnpj}</span>}
+                   </div>
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                   <div>
+                       <label className="text-xs text-slate-400 block mb-1">Telefone</label>
+                       <input 
+                           type="text" 
+                           value={editForm.phone || ''} 
+                           onChange={e => setEditForm({...editForm, phone: e.target.value})}
+                           className="w-full bg-black/20 border border-white/10 rounded-lg p-2.5 text-white outline-none focus:border-indigo-500"
+                       />
+                   </div>
+                   <div>
+                       <label className="text-xs text-slate-400 block mb-1">E-mail</label>
+                       <input 
+                           type="email" 
+                           value={editForm.email || ''} 
+                           onChange={e => setEditForm({...editForm, email: e.target.value})}
+                           className="w-full bg-black/20 border border-white/10 rounded-lg p-2.5 text-white outline-none focus:border-indigo-500"
+                       />
+                   </div>
+               </div>
+               <div>
+                   <label className="text-xs text-slate-400 block mb-1">Endereço</label>
+                   <input 
+                       type="text" 
+                       value={editForm.address || ''} 
+                       onChange={e => setEditForm({...editForm, address: e.target.value})}
+                       className="w-full bg-black/20 border border-white/10 rounded-lg p-2.5 text-white outline-none focus:border-indigo-500"
+                   />
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                   <div>
+                       <label className="text-xs text-slate-400 block mb-1">Cidade</label>
+                       <input 
+                           type="text" 
+                           value={editForm.city || ''} 
+                           onChange={e => setEditForm({...editForm, city: e.target.value})}
+                           className="w-full bg-black/20 border border-white/10 rounded-lg p-2.5 text-white outline-none focus:border-indigo-500"
+                       />
+                   </div>
+                   <div>
+                       <label className="text-xs text-slate-400 block mb-1">Estado</label>
+                       <input 
+                           type="text" 
+                           value={editForm.state || ''} 
+                           onChange={e => setEditForm({...editForm, state: e.target.value})}
+                           className="w-full bg-black/20 border border-white/10 rounded-lg p-2.5 text-white outline-none focus:border-indigo-500"
+                           maxLength={2}
+                       />
+                   </div>
+               </div>
+           </div>
+       </Modal>
+
+       {/* Add Alert Modal */}
+       <Modal
+           isOpen={isAlertModalOpen}
+           onClose={() => setIsAlertModalOpen(false)}
+           title="Adicionar Alerta"
+           maxWidth="max-w-sm"
+           footer={
+               <div className="flex justify-end gap-2 w-full">
+                   <button onClick={() => setIsAlertModalOpen(false)} className="px-3 py-1.5 text-slate-400 hover:text-white">Cancelar</button>
+                   <button onClick={handleAddAlert} className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm">Salvar</button>
+               </div>
+           }
+       >
+           <div className="space-y-3">
+               <div>
+                   <label className="text-xs text-slate-400 block mb-1">Título do Alerta</label>
+                   <input type="text" value={newAlert.title} onChange={e => setNewAlert({...newAlert, title: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm outline-none focus:border-indigo-500" placeholder="Ex: Risco de Fuga" />
+               </div>
+               <div>
+                   <label className="text-xs text-slate-400 block mb-1">Detalhes</label>
+                   <textarea rows={3} value={newAlert.message} onChange={e => setNewAlert({...newAlert, message: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-lg p-2 text-white text-sm outline-none focus:border-indigo-500 resize-none" placeholder="Descrição detalhada..."></textarea>
+               </div>
+               <div>
+                   <label className="text-xs text-slate-400 block mb-1">Tipo</label>
+                   <div className="flex gap-2">
+                       <button 
+                           onClick={() => setNewAlert({...newAlert, type: 'warning'})} 
+                           className={`flex-1 py-1.5 text-xs font-bold uppercase rounded border ${newAlert.type === 'warning' ? 'bg-amber-500 text-white border-amber-500' : 'border-white/10 text-slate-500 hover:border-white/30'}`}
+                       >
+                           AVISO
+                       </button>
+                       <button 
+                           onClick={() => setNewAlert({...newAlert, type: 'critical'})} 
+                           className={`flex-1 py-1.5 text-xs font-bold uppercase rounded border ${newAlert.type === 'critical' ? 'bg-rose-500 text-white border-rose-500' : 'border-white/10 text-slate-500 hover:border-white/30'}`}
+                       >
+                           CRÍTICO
+                       </button>
+                       <button 
+                           onClick={() => setNewAlert({...newAlert, type: 'info'})} 
+                           className={`flex-1 py-1.5 text-xs font-bold uppercase rounded border ${newAlert.type === 'info' ? 'bg-blue-500 text-white border-blue-500' : 'border-white/10 text-slate-500 hover:border-white/30'}`}
+                       >
+                           INFO
+                       </button>
+                   </div>
+               </div>
+           </div>
+       </Modal>
+    </div>
+  );
+};
