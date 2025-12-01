@@ -1,13 +1,24 @@
-// Integração com Supabase removida para versão Local-First limpa.
-// Para reativar, instale @supabase/supabase-js e configure o cliente aqui.
-
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Acesso seguro às variáveis de ambiente
+const env = import.meta.env || ({} as any);
 
-export const isSupabaseConfigured = !!supabaseUrl && !!supabaseAnonKey;
+const supabaseUrl = env.VITE_SUPABASE_URL;
+const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY;
 
+// Verifica se a configuração existe e é válida
+export const isSupabaseConfigured = 
+  !!supabaseUrl && 
+  !!supabaseAnonKey && 
+  !supabaseUrl.includes('seu-projeto'); // Evita placeholders
+
+// Cria o cliente Supabase apenas se as credenciais existirem
 export const supabase = isSupabaseConfigured 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
+
+if (!isSupabaseConfigured) {
+  console.info("JurisControl: Modo Demo/Offline ativo. Supabase não configurado.");
+} else {
+  console.info("JurisControl: Conectado ao Supabase.");
+}

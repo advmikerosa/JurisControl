@@ -42,9 +42,12 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     hasError: false,
     error: null
   };
+  // Fix: Explicitly declare props to satisfy TS in strict environments
+  readonly props: Readonly<ErrorBoundaryProps>;
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    this.props = props;
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
