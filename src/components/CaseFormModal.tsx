@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
 import { User, Search, CheckSquare, AlertCircle, Briefcase, ChevronRight, Info, Scale, Users, HelpCircle, ChevronLeft, Save, Loader2, Download, Check } from 'lucide-react';
@@ -292,3 +291,109 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                         <div className="space-y-1">
                             <label className="text-xs text-slate-400 ml-1">Fase Processual</label>
                             <select 
+                                value={formData.phase}
+                                onChange={e => setFormData({...formData, phase: e.target.value as CasePhase})}
+                                className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                            >
+                                {CASE_PHASES.map(phase => (
+                                    <option key={phase} value={phase} className="bg-slate-900">{phase}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400 ml-1">Tribunal / Vara</label>
+                            <div className="relative">
+                                <Scale className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                <input 
+                                    type="text" 
+                                    value={formData.court || ''} 
+                                    onChange={e => setFormData({...formData, court: e.target.value})}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white outline-none focus:border-indigo-500"
+                                    placeholder="Ex: 2ª Vara Cível de SP"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400 ml-1">Próxima Audiência</label>
+                            <input 
+                                type="date" 
+                                value={formData.nextHearing ? formData.nextHearing.split('/').reverse().join('-') : ''} 
+                                onChange={e => {
+                                    const date = e.target.value ? new Date(e.target.value).toLocaleDateString('pt-BR') : undefined;
+                                    setFormData({...formData, nextHearing: date});
+                                }}
+                                className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-indigo-500 scheme-dark"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-1">
+                        <label className="text-xs text-slate-400 ml-1">Advogado Responsável</label>
+                        <div className="relative">
+                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                            <input 
+                                type="text" 
+                                value={formData.responsibleLawyer || ''} 
+                                onChange={e => setFormData({...formData, responsibleLawyer: e.target.value})}
+                                className="w-full bg-white/5 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white outline-none focus:border-indigo-500"
+                                placeholder="Nome do advogado"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {step === 3 && (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="bg-white/5 rounded-xl p-5 border border-white/10 space-y-4">
+                        <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                                <Briefcase size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-white font-bold text-lg">{formData.title}</h3>
+                                <p className="text-slate-400 text-sm">{formData.cnj}</p>
+                            </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-y-4 gap-x-8 border-t border-white/5 pt-4">
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Cliente</p>
+                                <p className="text-white font-medium">{formData.client?.name || 'Não selecionado'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Categoria</p>
+                                <p className="text-white font-medium">{formData.category}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Valor</p>
+                                <p className="text-emerald-400 font-bold">R$ {Number(formData.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Fase</p>
+                                <p className="text-white font-medium">{formData.phase}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Tribunal</p>
+                                <p className="text-white font-medium">{formData.court || '-'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase tracking-wider">Próx. Audiência</p>
+                                <p className="text-white font-medium">{formData.nextHearing || 'Não agendada'}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+                        <AlertCircle size={16} />
+                        <p>Verifique se todas as informações estão corretas antes de salvar.</p>
+                    </div>
+                </div>
+            )}
+        </div>
+    </Modal>
+  );
+};
