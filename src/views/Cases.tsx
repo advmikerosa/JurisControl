@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { storageService } from '../services/storageService';
@@ -400,7 +401,7 @@ export const Cases: React.FC = () => {
                                     className="w-full bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-white/10 rounded-lg py-2 pl-3 pr-8 text-sm text-slate-900 dark:text-slate-200 appearance-none focus:border-indigo-500 outline-none"
                                  >
                                      <option value="Todos">Todas as Categorias</option>
-                                     {LEGAL_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                     {LEGAL_CATEGORIES.map((cat: string) => <option key={cat} value={cat}>{cat}</option>)}
                                  </select>
                                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={14} />
                              </div>

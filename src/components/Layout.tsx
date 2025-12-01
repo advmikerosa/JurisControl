@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { 
@@ -504,7 +505,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     </div>
                     <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
                       {notifications.length > 0 ? (
-                        notifications.map(n => (
+                        notifications.map((n) => (
                           <div 
                             key={n.id} 
                             onClick={() => markAsRead(n.id)}

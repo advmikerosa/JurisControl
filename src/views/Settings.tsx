@@ -10,7 +10,7 @@ import { emailService } from '../services/emailService';
 import { Modal } from '../components/ui/Modal';
 import { OfficeEditModal } from '../components/OfficeEditModal';
 import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Zap, Globe, Moon, Archive, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, XCircle, Mail, Clock, List, Send, Calendar, DollarSign } from 'lucide-react';
-import { AppSettings, Office, EmailLog } from '../types';
+import { AppSettings, Office, EmailLog, MemberRole, OfficeMember } from '../types';
 
 export const Settings: React.FC = () => {
   const { logout, user, updateProfile } = useAuth();
@@ -704,11 +704,11 @@ export const Settings: React.FC = () => {
                     <div>
                        <div className="flex justify-between items-center mb-3">
                            <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2"><Users size={16} /> Equipe</h4>
-                           <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded">{myOffice.members.length} Membros</span>
+                           <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded">{myOffice?.members?.length || 0} Membros</span>
                        </div>
                        <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                          {myOffice.members.map((member, idx) => (
-                              <div key={member.userId} className={`p-4 flex items-center justify-between ${idx !== myOffice.members.length - 1 ? 'border-b border-white/5' : ''}`}>
+                          {myOffice?.members?.map((member, idx) => (
+                              <div key={member.userId} className={`p-4 flex items-center justify-between ${idx !== (myOffice?.members?.length || 0) - 1 ? 'border-b border-white/5' : ''}`}>
                                   <div className="flex items-center gap-3">
                                       <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden">
                                           {member.avatarUrl ? <img src={member.avatarUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white font-bold">{member.name.charAt(0)}</div>}
