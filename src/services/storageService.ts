@@ -586,15 +586,28 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
           const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
+          // For now, return office data without members to avoid complex joining in the list view
+          // The detail view will fetch members separately
           if (error) throw error;
           
           return (data || []).map((o: any) => ({
-              id: o.id, name: o.name, handle: o.handle, location: o.location, ownerId: o.owner_id, logoUrl: o.logo_url,
-              createdAt: o.created_at, areaOfActivity: o.area_of_activity, members: []
+              id: o.id,
+              name: o.name,
+              handle: o.handle,
+              location: o.location,
+              ownerId: o.owner_id,
+              logoUrl: o.logo_url,
+              createdAt: o.created_at,
+              areaOfActivity: o.area_of_activity,
+              members: [] // Members not fetched here to optimize
           }));
-      } catch { return []; }
+      } catch (e) {
+          console.error("Error fetching offices:", e);
+          return [];
+      }
+    } else {
+      return this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
     }
-    return this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
   }
 
   async getOfficeById(id: string): Promise<Office | undefined> {
@@ -603,6 +616,7 @@ class StorageService {
            const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', id).single();
            if (error || !data) return undefined;
            
+           // Fetch Members separately to avoid 'members column not found' error
            const { data: membersData } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).select('*').eq('office_id', id);
            
            const mappedMembers: OfficeMember[] = (membersData || []).map((m: any) => ({
@@ -635,18 +649,23 @@ class StorageService {
   async saveOffice(office: Office): Promise<void> {
     if (isSupabaseConfigured && supabase) {
         // Do NOT send 'members' to the offices table.
+        // Update office details
         const payload = {
-            id: office.id, 
-            name: office.name, 
-            handle: office.handle, 
-            location: office.location, 
+            id: office.id,
+            name: office.name,
+            handle: office.handle,
+            location: office.location,
             owner_id: office.ownerId,
-            logo_url: office.logoUrl, 
-            created_at: office.createdAt, 
-            area_of_activity: office.areaOfActivity, 
+            logo_url: office.logoUrl,
+            created_at: office.createdAt,
+            area_of_activity: office.areaOfActivity,
             social: office.social
         };
         await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
+        
+        // Note: Updating members list usually requires specific logic (add/remove), 
+        // passing the whole array might need a different approach or separate endpoint in a real app.
+        // For this demo, we assume members are managed via invite/join flows primarily.
     } else {
         const offices = await this.getOffices();
         const index = offices.findIndex(o => o.id === office.id);
@@ -664,6 +683,7 @@ class StorageService {
     let userName = ownerDetails?.name || 'Admin';
     let userEmail = ownerDetails?.email || 'admin@email.com';
     
+    // Fallback for user details if not provided
     if (!ownerDetails) {
         const userStr = localStorage.getItem('@JurisControl:user');
         const user = userStr ? JSON.parse(userStr) : null;
@@ -681,23 +701,24 @@ class StorageService {
         
         // Remove 'members' array from office payload to avoid "Column 'members' does not exist" error
         const newOffice = {
-            name: officeData.name || 'Novo Escritório', 
-            handle: handle, 
-            location: officeData.location || 'Brasil', 
+            name: officeData.name || 'Novo Escritório',
+            handle: handle,
+            location: officeData.location || 'Brasil',
             owner_id: userId,
             created_at: new Date().toISOString(),
-            social: {} // Ensure table has this column or remove it if not needed
+            social: {}
         };
         
+        // Insert Office
         const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
+        
         if (error) {
             if (error.code === '42P01') throw new Error("Tabela 'offices' não encontrada.");
             if (error.code === '23505') throw new Error("Identificador em uso.");
-            // Handle missing 'social' column gracefully if schema is old
-            if (error.message.includes('column "social"')) throw new Error("Erro de Schema: Coluna 'social' não existe. Atualize o banco.");
             throw new Error(error.message);
         }
 
+        // Insert Admin Member
         const adminMember = {
             office_id: data.id,
             user_id: userId,
@@ -711,20 +732,42 @@ class StorageService {
         await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert(adminMember);
 
         return {
-            id: data.id, name: data.name, handle: data.handle, location: data.location, ownerId: data.owner_id, 
-            createdAt: data.created_at, 
-            members: [{ userId: userId, name: userName, email: userEmail, avatarUrl: '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }], 
+            id: data.id,
+            name: data.name,
+            handle: data.handle,
+            location: data.location,
+            ownerId: data.owner_id,
+            createdAt: data.created_at,
+            members: [{ userId: userId, name: userName, email: userEmail, avatarUrl: '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }],
             social: data.social || {}
         } as Office;
+
     } else {
-        // LocalStorage fallback
         const offices = await this.getOffices();
-        if (offices.some(o => o.handle.toLowerCase() === handle.toLowerCase())) throw new Error("Este identificador já está em uso.");
+        if (offices.some(o => o.handle.toLowerCase() === handle.toLowerCase())) {
+          throw new Error("Este identificador já está em uso.");
+        }
+
         const newOffice: Office = {
-          id: `office-${Date.now()}`, name: officeData.name || 'Novo Escritório', handle: handle, location: officeData.location || 'Brasil', ownerId: userId || 'local',
-          members: [{ userId: userId || 'local', name: userName, email: userEmail, avatarUrl: '', role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } }],
-          createdAt: new Date().toISOString(), social: {}
+          id: `office-${Date.now()}`,
+          name: officeData.name || 'Novo Escritório',
+          handle: handle,
+          location: officeData.location || 'Brasil',
+          ownerId: userId || 'local',
+          members: [
+            {
+              userId: userId || 'local',
+              name: userName,
+              email: userEmail,
+              avatarUrl: '',
+              role: 'Admin',
+              permissions: { financial: true, cases: true, documents: true, settings: true }
+            }
+          ],
+          createdAt: new Date().toISOString(),
+          social: {}
         };
+
         offices.push(newOffice);
         this.setLocal(LOCAL_KEYS.OFFICES, offices);
         this.logActivity(`Criou novo escritório: ${newOffice.name}`);
