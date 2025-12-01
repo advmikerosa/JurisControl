@@ -1,4 +1,6 @@
-import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, SearchResult, OfficeMember } from '../types';
+
+import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, SearchResult } from '../types';
+import { notificationService } from './notificationService';
 
 const LOCAL_KEYS = {
   CLIENTS: '@JurisControl:clients',

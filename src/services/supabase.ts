@@ -1,8 +1,5 @@
-
-// This file is a placeholder for future backend integration.
-// Currently, the system runs in Mock/LocalStorage mode.
+// Integração com Supabase removida para versão Local-First limpa.
+// Para reativar, instale @supabase/supabase-js e configure o cliente aqui.
 
 export const isSupabaseConfigured = false;
 export const supabase = null;
-
-console.info("JurisControl: System running in Local/Mock mode.");
