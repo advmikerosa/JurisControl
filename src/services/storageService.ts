@@ -585,9 +585,11 @@ class StorageService {
   async getOffices(): Promise<Office[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
-          // For now, return office data without members to avoid complex joining in the list view
-          // The detail view will fetch members separately
+          // Select offices and their members using relational query
+          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select(`
+            *,
+            members:office_members(*)
+          `);
           if (error) throw error;
           
           return (data || []).map((o: any) => ({
@@ -599,7 +601,15 @@ class StorageService {
               logoUrl: o.logo_url,
               createdAt: o.created_at,
               areaOfActivity: o.area_of_activity,
-              members: [] // Members not fetched here to optimize
+              social: o.social,
+              members: (o.members || []).map((m: any) => ({
+                  userId: m.user_id,
+                  name: m.name,
+                  email: m.email,
+                  avatarUrl: m.avatar_url,
+                  role: m.role,
+                  permissions: m.permissions
+              }))
           }));
       } catch (e) {
           console.error("Error fetching offices:", e);
@@ -613,13 +623,16 @@ class StorageService {
   async getOfficeById(id: string): Promise<Office | undefined> {
     if (isSupabaseConfigured && supabase) {
        try {
-           const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', id).single();
+           // Fetch office with members join
+           const { data, error } = await supabase
+             .from(TABLE_NAMES.OFFICES)
+             .select(`*, members:office_members(*)`)
+             .eq('id', id)
+             .single();
+
            if (error || !data) return undefined;
            
-           // Fetch Members separately to avoid 'members column not found' error
-           const { data: membersData } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).select('*').eq('office_id', id);
-           
-           const mappedMembers: OfficeMember[] = (membersData || []).map((m: any) => ({
+           const mappedMembers: OfficeMember[] = (data.members || []).map((m: any) => ({
                userId: m.user_id,
                name: m.name,
                email: m.email,
@@ -649,7 +662,7 @@ class StorageService {
   async saveOffice(office: Office): Promise<void> {
     if (isSupabaseConfigured && supabase) {
         // Do NOT send 'members' to the offices table.
-        // Update office details
+        // Update only office details
         const payload = {
             id: office.id,
             name: office.name,
@@ -663,9 +676,8 @@ class StorageService {
         };
         await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
         
-        // Note: Updating members list usually requires specific logic (add/remove), 
-        // passing the whole array might need a different approach or separate endpoint in a real app.
-        // For this demo, we assume members are managed via invite/join flows primarily.
+        // Note: Full member synchronization (add/remove/update roles) should ideally be handled 
+        // by separate logic or diffing, but for this context we focus on preventing the schema error.
     } else {
         const offices = await this.getOffices();
         const index = offices.findIndex(o => o.id === office.id);
@@ -683,7 +695,6 @@ class StorageService {
     let userName = ownerDetails?.name || 'Admin';
     let userEmail = ownerDetails?.email || 'admin@email.com';
     
-    // Fallback for user details if not provided
     if (!ownerDetails) {
         const userStr = localStorage.getItem('@JurisControl:user');
         const user = userStr ? JSON.parse(userStr) : null;
@@ -699,7 +710,7 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
         if (!userId) throw new Error("Usuário não autenticado");
         
-        // Remove 'members' array from office payload to avoid "Column 'members' does not exist" error
+        // 1. Insert Office (without members column)
         const newOffice = {
             name: officeData.name || 'Novo Escritório',
             handle: handle,
@@ -709,16 +720,14 @@ class StorageService {
             social: {}
         };
         
-        // Insert Office
         const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice).select().single();
         
         if (error) {
-            if (error.code === '42P01') throw new Error("Tabela 'offices' não encontrada.");
             if (error.code === '23505') throw new Error("Identificador em uso.");
             throw new Error(error.message);
         }
 
-        // Insert Admin Member
+        // 2. Insert Admin Member
         const adminMember = {
             office_id: data.id,
             user_id: userId,
@@ -745,7 +754,7 @@ class StorageService {
     } else {
         const offices = await this.getOffices();
         if (offices.some(o => o.handle.toLowerCase() === handle.toLowerCase())) {
-          throw new Error("Este identificador já está em uso.");
+          throw new Error("Este identificador de escritório (@handle) já está em uso.");
         }
 
         const newOffice: Office = {
@@ -777,6 +786,7 @@ class StorageService {
 
   async joinOffice(officeHandle: string): Promise<Office> {
     if (isSupabaseConfigured && supabase) {
+        // Find office by handle
         const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', officeHandle).single();
         
         if (error || !office) {
@@ -796,6 +806,7 @@ class StorageService {
              return await this.getOfficeById(office.id) as Office;
         }
 
+        // Add member
         const newMember = {
              office_id: office.id,
              user_id: userId,
