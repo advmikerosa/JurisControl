@@ -346,6 +346,7 @@ export const Kanban: React.FC = () => {
   const handleQuickAdd = async (title: string, status: Task['status']) => {
     const newTask: Task = {
       id: `task-${Date.now()}`,
+      officeId: '', // Will be set by storageService
       title,
       dueDate: new Date().toLocaleDateString('pt-BR'),
       priority: Priority.MEDIUM,
@@ -373,11 +374,10 @@ export const Kanban: React.FC = () => {
         return;
     }
     
-    // Explicit types to fix TS7034/TS7005
-    let finalCaseId: string | undefined = undefined;
-    let finalCaseTitle: string | undefined = undefined;
-    let finalClientId: string | undefined = undefined;
-    let finalClientName: string | undefined = undefined;
+    let finalCaseId = undefined;
+    let finalCaseTitle = undefined;
+    let finalClientId = undefined;
+    let finalClientName = undefined;
 
     // Logic to handle Creation of New Entities
     if (formData.linkType === 'case') {
@@ -391,6 +391,7 @@ export const Kanban: React.FC = () => {
 
          const newCase: LegalCase = {
             id: `case-${Date.now()}`,
+            officeId: '', // Will be set by storageService
             title: formData.newEntityName,
             client: client,
             cnj: 'Em andamento',
@@ -414,6 +415,7 @@ export const Kanban: React.FC = () => {
           }
           const newClient: Client = {
              id: `cli-${Date.now()}`,
+             officeId: '', // Will be set by storageService
              name: formData.newEntityName,
              type: 'PF',
              status: 'Lead',
@@ -433,6 +435,7 @@ export const Kanban: React.FC = () => {
 
     const taskToSave: Task = {
       id: editingTask ? editingTask.id : `task-${Date.now()}`,
+      officeId: editingTask ? editingTask.officeId : '', // Will be handled
       title: formData.title,
       dueDate: formData.dueDate ? new Date(formData.dueDate).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
       priority: formData.priority,

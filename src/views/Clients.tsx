@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { storageService } from '../services/storageService';
@@ -99,6 +100,7 @@ export const Clients: React.FC = () => {
 
     const newClient: Client = {
       id: `cli-${Date.now()}`,
+      officeId: '', // Will be set by storageService
       name: newClientType === 'PF' ? formData.name : formData.corporateName,
       type: newClientType,
       status: 'Ativo',

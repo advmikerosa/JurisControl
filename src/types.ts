@@ -1,5 +1,4 @@
 
-
 export enum CaseStatus {
   ACTIVE = 'Ativo',
   PENDING = 'Pendente',
@@ -38,23 +37,39 @@ export type CasePhase =
 export type ClientType = 'PF' | 'PJ';
 export type ClientStatus = 'Ativo' | 'Inativo' | 'Sob Análise' | 'Em Litígio' | 'Lead';
 
+// --- Security & Permissions Types ---
+export type PermissionResource = 'financial' | 'cases' | 'clients' | 'documents' | 'settings' | 'team';
+export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'export';
+
+export type MemberRole = 'Admin' | 'Advogado' | 'Estagiário' | 'Financeiro';
+
+export interface OfficePermissions {
+  financial: boolean;
+  cases: boolean;
+  documents: boolean;
+  settings: boolean;
+}
+
+// --- Entities with Tenancy (officeId) ---
+
 export interface ClientDocument {
   id: string;
   title: string;
   type: 'PDF' | 'DOC' | 'IMG' | 'XLS';
   uploadDate: string;
   size: string;
-  isEncrypted?: boolean; // Security Audit: Encryption flag
+  isEncrypted?: boolean; 
 }
 
 export interface SystemDocument {
   id: string;
+  officeId: string; // Tenancy enforcement
   name: string;
   size: string;
   type: string;
   date: string;
   category?: string;
-  caseId?: string; // Vínculo com processo
+  caseId?: string;
   userId?: string;
 }
 
@@ -74,12 +89,13 @@ export interface ClientAlert {
   message: string;
   date: string;
   type: AlertType;
-  isActionable: boolean; // Se true, mostra botão de check para concluir
+  isActionable: boolean;
 }
 
 export interface Client {
   id: string;
-  name: string; // Nome ou Nome Fantasia
+  officeId: string; // Tenancy enforcement
+  name: string;
   email: string;
   phone: string;
   type: ClientType;
@@ -89,28 +105,25 @@ export interface Client {
   city: string;
   state: string;
   notes?: string;
-  tags?: string[]; // New field for categorization
+  tags?: string[];
   createdAt: string;
   
-  // Dados PF
   cpf?: string;
   rg?: string;
   birthDate?: string;
   profession?: string;
   civilStatus?: string;
 
-  // Dados PJ
-  corporateName?: string; // Razão Social
+  corporateName?: string;
   cnpj?: string;
-  stateRegistration?: string; // Inscrição Estadual
-  legalRepresentative?: string; // Representante Legal
+  stateRegistration?: string;
+  legalRepresentative?: string;
   areaOfActivity?: string;
 
-  // Relacionamentos
   documents: ClientDocument[];
   history: ClientInteraction[];
   alerts: ClientAlert[];
-  userId?: string;
+  userId?: string; // Creator
 }
 
 export interface CaseMovement {
@@ -133,42 +146,44 @@ export interface ChangeLogEntry {
 
 export interface LegalCase {
   id: string;
+  officeId: string; // Tenancy enforcement
   cnj: string;
   title: string;
-  client: Client; // Referência ao cliente completo
+  client: Client;
   status: CaseStatus;
-  category?: LegalCategory; // Novo campo
-  phase?: CasePhase; // Novo campo
+  category?: LegalCategory;
+  phase?: CasePhase;
   
   nextHearing?: string;
-  distributionDate?: string; // Novo campo
+  distributionDate?: string;
   
   value: number;
   responsibleLawyer: string;
   
-  court?: string; // Vara/Tribunal
-  judge?: string; // Novo campo
-  opposingParty?: string; // Novo campo
+  court?: string;
+  judge?: string;
+  opposingParty?: string;
   
-  description?: string; // Observações iniciais
-  lastUpdate?: string; // Para automação de arquivamento
-  movements?: CaseMovement[]; // Histórico do processo
-  changeLog?: ChangeLogEntry[]; // Histórico de alterações de campos
+  description?: string;
+  lastUpdate?: string;
+  movements?: CaseMovement[];
+  changeLog?: ChangeLogEntry[];
   userId?: string;
 }
 
 export interface Task {
   id: string;
+  officeId: string; // Tenancy enforcement
   title: string;
   dueDate: string;
   priority: Priority;
   status: 'A Fazer' | 'Em Andamento' | 'Concluído';
   assignedTo: string;
   description?: string;
-  caseId?: string; // Vínculo com processo
-  caseTitle?: string; // Cache do título para display
-  clientId?: string; // Vínculo direto com cliente
-  clientName?: string; // Cache do nome do cliente
+  caseId?: string;
+  caseTitle?: string;
+  clientId?: string;
+  clientName?: string;
   userId?: string;
 }
 
@@ -176,16 +191,17 @@ export type FinancialStatus = 'Pago' | 'Pendente' | 'Atrasado';
 
 export interface FinancialRecord {
   id: string;
-  title: string; // Antigo description
+  officeId: string; // Tenancy enforcement
+  title: string;
   amount: number;
   type: 'Receita' | 'Despesa';
   category: string;
   status: FinancialStatus;
-  dueDate: string; // Data de Vencimento
-  paymentDate?: string; // Data do Pagamento efetivo
-  clientId?: string; // Opcional: Vínculo com cliente
-  clientName?: string; // Cache do nome para facilitar listagem
-  caseId?: string; // Vínculo com processo
+  dueDate: string;
+  paymentDate?: string;
+  clientId?: string;
+  clientName?: string;
+  caseId?: string;
   installment?: {
     current: number;
     total: number;
@@ -193,19 +209,9 @@ export interface FinancialRecord {
   userId?: string;
 }
 
-// Office & Team Types
-export type MemberRole = 'Admin' | 'Advogado' | 'Estagiário' | 'Financeiro';
-
-export interface OfficePermissions {
-  financial: boolean;
-  cases: boolean;
-  documents: boolean;
-  settings: boolean;
-}
-
 export interface OfficeMember {
   userId: string;
-  name: string; // Cache do nome para facilitar display
+  name: string;
   role: MemberRole;
   permissions: OfficePermissions;
   email?: string;
@@ -215,20 +221,19 @@ export interface OfficeMember {
 export interface Office {
   id: string;
   name: string;
-  handle: string; // ex: @silvaadvocacia
-  ownerId: string; // ID do usuário dono/gerente
+  handle: string;
+  ownerId: string;
   location: string;
-  members: OfficeMember[]; // Agora é um array de objetos complexos
+  members: OfficeMember[];
   logoUrl?: string;
   createdAt?: string;
   
-  // Novos campos de perfil do escritório
   cnpj?: string;
   phone?: string;
   email?: string;
   website?: string;
   description?: string;
-  areaOfActivity?: string; // ex: Full Service, Trabalhista, Criminal
+  areaOfActivity?: string;
   social?: {
     linkedin?: string;
     instagram?: string;
@@ -236,28 +241,24 @@ export interface Office {
   };
 }
 
-// Auth Types
 export type AuthProvider = 'email' | 'google' | 'apple' | 'microsoft';
 
 export interface User {
   id: string;
   name: string;
-  username?: string; // ex: @drjoao
+  username?: string;
   email: string;
   avatar: string;
   provider: AuthProvider;
-  offices: string[]; // IDs dos escritórios
+  offices: string[];
   currentOfficeId?: string;
   twoFactorEnabled: boolean;
-  emailVerified: boolean; // Novo campo de verificação
-  
-  // Novos campos de perfil
+  emailVerified: boolean;
   oab?: string;
   phone?: string;
-  role?: string; // ex: "Sócio Sênior" (apenas visual, role real está em OfficeMember)
+  role?: string; 
 }
 
-// Email & Notification Types
 export interface EmailSettings {
   enabled: boolean;
   frequency: 'immediate' | 'hourly' | 'daily';
@@ -266,7 +267,7 @@ export interface EmailSettings {
     processes: boolean;
     events: boolean;
     financial: boolean;
-    marketing: boolean; // Opt-out LGPD
+    marketing: boolean;
   };
   deadlineAlerts: {
     sevenDays: boolean;
@@ -283,16 +284,15 @@ export interface EmailLog {
   templateType: string;
   status: 'Sent' | 'Failed' | 'Queued';
   sentAt: string;
-  openedAt?: string; // Mocking open tracking
+  openedAt?: string;
 }
 
-// Settings Types
 export interface AppSettings {
   general: {
     language: 'pt-BR' | 'en-US' | 'es-ES';
     dateFormat: 'DD/MM/YYYY' | 'MM/DD/YYYY';
     compactMode: boolean;
-    dataJudApiKey?: string; // Novo campo para integração CNJ
+    dataJudApiKey?: string;
   };
   notifications: {
     email: boolean;
@@ -300,14 +300,13 @@ export interface AppSettings {
     sound: boolean;
     dailyDigest: boolean;
   };
-  emailPreferences?: EmailSettings; // Detailed email settings
+  emailPreferences?: EmailSettings;
   automation: {
     autoArchiveWonCases: boolean;
     autoSaveDrafts: boolean;
   };
 }
 
-// LGPD & Security Audit Types
 export interface ActivityLog {
   id: string;
   action: string;
@@ -325,7 +324,6 @@ export interface DataRequest {
   completionDate?: string;
 }
 
-// CRM Types
 export type LeadStatus = 'Novo' | 'Qualificação' | 'Proposta' | 'Negociação' | 'Fechado' | 'Perdido';
 export type LeadSource = 'Indicação' | 'Site' | 'Instagram' | 'WhatsApp' | 'Evento' | 'Outro';
 
@@ -350,27 +348,26 @@ export interface SalesTask {
 export interface Lead {
   id: string;
   name: string;
-  company?: string; // Se for PJ
+  company?: string;
   type: 'PF' | 'PJ';
   email: string;
   phone: string;
   city: string;
   state: string;
   source: LeadSource;
-  interestArea: string; // ex: Cível, Trabalhista
+  interestArea: string;
   priority: Priority;
   status: LeadStatus;
-  value?: number; // Valor estimado da oportunidade
+  value?: number;
   lastContact: string;
   nextAction?: string;
   createdAt: string;
   
-  history: ClientInteraction[]; // Reusing interaction type
+  history: ClientInteraction[];
   proposals: Proposal[];
   tasks: SalesTask[];
 }
 
-// Search Result Type
 export interface SearchResult {
   id: string;
   type: 'client' | 'case' | 'task';
@@ -379,7 +376,6 @@ export interface SearchResult {
   url: string;
 }
 
-// Dashboard Aggregated Data
 export interface DashboardData {
   counts: {
     activeCases: number;

@@ -60,6 +60,7 @@ export const Documents: React.FC = () => {
         try {
             const newDoc: SystemDocument = {
                 id: Date.now().toString(),
+                officeId: '', // Will be set by storageService
                 name: file.name,
                 size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
                 type: file.name.split('.').pop()?.toUpperCase() || 'FILE',

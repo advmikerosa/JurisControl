@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { storageService } from '../services/storageService';
@@ -166,6 +167,7 @@ export const Financial: React.FC = () => {
       
       newTransactions.push({
         id: `trans-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`,
+        officeId: '', // Will be set by storageService
         title: formData.title + titleSuffix,
         amount: installmentValue,
         type: formData.type,

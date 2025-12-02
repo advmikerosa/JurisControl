@@ -1,5 +1,7 @@
 import { Client, FinancialRecord, LegalCase, Office, Task, Lead, CaseStatus, Priority } from '../types';
 
+const DEFAULT_OFFICE_ID = 'office-1';
+
 export const MOCK_OFFICES: Office[] = [
   {
     id: 'office-1',
@@ -16,6 +18,7 @@ export const MOCK_OFFICES: Office[] = [
 export const MOCK_CLIENTS: Client[] = [
   {
     id: 'cli-1',
+    officeId: DEFAULT_OFFICE_ID,
     name: 'Tech Solutions Ltda',
     type: 'PJ',
     status: 'Ativo',
@@ -34,6 +37,7 @@ export const MOCK_CLIENTS: Client[] = [
   },
   {
     id: 'cli-2',
+    officeId: DEFAULT_OFFICE_ID,
     name: 'João da Silva',
     type: 'PF',
     status: 'Ativo',
@@ -52,6 +56,7 @@ export const MOCK_CLIENTS: Client[] = [
   },
   {
     id: 'cli-3',
+    officeId: DEFAULT_OFFICE_ID,
     name: 'Construtora Horizonte',
     type: 'PJ',
     status: 'Em Litígio',
@@ -73,6 +78,7 @@ export const MOCK_CLIENTS: Client[] = [
 export const MOCK_CASES: LegalCase[] = [
   {
     id: 'case-1',
+    officeId: DEFAULT_OFFICE_ID,
     cnj: '0001234-56.2024.5.02.0001',
     title: 'Ação Trabalhista - Reclamação',
     client: MOCK_CLIENTS[1],
@@ -93,6 +99,7 @@ export const MOCK_CASES: LegalCase[] = [
   },
   {
     id: 'case-2',
+    officeId: DEFAULT_OFFICE_ID,
     cnj: '1005678-90.2023.8.26.0100',
     title: 'Execução de Título Extrajudicial',
     client: MOCK_CLIENTS[0],
@@ -108,6 +115,7 @@ export const MOCK_CASES: LegalCase[] = [
   },
   {
     id: 'case-3',
+    officeId: DEFAULT_OFFICE_ID,
     cnj: '5003344-11.2024.4.03.6100',
     title: 'Mandado de Segurança - Licitação',
     client: MOCK_CLIENTS[2],
@@ -127,6 +135,7 @@ export const MOCK_CASES: LegalCase[] = [
 export const MOCK_TASKS: Task[] = [
   {
     id: 'task-1',
+    officeId: DEFAULT_OFFICE_ID,
     title: 'Protocolar Contestação',
     dueDate: '20/11/2024',
     priority: Priority.HIGH,
@@ -140,6 +149,7 @@ export const MOCK_TASKS: Task[] = [
   },
   {
     id: 'task-2',
+    officeId: DEFAULT_OFFICE_ID,
     title: 'Reunião com Cliente',
     dueDate: '22/11/2024',
     priority: Priority.MEDIUM,
@@ -151,6 +161,7 @@ export const MOCK_TASKS: Task[] = [
   },
   {
     id: 'task-3',
+    officeId: DEFAULT_OFFICE_ID,
     title: 'Verificar Publicações',
     dueDate: '18/11/2024',
     priority: Priority.LOW,
@@ -163,6 +174,7 @@ export const MOCK_TASKS: Task[] = [
 export const MOCK_FINANCIALS: FinancialRecord[] = [
   {
     id: 'fin-1',
+    officeId: DEFAULT_OFFICE_ID,
     title: 'Honorários Iniciais - Tech Solutions',
     amount: 5000.00,
     type: 'Receita',
@@ -175,6 +187,7 @@ export const MOCK_FINANCIALS: FinancialRecord[] = [
   },
   {
     id: 'fin-2',
+    officeId: DEFAULT_OFFICE_ID,
     title: 'Custas Processuais - Caso João',
     amount: 350.00,
     type: 'Despesa',
@@ -186,6 +199,7 @@ export const MOCK_FINANCIALS: FinancialRecord[] = [
   },
   {
     id: 'fin-3',
+    officeId: DEFAULT_OFFICE_ID,
     title: 'Mensalidade Software',
     amount: 199.90,
     type: 'Despesa',

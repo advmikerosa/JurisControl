@@ -147,10 +147,10 @@ export const Cases: React.FC = () => {
           categoryFilter,
           (dateRange.start && dateRange.end) ? dateRange : null
       );
-      let fetchedData: LegalCase[] = response.data;
+      let fetchedData = response.data;
 
       if (showOnlyMyCases && user?.name) {
-        fetchedData = fetchedData.filter((c: LegalCase) => c.responsibleLawyer.toLowerCase().includes(user.name.toLowerCase()));
+        fetchedData = fetchedData.filter(c => c.responsibleLawyer.toLowerCase().includes(user.name.toLowerCase()));
       }
 
       fetchedData.sort((a, b) => {
@@ -289,6 +289,7 @@ export const Cases: React.FC = () => {
      try {
         const newClient: Client = {
           id: `cli-${Date.now()}`,
+          officeId: '', // Will be set by storageService
           name: quickClientData.name, type: quickClientData.type as any, email: quickClientData.email, phone: quickClientData.phone, status: 'Ativo',
           avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(quickClientData.name)}&background=random`,
           address: '', city: '', state: '', documents: [], history: [], alerts: [], createdAt: new Date().toLocaleDateString('pt-BR'),
@@ -401,7 +402,7 @@ export const Cases: React.FC = () => {
                                     className="w-full bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-white/10 rounded-lg py-2 pl-3 pr-8 text-sm text-slate-900 dark:text-slate-200 appearance-none focus:border-indigo-500 outline-none"
                                  >
                                      <option value="Todos">Todas as Categorias</option>
-                                     {LEGAL_CATEGORIES.map((cat: string) => <option key={cat} value={cat}>{cat}</option>)}
+                                     {LEGAL_CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
                                  </select>
                                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={14} />
                              </div>

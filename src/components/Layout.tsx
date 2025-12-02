@@ -32,6 +32,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
+import { usePermission } from '../hooks/usePermission';
 import { Logo } from './Logo';
 import { SearchResult, Office } from '../types';
 import { Breadcrumbs } from './Breadcrumbs';
@@ -49,10 +50,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { logout, user } = useAuth();
   const { unreadCount, notifications, markAsRead, markAllAsRead, clearAll } = useNotifications();
   const { theme, toggleTheme } = useTheme();
+  const { can } = usePermission();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  // Office State Management - Initialize as null to prevent crash
+  // Office State Management
   const [currentOffice, setCurrentOffice] = useState<Office | null>(null);
   const [userOffices, setUserOffices] = useState<Office[]>([]);
   const [isOfficeMenuOpen, setIsOfficeMenuOpen] = useState(false);
@@ -77,8 +79,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       try {
         const allOffices = await storageService.getOffices();
         
-        // Filter offices for the current user
-        // Logic: Office ID is in user.offices OR user is a member in the office members list
         const myOffices: Office[] = user 
             ? allOffices.filter((o: Office) => 
                 (user.offices && user.offices.includes(o.id)) || 
@@ -89,13 +89,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         setUserOffices(myOffices);
 
         if (myOffices.length > 0) {
-            // Prefer the office set in user profile, otherwise first one
             const selected = user?.currentOfficeId 
                 ? myOffices.find((o: Office) => o.id === user.currentOfficeId) 
                 : myOffices[0];
             setCurrentOffice(selected || myOffices[0]);
         } else {
-            // Fallback dummy office to prevent UI breakage if no office is found
             setCurrentOffice({
                 id: 'default',
                 name: 'Meu Escritório',
@@ -149,13 +147,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, [globalSearch]);
 
   const navItems = [
-    { path: '/', icon: LayoutDashboard, label: 'Visão Geral' },
-    { path: '/calendar', icon: CalendarIcon, label: 'Calendário' },
-    { path: '/clients', icon: UserCheck, label: 'Clientes' },
-    { path: '/cases', icon: Briefcase, label: 'Processos' },
-    { path: '/crm', icon: Users, label: 'Tarefas / CRM' },
-    { path: '/financial', icon: DollarSign, label: 'Financeiro' },
-    { path: '/documents', icon: FileText, label: 'Documentos' },
+    { path: '/', icon: LayoutDashboard, label: 'Visão Geral', resource: 'cases', action: 'view' },
+    { path: '/calendar', icon: CalendarIcon, label: 'Calendário', resource: 'cases', action: 'view' },
+    { path: '/clients', icon: UserCheck, label: 'Clientes', resource: 'clients', action: 'view' },
+    { path: '/cases', icon: Briefcase, label: 'Processos', resource: 'cases', action: 'view' },
+    { path: '/crm', icon: Users, label: 'Tarefas / CRM', resource: 'cases', action: 'view' },
+    { path: '/financial', icon: DollarSign, label: 'Financeiro', resource: 'financial', action: 'view' },
+    { path: '/documents', icon: FileText, label: 'Documentos', resource: 'documents', action: 'view' },
   ];
 
   const handleSearchResultClick = (url: string) => {
@@ -174,10 +172,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     return `${Math.floor(hours / 24)}d atrás`;
   };
 
+  const visibleNavItems = navItems.filter(item => can(item.resource as any, item.action as any));
+
   return (
     <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative selection:bg-indigo-500/30 selection:text-indigo-900 dark:selection:text-indigo-100 bg-slate-50 dark:bg-[#0f172a] transition-colors duration-300">
       
-      {/* Ambient Background - Dark Mode only or subtle light mode */}
+      {/* Ambient Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden opacity-30 dark:opacity-100 transition-opacity">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-300/30 dark:bg-indigo-900/20 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-300/30 dark:bg-violet-900/20 rounded-full blur-[120px]" />
@@ -191,7 +191,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
 
         <nav className="flex-1 px-4 space-y-2 py-4">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
@@ -224,13 +224,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </nav>
 
         <div className="p-4 border-t border-slate-200 dark:border-white/10 space-y-1">
-          <NavLink 
-            to="/settings"
-            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 w-full rounded-xl transition-colors text-sm font-medium ${isActive ? 'text-slate-900 dark:text-white bg-slate-100 dark:bg-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'}`}
-          >
-            <Settings size={20} />
-            <span>Configurações</span>
-          </NavLink>
+          {can('settings', 'view') && (
+            <NavLink 
+              to="/settings"
+              className={({ isActive }) => `flex items-center gap-3 px-4 py-3 w-full rounded-xl transition-colors text-sm font-medium ${isActive ? 'text-slate-900 dark:text-white bg-slate-100 dark:bg-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'}`}
+            >
+              <Settings size={20} />
+              <span>Configurações</span>
+            </NavLink>
+          )}
           <button 
             onClick={() => { logout(); navigate('/login'); }}
             className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-300 transition-colors text-sm font-medium"
@@ -268,7 +270,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-100 dark:bg-white/5 rounded-full text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"><X size={20} /></button>
                  </div>
                  <nav className="space-y-2 flex-1">
-                   {navItems.map((item) => (
+                   {visibleNavItems.map((item) => (
                      <NavLink
                        key={item.path}
                        to={item.path}
@@ -282,13 +284,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                    ))}
                  </nav>
                  <div className="border-t border-slate-200 dark:border-white/10 pt-4 space-y-2">
-                    <NavLink 
-                      to="/settings"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-white/5"
-                    >
-                      <Settings size={20} /> Configurações
-                    </NavLink>
+                    {can('settings', 'view') && (
+                      <NavLink 
+                        to="/settings"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-white/5"
+                      >
+                        <Settings size={20} /> Configurações
+                      </NavLink>
+                    )}
                     <button 
                       onClick={() => { setIsMobileMenuOpen(false); logout(); }}
                       className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-rose-600 dark:text-rose-400 font-medium hover:bg-rose-50 dark:hover:bg-rose-500/10"
@@ -506,7 +510,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     </div>
                     <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
                       {notifications.length > 0 ? (
-                        notifications.map((n: SystemNotification) => (
+                        notifications.map(n => (
                           <div 
                             key={n.id} 
                             onClick={() => markAsRead(n.id)}
