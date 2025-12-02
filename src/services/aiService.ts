@@ -4,11 +4,18 @@ import { ExtractedMovementData } from '../types';
 
 class AiService {
   private ai: GoogleGenAI;
-  private model: string = "gemini-2.5-flash"; // Using Flash for speed/cost effectiveness on vision tasks
+  private model: string = "gemini-2.5-flash"; 
 
   constructor() {
-    // Inicialização utilizando a variável de ambiente process.env.API_KEY conforme diretrizes estritas.
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // SECURITY WARNING: In a production environment, API keys should not be exposed on the client side.
+    // Recommended: Move this logic to a Supabase Edge Function or a backend proxy.
+    const apiKey = process.env.API_KEY;
+    
+    if (!apiKey) {
+      console.warn("JurisAI: API Key não encontrada. As funcionalidades de IA estarão indisponíveis.");
+    }
+
+    this.ai = new GoogleGenAI({ apiKey: apiKey || '' });
   }
 
   /**

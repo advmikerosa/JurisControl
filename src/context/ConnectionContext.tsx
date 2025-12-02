@@ -1,5 +1,7 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { isSupabaseConfigured, supabase } from '../services/supabase';
+import { syncQueueService } from '../services/syncQueue';
 
 interface ConnectionContextData {
   isOnline: boolean;
@@ -25,6 +27,7 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
 
       try {
+        // Simple check to Supabase Auth to verify connectivity
         const { error } = await supabase.auth.getSession();
         
         if (error && error.message && (error.message.includes('connection') || error.message.includes('fetch'))) {
@@ -42,13 +45,21 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     checkConnection();
     const interval = setInterval(checkConnection, 30000);
 
-    window.addEventListener('online', () => setIsOnline(true));
-    window.addEventListener('offline', () => setIsOnline(false));
+    const handleOnline = () => {
+        setIsOnline(true);
+        // Trigger sync when coming back online
+        syncQueueService.processPending();
+    };
+
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('online', () => {});
-      window.removeEventListener('offline', () => {});
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 

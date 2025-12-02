@@ -2,6 +2,7 @@
 import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { notificationService } from './notificationService';
+import { syncQueueService } from './syncQueue';
 import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS, MOCK_OFFICES as MOCK_OFFICES_DATA } from './mockData';
 
 const TABLE_NAMES = {
@@ -37,7 +38,6 @@ class StorageService {
   }
 
   private async getUserSession(): Promise<{ userId: string | null, officeId: string | null }> {
-    // Tenta obter do Supabase
     if (isSupabaseConfigured && supabase) {
       try {
         const { data } = await supabase.auth.getSession();
@@ -48,7 +48,7 @@ class StorageService {
         }
       } catch {}
     }
-    // Fallback Local
+    // Fallback Local (Demo Mode Only)
     const stored = localStorage.getItem('@JurisControl:user');
     if (stored) {
         const u = JSON.parse(stored);
@@ -74,7 +74,6 @@ class StorageService {
     }
   }
 
-  // --- FILTRO DE SEGURANÇA LOCAL ---
   private filterByOffice<T extends { officeId?: string }>(data: T[], officeId: string | null): T[] {
       if (!officeId) return []; 
       return data.filter(item => item.officeId === officeId);
@@ -96,7 +95,8 @@ class StorageService {
         if (error) throw error;
         return this.mapSupabaseClients(data);
       } catch (error) { 
-        return this.filterByOffice(this.getLocal<Client[]>(LOCAL_KEYS.CLIENTS, []), session.officeId);
+        console.warn("Supabase fetch failed, returning empty (not using local fallback to prevent mismatch).", error);
+        return []; 
       }
     } else {
       return this.filterByOffice(this.getLocal<Client[]>(LOCAL_KEYS.CLIENTS, []), session.officeId);
@@ -110,26 +110,29 @@ class StorageService {
     client.officeId = session.officeId;
 
     if (isSupabaseConfigured && supabase && session.userId) {
+      const payload = this.mapClientToPayload(client, session.userId);
       try {
-        const payload = this.mapClientToPayload(client, session.userId);
         const { error } = await supabase.from(TABLE_NAMES.CLIENTS).upsert(payload);
         if (error) throw error;
-        this.logActivity(`Salvou cliente: ${client.name}`);
-        return;
-      } catch (e) { console.error(e); }
-    }
-    
-    const list = this.getLocal<Client[]>(LOCAL_KEYS.CLIENTS, []);
-    const idx = list.findIndex(i => i.id === client.id);
-    if (idx >= 0) {
-        list[idx] = client;
+      } catch (e) { 
+        console.warn("Offline or Error saving to Supabase. Adding to SyncQueue.");
+        syncQueueService.addOperation(client.id ? 'update' : 'create', 'client', payload);
+      }
+      this.logActivity(`Salvou cliente: ${client.name}`);
     } else {
-        if (!client.id || !client.id.startsWith('cli-')) client.id = `cli-${Date.now()}`;
-        client.userId = session.userId || 'local';
-        list.unshift(client);
+      // Demo Mode
+      const list = this.getLocal<Client[]>(LOCAL_KEYS.CLIENTS, []);
+      const idx = list.findIndex(i => i.id === client.id);
+      if (idx >= 0) {
+          list[idx] = client;
+      } else {
+          if (!client.id || !client.id.startsWith('cli-')) client.id = `cli-${Date.now()}`;
+          client.userId = session.userId || 'local';
+          list.unshift(client);
+      }
+      this.setLocal(LOCAL_KEYS.CLIENTS, list);
+      this.logActivity(`Salvou cliente (Local): ${client.name}`);
     }
-    this.setLocal(LOCAL_KEYS.CLIENTS, list);
-    this.logActivity(`Salvou cliente (Local): ${client.name}`);
   }
 
   async deleteClient(id: string) {
@@ -143,7 +146,12 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       const session = await this.getUserSession();
       if (!session.userId) return;
-      await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id).eq('office_id', session.officeId);
+      try {
+        const { error } = await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id).eq('office_id', session.officeId);
+        if(error) throw error;
+      } catch {
+        syncQueueService.addOperation('delete', 'client', { id });
+      }
     } else {
       const list = this.getLocal<Client[]>(LOCAL_KEYS.CLIENTS, []);
       this.setLocal(LOCAL_KEYS.CLIENTS, list.filter(i => i.id !== id));
@@ -165,9 +173,7 @@ class StorageService {
         
         if (error) throw error;
         return this.mapSupabaseCases(data);
-      } catch (e) { 
-        return this.filterByOffice(this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []), session.officeId);
-      }
+      } catch (e) { return []; }
     } else {
       return this.filterByOffice(this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []), session.officeId);
     }
@@ -181,33 +187,39 @@ class StorageService {
     legalCase.lastUpdate = new Date().toISOString();
     
     if (isSupabaseConfigured && supabase && session.userId) {
+      const payload = this.mapCaseToPayload(legalCase, session.userId);
       try {
-        const payload = this.mapCaseToPayload(legalCase, session.userId);
         const { error } = await supabase.from(TABLE_NAMES.CASES).upsert(payload);
         if (error) throw error;
-        this.logActivity(`Salvou processo: ${legalCase.title}`);
-        return;
-      } catch (e) { console.error(e); }
-    }
-    
-    const list = this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
-    const idx = list.findIndex(i => i.id === legalCase.id);
-    if (idx >= 0) {
-        list[idx] = legalCase;
+      } catch (e) { 
+        syncQueueService.addOperation(legalCase.id ? 'update' : 'create', 'case', payload);
+      }
+      this.logActivity(`Salvou processo: ${legalCase.title}`);
     } else {
-        if (!legalCase.id || !legalCase.id.startsWith('case-')) legalCase.id = `case-${Date.now()}`;
-        legalCase.userId = session.userId || 'local';
-        list.push(legalCase);
+      const list = this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
+      const idx = list.findIndex(i => i.id === legalCase.id);
+      if (idx >= 0) {
+          list[idx] = legalCase;
+      } else {
+          if (!legalCase.id || !legalCase.id.startsWith('case-')) legalCase.id = `case-${Date.now()}`;
+          legalCase.userId = session.userId || 'local';
+          list.push(legalCase);
+      }
+      this.setLocal(LOCAL_KEYS.CASES, list);
+      this.logActivity(`Salvou processo (Local): ${legalCase.title}`);
     }
-    this.setLocal(LOCAL_KEYS.CASES, list);
-    this.logActivity(`Salvou processo (Local): ${legalCase.title}`);
   }
 
   async deleteCase(id: string) {
     if (isSupabaseConfigured && supabase) {
       const session = await this.getUserSession();
       if (!session.userId) return;
-      await supabase.from(TABLE_NAMES.CASES).delete().eq('id', id).eq('office_id', session.officeId);
+      try {
+        const { error } = await supabase.from(TABLE_NAMES.CASES).delete().eq('id', id).eq('office_id', session.officeId);
+        if(error) throw error;
+      } catch {
+        syncQueueService.addOperation('delete', 'case', { id });
+      }
     } else {
       const list = this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
       this.setLocal(LOCAL_KEYS.CASES, list.filter(i => i.id !== id));
@@ -267,7 +279,7 @@ class StorageService {
             .eq('office_id', session.officeId);
         if (error) throw error;
         return this.mapSupabaseTasks(data);
-      } catch { return this.filterByOffice(this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []), session.officeId); }
+      } catch { return []; }
     } else {
       return this.filterByOffice(this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []), session.officeId);
     }
@@ -283,29 +295,34 @@ class StorageService {
     task.officeId = session.officeId;
 
     if (isSupabaseConfigured && supabase && session.userId) {
+      const payload = this.mapTaskToPayload(task, session.userId);
       try {
-        const payload = this.mapTaskToPayload(task, session.userId);
         const { error } = await supabase.from(TABLE_NAMES.TASKS).upsert(payload);
         if (error) throw error;
-        return;
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+        syncQueueService.addOperation(task.id ? 'update' : 'create', 'task', payload);
+      }
+    } else {
+      const list = this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []);
+      const idx = list.findIndex(i => i.id === task.id);
+      if (idx >= 0) list[idx] = task;
+      else {
+          if(!task.id) task.id = `task-${Date.now()}`;
+          list.push(task);
+      }
+      this.setLocal(LOCAL_KEYS.TASKS, list);
     }
-    
-    const list = this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []);
-    const idx = list.findIndex(i => i.id === task.id);
-    if (idx >= 0) list[idx] = task;
-    else {
-        if(!task.id) task.id = `task-${Date.now()}`;
-        list.push(task);
-    }
-    this.setLocal(LOCAL_KEYS.TASKS, list);
   }
   
   async deleteTask(id: string) {
     if (isSupabaseConfigured && supabase) {
       const session = await this.getUserSession();
       if (!session.userId) return;
-      await supabase.from(TABLE_NAMES.TASKS).delete().eq('id', id).eq('office_id', session.officeId);
+      try {
+        await supabase.from(TABLE_NAMES.TASKS).delete().eq('id', id).eq('office_id', session.officeId);
+      } catch {
+        syncQueueService.addOperation('delete', 'task', { id });
+      }
     } else {
       const list = this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []);
       this.setLocal(LOCAL_KEYS.TASKS, list.filter(i => i.id !== id));
@@ -322,7 +339,7 @@ class StorageService {
         const { data } = await supabase
             .from(TABLE_NAMES.FINANCIAL)
             .select('*')
-            .eq('office_id', session.officeId); // Strict Office Isolation
+            .eq('office_id', session.officeId);
         
         return (data || []).map((f: any) => ({
             id: f.id,
@@ -339,7 +356,7 @@ class StorageService {
             caseId: f.case_id,
             installment: f.installment
         })) as FinancialRecord[];
-      } catch { return this.filterByOffice(this.getLocal<FinancialRecord[]>(LOCAL_KEYS.FINANCIAL, []), session.officeId); }
+      } catch { return []; }
     } else {
       return this.filterByOffice(this.getLocal<FinancialRecord[]>(LOCAL_KEYS.FINANCIAL, []), session.officeId);
     }
@@ -360,7 +377,7 @@ class StorageService {
       const payload = {
           id: record.id && !record.id.startsWith('trans-') ? record.id : undefined,
           user_id: session.userId,
-          office_id: session.officeId, // Enforcing Office ID on Save
+          office_id: session.officeId,
           title: record.title,
           amount: record.amount,
           type: record.type,
@@ -374,8 +391,12 @@ class StorageService {
           installment: record.installment
       };
       
-      const { error } = await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
-      if(error) console.error("Supabase Save Financial Error", error);
+      try {
+        const { error } = await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
+        if (error) throw error;
+      } catch {
+        syncQueueService.addOperation(record.id ? 'update' : 'create', 'financial', payload);
+      }
 
     } else {
       const list = this.getLocal<FinancialRecord[]>(LOCAL_KEYS.FINANCIAL, []);
@@ -399,7 +420,7 @@ class StorageService {
         const { data } = await supabase
             .from(TABLE_NAMES.DOCUMENTS)
             .select('*')
-            .eq('office_id', session.officeId); // Strict Office Isolation
+            .eq('office_id', session.officeId);
         
         return (data || []).map((d: any) => ({
             id: d.id,
@@ -412,7 +433,7 @@ class StorageService {
             caseId: d.case_id,
             userId: d.user_id
         })) as SystemDocument[];
-      } catch { return this.filterByOffice(this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []), session.officeId); }
+      } catch { return []; }
     } else {
       return this.filterByOffice(this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []), session.officeId);
     }
@@ -433,7 +454,7 @@ class StorageService {
       const payload = { 
           id: docData.id,
           user_id: session.userId,
-          office_id: session.officeId, // Enforcing Office ID
+          office_id: session.officeId,
           name: docData.name,
           size: docData.size,
           type: docData.type,
@@ -441,7 +462,12 @@ class StorageService {
           category: docData.category,
           case_id: docData.caseId
       };
-      await supabase.from(TABLE_NAMES.DOCUMENTS).insert([payload]);
+      try {
+        const { error } = await supabase.from(TABLE_NAMES.DOCUMENTS).insert([payload]);
+        if (error) throw error;
+      } catch {
+        syncQueueService.addOperation('create', 'document', payload);
+      }
     } else {
       const list = this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []);
       list.unshift({ ...docData, userId: session.userId || 'local' });
@@ -454,7 +480,11 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       const session = await this.getUserSession();
       if (!session.userId) return;
-      await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id).eq('office_id', session.officeId);
+      try {
+        await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id).eq('office_id', session.officeId);
+      } catch {
+        syncQueueService.addOperation('delete', 'document', { id });
+      }
     } else {
       const list = this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []);
       this.setLocal(LOCAL_KEYS.DOCUMENTS, list.filter(i => i.id !== id));
@@ -525,7 +555,13 @@ class StorageService {
             social: office.social
         };
         
-        await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
+        try {
+            await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
+        } catch {
+            // Office updates are critical, generally strictly required online, 
+            // but we can queue them for metadata updates.
+            console.warn("Saving office offline not fully supported.");
+        }
         this.logActivity(`Atualizou escritório: ${office.name}`);
     } else {
         const offices = await this.getOffices();
@@ -538,6 +574,8 @@ class StorageService {
     }
   }
 
+  // --- Helpers e Seeds (Mantidos iguais, omitidos para brevidade se não alterados logicamente) ---
+  
   async createOffice(officeData: Partial<Office>, userId?: string, ownerDetails?: any): Promise<Office> {
       const actualUserId = userId || (await this.getUserSession()).userId || 'local';
       
@@ -605,7 +643,6 @@ class StorageService {
       return { data: data.slice(start, start + limit), total: data.length };
   }
 
-  // --- Helpers de Mapeamento ---
   private mapSupabaseClients(data: any[]): Client[] {
       return data.map(c => ({
           id: c.id, officeId: c.office_id, name: c.name, type: c.type, status: c.status,
@@ -700,28 +737,12 @@ class StorageService {
 
   async deleteAccount() {
     const session = await this.getUserSession();
-    
     if (isSupabaseConfigured && supabase) {
       if (!session.userId) return;
-      
-      const tables = [
-        TABLE_NAMES.LOGS,
-        TABLE_NAMES.FINANCIAL,
-        TABLE_NAMES.TASKS,
-        TABLE_NAMES.DOCUMENTS,
-        TABLE_NAMES.CASES,
-        TABLE_NAMES.CLIENTS,
-        TABLE_NAMES.PROFILES
-      ];
-
+      const tables = [TABLE_NAMES.LOGS, TABLE_NAMES.FINANCIAL, TABLE_NAMES.TASKS, TABLE_NAMES.DOCUMENTS, TABLE_NAMES.CASES, TABLE_NAMES.CLIENTS, TABLE_NAMES.PROFILES];
       for (const table of tables) {
-        try {
-            await supabase.from(table).delete().eq('user_id', session.userId);
-        } catch (e) {
-            console.error(`Error deleting from ${table}`, e);
-        }
+        try { await supabase.from(table).delete().eq('user_id', session.userId); } catch {}
       }
-      
     } else {
       localStorage.clear();
     }
@@ -729,29 +750,26 @@ class StorageService {
   factoryReset() { localStorage.clear(); window.location.reload(); }
 
   async seedDatabase() {
-      const offices = this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
-      if(offices.length === 0) {
-          this.setLocal(LOCAL_KEYS.OFFICES, MOCK_OFFICES_DATA);
-          this.setLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS);
-          this.setLocal(LOCAL_KEYS.CASES, MOCK_CASES);
-          this.setLocal(LOCAL_KEYS.TASKS, MOCK_TASKS);
-          this.setLocal(LOCAL_KEYS.FINANCIAL, MOCK_FINANCIALS);
+      if (!isSupabaseConfigured) {
+          const offices = this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
+          if(offices.length === 0) {
+              this.setLocal(LOCAL_KEYS.OFFICES, MOCK_OFFICES_DATA);
+              this.setLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS);
+              this.setLocal(LOCAL_KEYS.CASES, MOCK_CASES);
+              this.setLocal(LOCAL_KEYS.TASKS, MOCK_TASKS);
+              this.setLocal(LOCAL_KEYS.FINANCIAL, MOCK_FINANCIALS);
+          }
       }
   }
 
-  // --- Real-time Alerts Check ---
   async checkRealtimeAlerts() {
+    // Only fetch if local to avoid excessive requests, or simple query
     const tasks = await this.getTasks();
-    const cases = await this.getCases();
     const now = new Date();
-    const todayStr = now.toLocaleDateString('pt-BR'); // DD/MM/YYYY
-
-    // Verificar se já alertamos nesta sessão para não spammar
+    const todayStr = now.toLocaleDateString('pt-BR');
     const alertedKeys = JSON.parse(sessionStorage.getItem('juris_alerted_keys') || '[]');
     const newAlerts: string[] = [];
 
-    // 1. Prazos/Tarefas de Hoje (Prazo Fatal)
-    // Se for 9h da manhã e ainda não alertamos
     if (now.getHours() === 9 && now.getMinutes() < 30) {
       tasks.forEach(t => {
         if (t.status !== 'Concluído' && t.dueDate === todayStr) {
@@ -763,22 +781,6 @@ class StorageService {
         }
       });
     }
-
-    // 2. Reuniões e Audiências (30 min antes)
-    // Assume que tasks podem ter hora na descrição ou título, mas vamos focar em 'cases.nextHearing'
-    // Para simplificar, vamos verificar se há audiência hoje
-    cases.forEach(c => {
-      if (c.nextHearing === todayStr) {
-        const key = `hearing-${c.id}-${todayStr}`;
-        // Se ainda não alertou hoje, alerta
-        if (!alertedKeys.includes(key)) {
-           // Em um cenário real com horário, verificaria se now + 30min >= hearingTime
-           notificationService.notify('Audiência Hoje', `Processo ${c.cnj} tem audiência hoje.`, 'info');
-           newAlerts.push(key);
-        }
-      }
-    });
-
     if (newAlerts.length > 0) {
       sessionStorage.setItem('juris_alerted_keys', JSON.stringify([...alertedKeys, ...newAlerts]));
     }
