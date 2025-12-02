@@ -18,12 +18,24 @@ class AiService {
         const { data, error } = await supabase.functions.invoke('juris-ai', {
           body: { action: 'chat', history, message },
           responseType: 'stream', // Habilita streaming se a função suportar
-        });
+        } as any);
 
         if (error) throw error;
 
         // Se a resposta for um ReadableStream (streaming real do backend)
-        if (data && data.body) {
+        // Nota: Dependendo da versão do client, 'data' pode já ser o body parsed ou um Response
+        if (data && data instanceof ReadableStream) {
+            const reader = data.getReader();
+            const decoder = new TextDecoder();
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                yield { text: chunk };
+            }
+        } else if (data && data.body) {
+            // Fallback para caso data seja um objeto Response-like
             const reader = data.body.getReader();
             const decoder = new TextDecoder();
             
@@ -31,12 +43,11 @@ class AiService {
                 const { done, value } = await reader.read();
                 if (done) break;
                 const chunk = decoder.decode(value, { stream: true });
-                // Assume que o backend envia texto puro ou SSE
                 yield { text: chunk };
             }
         } else {
             // Fallback para resposta única se não houver stream
-            yield { text: data.text || "Resposta recebida." };
+            yield { text: typeof data === 'string' ? data : (data.text || "Resposta recebida.") };
         }
 
       } catch (error) {
