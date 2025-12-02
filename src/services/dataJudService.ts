@@ -1,5 +1,6 @@
 import { LegalCase, CaseMovement, CaseStatus, LegalCategory } from '../types';
 import { storageService } from './storageService';
+import { supabase, isSupabaseConfigured } from './supabase';
 
 interface DataJudResponse {
   hits: {
@@ -21,71 +22,92 @@ interface DataJudResponse {
   }
 }
 
-const TRIBUNAL_ENDPOINTS: Record<string, string> = {
-  '8.26': 'https://api-publica.datajud.cnj.jus.br/api_publica_tjsp/_search',
-  '8.19': 'https://api-publica.datajud.cnj.jus.br/api_publica_tjrj/_search',
-  '8.13': 'https://api-publica.datajud.cnj.jus.br/api_publica_tjmg/_search',
-  '8.24': 'https://api-publica.datajud.cnj.jus.br/api_publica_tjsc/_search',
-  '8.21': 'https://api-publica.datajud.cnj.jus.br/api_publica_tjrs/_search',
-  '8.16': 'https://api-publica.datajud.cnj.jus.br/api_publica_tjpr/_search',
-  '4.03': 'https://api-publica.datajud.cnj.jus.br/api_publica_trf3/_search',
-  '5.02': 'https://api-publica.datajud.cnj.jus.br/api_publica_trt2/_search',
-  '5.00': 'https://api-publica.datajud.cnj.jus.br/api_publica_tst/_search',
-};
-
 class DataJudService {
   
-  private getApiKey(): string | undefined {
-    const settings = storageService.getSettings();
-    return settings.general.dataJudApiKey;
-  }
-
-  private getEndpointByCNJ(cnj: string): string | null {
-    const cleanCNJ = cnj.replace(/\D/g, '');
-    if (cleanCNJ.length < 20) return null;
-    const j = cleanCNJ.substring(13, 14);
-    const tr = cleanCNJ.substring(14, 16);
-    return TRIBUNAL_ENDPOINTS[`${j}.${tr}`] || null;
-  }
-
+  /**
+   * Valida a API Key. 
+   * Se estiver usando Supabase, validamos via função segura.
+   * Se estiver offline/demo, fazemos uma validação básica de formato.
+   */
   async validateApiKey(key: string): Promise<boolean> {
-    try {
-      const response = await fetch(TRIBUNAL_ENDPOINTS['5.00'], {
-        method: 'POST',
-        headers: { 'Authorization': `APIKey ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ "query": { "match": { "numeroProcesso": "00000000000000000000" } } })
-      });
-      return response.status !== 401 && response.status !== 403;
-    } catch {
-      return key.length > 20; // Fallback for CORS/Network issues in dev
+    if (!key || key.length < 20) return false;
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.functions.invoke('datajud-proxy', {
+          body: { action: 'validate', apiKey: key }
+        });
+        if (error) throw error;
+        return data.valid;
+      } catch (e) {
+        console.warn("Falha ao validar via Proxy, assumindo válido para Demo/Teste se formato correto.");
+        return true; 
+      }
     }
+    
+    return true; // Fallback para modo demo
   }
 
+  /**
+   * Busca dados de um processo pelo CNJ.
+   * Utiliza Supabase Edge Function para evitar CORS e proteger a API Key.
+   */
   async fetchProcessByCNJ(cnj: string): Promise<Partial<LegalCase> | null> {
-    const apiKey = this.getApiKey();
-    if (!apiKey) throw new Error('API Key não configurada.');
+    // Limpeza básica do CNJ
+    const cleanCNJ = cnj.replace(/[-.]/g, '');
+    
+    // 1. Modo DEMO / Offline (Sem Supabase)
+    if (!isSupabaseConfigured || !supabase) {
+      console.warn("Modo Demo: Retornando dados simulados do DataJud.");
+      // Simula um delay de rede
+      await new Promise(r => setTimeout(r, 1000));
+      return this.getMockData(cnj);
+    }
 
-    const endpoint = this.getEndpointByCNJ(cnj);
-    if (!endpoint && apiKey.length > 20) return this.getMockData(cnj); // Mock fallback
-    if (!endpoint) throw new Error('Tribunal não suportado.');
-
+    // 2. Modo Produção (Via Proxy Seguro)
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Authorization': `APIKey ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ "query": { "match": { "numeroProcesso": cnj.replace(/[-.]/g, '') } } })
+      const { data, error } = await supabase.functions.invoke('datajud-proxy', {
+        body: { 
+          action: 'search', 
+          cnj: cleanCNJ 
+        }
       });
 
-      if (!response.ok) throw new Error(`Erro DataJud: ${response.statusText}`);
-      const data: DataJudResponse = await response.json();
+      if (error) {
+        throw new Error(`Erro na comunicação com servidor: ${error.message}`);
+      }
+
+      if (!data || data.error) {
+        throw new Error(data?.error || 'Processo não encontrado ou erro na API do DataJud.');
+      }
+
+      // Se a função retornou os dados brutos do DataJud, mapeamos aqui
+      if (data.hits && data.hits.hits.length > 0) {
+        return this.mapResponseToCase(data.hits.hits[0]._source, cnj);
+      }
       
-      if (!data.hits?.hits?.length) return null;
-      return this.mapResponseToCase(data.hits.hits[0]._source, cnj);
+      return null;
+
     } catch (error) {
-      console.warn("DataJud Fetch Error:", error);
-      if (apiKey.length > 20) return this.getMockData(cnj);
+      console.error("DataJud Proxy Error:", error);
+      // Fallback gracioso para dados mockados em caso de erro de configuração na demonstração
+      const settings = storageService.getSettings();
+      if (settings.general.dataJudApiKey && settings.general.dataJudApiKey.length > 20) {
+         return this.getMockData(cnj);
+      }
       throw error;
     }
+  }
+
+  private mapCategory(classe: string, assunto: string): LegalCategory {
+    const text = (classe + ' ' + assunto).toLowerCase();
+    if (text.includes('trabalhista') || text.includes('trabalho')) return 'Trabalhista';
+    if (text.includes('família') || text.includes('divórcio') || text.includes('alimentos')) return 'Família';
+    if (text.includes('criminal') || text.includes('penal')) return 'Penal';
+    if (text.includes('consumidor')) return 'Consumidor';
+    if (text.includes('tributário') || text.includes('fiscal')) return 'Tributário';
+    if (text.includes('execução') || text.includes('cível') || text.includes('contrato')) return 'Cível';
+    return 'Outro';
   }
 
   private mapResponseToCase(source: any, cnj: string): Partial<LegalCase> {
@@ -95,13 +117,23 @@ class DataJudService {
       date: new Date(mov.dataHora).toLocaleString('pt-BR'),
       description: mov.complementosTabelados?.map((c: any) => `${c.nome}: ${c.valor}`).join('; ') || mov.nome,
       type: 'Andamento',
-      author: 'DataJud'
-    })).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      author: 'DataJud (Oficial)'
+    })).sort((a: any, b: any) => {
+        // Tenta ordenar por data descrescente
+        try {
+            const dateA = new Date(a.date.split(' ')[0].split('/').reverse().join('-')).getTime();
+            const dateB = new Date(b.date.split(' ')[0].split('/').reverse().join('-')).getTime();
+            return dateB - dateA;
+        } catch { return 0; }
+    });
+
+    const classe = source.classe?.nome || '';
+    const assunto = source.assuntos?.[0]?.nome || '';
 
     return {
       cnj: source.numeroProcesso,
-      title: source.assuntos?.[0]?.nome ? `Ação de ${source.assuntos[0].nome}` : `Processo ${source.classe?.nome}`,
-      category: 'Cível', // Default mapping
+      title: assunto ? `Ação de ${assunto}` : `Processo ${classe}`,
+      category: this.mapCategory(classe, assunto),
       court: source.orgaoJulgador?.nome || 'Tribunal não identificado',
       distributionDate: source.dataAjuizamento ? new Date(source.dataAjuizamento).toISOString() : undefined,
       status: CaseStatus.ACTIVE,
@@ -125,8 +157,16 @@ class DataJudService {
                 id: `mov-sim-${Date.now()}`,
                 title: 'Conclusos para Despacho (Simulado)',
                 date: new Date().toLocaleString('pt-BR'),
-                description: 'Simulação: Conexão direta com DataJud bloqueada por CORS. Dados fictícios carregados.',
+                description: 'Simulação: Conexão direta bloqueada ou chave não configurada no backend. Dados fictícios carregados para demonstração.',
                 type: 'Andamento',
+                author: 'Sistema'
+            },
+            {
+                id: `mov-sim-2-${Date.now()}`,
+                title: 'Petição Inicial',
+                date: new Date(Date.now() - 86400000).toLocaleString('pt-BR'),
+                description: 'Protocolo da inicial.',
+                type: 'Petição',
                 author: 'Sistema'
             }
         ],

@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles } from 'lucide-react';
@@ -88,10 +89,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               shadow-xl dark:shadow-2xl shadow-slate-200/50 dark:shadow-black/50
               rounded-xl overflow-hidden flex flex-col 
               origin-${menuState.origin}
+              max-h-[300px] overflow-y-auto custom-scrollbar
             `}
           >
             {title && (
-              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/30 flex justify-between items-center">
+              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/30 flex justify-between items-center sticky top-0 backdrop-blur-md z-10">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">{title}</span>
                 <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                   <X size={14} />

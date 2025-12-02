@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -72,8 +73,8 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
               </button>
             </div>
 
-            {/* Content Body */}
-            <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
+            {/* Content Body - Added flex-1 and min-h-0 to prevent overflow clipping */}
+            <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1 min-h-0">
               {children}
             </div>
 

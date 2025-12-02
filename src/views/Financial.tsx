@@ -302,7 +302,7 @@ export const Financial: React.FC = () => {
                <h3 className="text-lg font-semibold text-white mb-6 shrink-0">Fluxo de Caixa (Últimos 6 Meses)</h3>
                <div className="flex-1 w-full min-h-0 relative">
                  <div className="absolute inset-0">
-                   <ResponsiveContainer width="100%" height="100%">
+                   <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                      <AreaChart data={chartDataFlow}>
                         <defs>
                           <linearGradient id="colorRec" x1="0" y1="0" x2="0" y2="1">
@@ -331,7 +331,7 @@ export const Financial: React.FC = () => {
                <p className="text-xs text-slate-400 mb-4 shrink-0">Mês de Referência: {filterMonth}</p>
                <div className="flex-1 w-full min-h-0 relative">
                  <div className="absolute inset-0">
-                   <ResponsiveContainer width="100%" height="100%">
+                   <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                       {chartDataCategories.length > 0 ? (
                         <PieChart>
                           <Pie
