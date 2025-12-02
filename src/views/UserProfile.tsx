@@ -396,10 +396,11 @@ export const UserProfile: React.FC = () => {
                               name="oab"
                               value={formData.oab} 
                               onChange={handleInputChange}
-                              placeholder="UF/123456"
+                              placeholder="UF/000000"
                               className="w-full bg-slate-900/50 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-slate-200 focus:border-indigo-500 focus:outline-none transition-all"
                             />
                          </div>
+                         <p className="text-[10px] text-slate-500 ml-1">Formato: UF/000.000 (ex: SP/123.456)</p>
                       </div>
                   </div>
 

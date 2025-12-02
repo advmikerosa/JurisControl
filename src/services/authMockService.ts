@@ -21,8 +21,8 @@ export const authMockService = {
       email: email,
       avatar: `https://ui-avatars.com/api/?name=Dr+Usuario&background=6366f1&color=fff`,
       provider: 'email',
-      offices: ['1'], // IDs dos escritórios que participa
-      currentOfficeId: '1',
+      offices: ['office-1'], // IDs dos escritórios que participa (Matches mockData.ts)
+      currentOfficeId: 'office-1',
       twoFactorEnabled: false,
       emailVerified: false, // Inicia como falso para demonstrar a funcionalidade
       phone: '(11) 99999-8888',

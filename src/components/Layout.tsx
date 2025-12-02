@@ -168,6 +168,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     setGlobalSearch('');
   };
 
+  const handleClearSearch = () => {
+    setGlobalSearch('');
+    setSearchResults([]);
+    setShowResults(false);
+  };
+
   const timeAgo = (date: Date) => {
     const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
     if (seconds < 60) return 'agora';
@@ -345,8 +351,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 value={globalSearch}
                 onChange={(e) => setGlobalSearch(e.target.value)}
                 onFocus={() => globalSearch.length >= 2 && setShowResults(true)}
-                className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl leading-5 text-slate-800 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all sm:text-sm shadow-sm"
+                className="block w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl leading-5 text-slate-800 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all sm:text-sm shadow-sm"
               />
+              {globalSearch && (
+                <button 
+                  onClick={handleClearSearch}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
 
             {/* Search Results Dropdown */}

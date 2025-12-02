@@ -192,6 +192,7 @@ export const Login: React.FC = () => {
                       placeholder="UF/000.000"
                     />
                   </div>
+                  <p className="text-[10px] text-slate-500 ml-1 mt-1">Formato: UF/000.000 (ex: SP/123.456)</p>
                 </div>
               </motion.div>
             )}
