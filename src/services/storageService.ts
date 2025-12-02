@@ -272,6 +272,10 @@ class StorageService {
       return this.filterByOffice(this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []), session.officeId);
     }
   }
+
+  async getTasksByCaseId(id: string) { 
+    return (await this.getTasks()).filter(t => t.caseId === id); 
+  }
   
   async saveTask(task: Task) {
     const session = await this.getUserSession();
@@ -306,6 +310,300 @@ class StorageService {
       const list = this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []);
       this.setLocal(LOCAL_KEYS.TASKS, list.filter(i => i.id !== id));
     }
+  }
+
+  // --- Financeiro ---
+  async getFinancials(): Promise<FinancialRecord[]> {
+    const session = await this.getUserSession();
+    if (!session.officeId) return [];
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data } = await supabase
+            .from(TABLE_NAMES.FINANCIAL)
+            .select('*')
+            .eq('office_id', session.officeId); // Strict Office Isolation
+        
+        return (data || []).map((f: any) => ({
+            id: f.id,
+            officeId: f.office_id,
+            title: f.title,
+            amount: Number(f.amount),
+            type: f.type,
+            category: f.category,
+            status: f.status,
+            dueDate: f.due_date,
+            paymentDate: f.payment_date,
+            clientId: f.client_id,
+            clientName: f.client_name,
+            caseId: f.case_id,
+            installment: f.installment
+        })) as FinancialRecord[];
+      } catch { return this.filterByOffice(this.getLocal<FinancialRecord[]>(LOCAL_KEYS.FINANCIAL, []), session.officeId); }
+    } else {
+      return this.filterByOffice(this.getLocal<FinancialRecord[]>(LOCAL_KEYS.FINANCIAL, []), session.officeId);
+    }
+  }
+
+  async getFinancialsByCaseId(caseId: string): Promise<FinancialRecord[]> {
+    const fins = await this.getFinancials();
+    return fins.filter(f => f.caseId === caseId);
+  }
+  
+  async saveFinancial(record: FinancialRecord) {
+    const session = await this.getUserSession();
+    if (!session.officeId) throw new Error("Nenhum escritório selecionado.");
+    
+    record.officeId = session.officeId;
+
+    if (isSupabaseConfigured && supabase && session.userId) {
+      const payload = {
+          id: record.id && !record.id.startsWith('trans-') ? record.id : undefined,
+          user_id: session.userId,
+          office_id: session.officeId, // Enforcing Office ID on Save
+          title: record.title,
+          amount: record.amount,
+          type: record.type,
+          category: record.category,
+          status: record.status,
+          due_date: record.dueDate,
+          payment_date: record.paymentDate,
+          client_id: record.clientId,
+          client_name: record.clientName,
+          case_id: record.caseId,
+          installment: record.installment
+      };
+      
+      const { error } = await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
+      if(error) console.error("Supabase Save Financial Error", error);
+
+    } else {
+      const list = this.getLocal<FinancialRecord[]>(LOCAL_KEYS.FINANCIAL, []);
+      const idx = list.findIndex(i => i.id === record.id);
+      if (idx >= 0) list[idx] = record;
+      else {
+          if(!record.id) record.id = `trans-${Date.now()}`;
+          list.push(record);
+      }
+      this.setLocal(LOCAL_KEYS.FINANCIAL, list);
+    }
+  }
+
+  // --- Documentos ---
+  async getDocuments(): Promise<SystemDocument[]> {
+    const session = await this.getUserSession();
+    if (!session.officeId) return [];
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data } = await supabase
+            .from(TABLE_NAMES.DOCUMENTS)
+            .select('*')
+            .eq('office_id', session.officeId); // Strict Office Isolation
+        
+        return (data || []).map((d: any) => ({
+            id: d.id,
+            officeId: d.office_id,
+            name: d.name,
+            size: d.size,
+            type: d.type,
+            date: d.date,
+            category: d.category,
+            caseId: d.case_id,
+            userId: d.user_id
+        })) as SystemDocument[];
+      } catch { return this.filterByOffice(this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []), session.officeId); }
+    } else {
+      return this.filterByOffice(this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []), session.officeId);
+    }
+  }
+
+  async getDocumentsByCaseId(caseId: string): Promise<SystemDocument[]> {
+    const docs = await this.getDocuments();
+    return docs.filter(d => d.caseId === caseId);
+  }
+
+  async saveDocument(docData: SystemDocument) {
+    const session = await this.getUserSession();
+    if (!session.officeId) throw new Error("Nenhum escritório selecionado.");
+    
+    docData.officeId = session.officeId;
+
+    if (isSupabaseConfigured && supabase && session.userId) {
+      const payload = { 
+          id: docData.id,
+          user_id: session.userId,
+          office_id: session.officeId, // Enforcing Office ID
+          name: docData.name,
+          size: docData.size,
+          type: docData.type,
+          date: docData.date,
+          category: docData.category,
+          case_id: docData.caseId
+      };
+      await supabase.from(TABLE_NAMES.DOCUMENTS).insert([payload]);
+    } else {
+      const list = this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []);
+      list.unshift({ ...docData, userId: session.userId || 'local' });
+      this.setLocal(LOCAL_KEYS.DOCUMENTS, list);
+    }
+    this.logActivity(`Upload de documento: ${docData.name}`);
+  }
+
+  async deleteDocument(id: string) {
+    if (isSupabaseConfigured && supabase) {
+      const session = await this.getUserSession();
+      if (!session.userId) return;
+      await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id).eq('office_id', session.officeId);
+    } else {
+      const list = this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []);
+      this.setLocal(LOCAL_KEYS.DOCUMENTS, list.filter(i => i.id !== id));
+    }
+  }
+
+  // --- Escritórios (Office Management) ---
+  async getOffices(): Promise<Office[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
+          if (error) throw error;
+
+          return (data || []).map((o: any) => ({
+              id: o.id,
+              name: o.name,
+              handle: o.handle,
+              location: o.location,
+              ownerId: o.owner_id,
+              logoUrl: o.logo_url,
+              createdAt: o.created_at,
+              areaOfActivity: o.area_of_activity,
+              members: o.members || []
+          }));
+      } catch (e) {
+          console.error("Error fetching offices:", e);
+          return [];
+      }
+    } else {
+      return this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
+    }
+  }
+
+  async getOfficeById(id: string): Promise<Office | undefined> {
+    if (isSupabaseConfigured && supabase) {
+       try {
+           const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', id).single();
+           if (error || !data) return undefined;
+           return {
+              id: data.id,
+              name: data.name,
+              handle: data.handle,
+              location: data.location,
+              ownerId: data.owner_id,
+              logoUrl: data.logo_url,
+              createdAt: data.created_at,
+              areaOfActivity: data.area_of_activity,
+              members: data.members || []
+           };
+       } catch { return undefined; }
+    }
+    const offices = await this.getOffices();
+    return offices.find(o => o.id === id);
+  }
+  
+  async saveOffice(office: Office): Promise<void> {
+    if (isSupabaseConfigured && supabase) {
+        const payload = {
+            id: office.id,
+            name: office.name,
+            handle: office.handle,
+            location: office.location,
+            owner_id: office.ownerId,
+            logo_url: office.logoUrl,
+            created_at: office.createdAt,
+            area_of_activity: office.areaOfActivity,
+            members: office.members,
+            social: office.social
+        };
+        
+        await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
+        this.logActivity(`Atualizou escritório: ${office.name}`);
+    } else {
+        const offices = await this.getOffices();
+        const index = offices.findIndex(o => o.id === office.id);
+        if (index >= 0) {
+          offices[index] = office;
+          this.setLocal(LOCAL_KEYS.OFFICES, offices);
+          this.logActivity(`Atualizou dados do escritório: ${office.name}`);
+        }
+    }
+  }
+
+  async createOffice(officeData: Partial<Office>, userId?: string, ownerDetails?: any): Promise<Office> {
+      const actualUserId = userId || (await this.getUserSession()).userId || 'local';
+      
+      const newOffice: Office = {
+          id: `office-${Date.now()}`,
+          name: officeData.name || 'Novo',
+          handle: officeData.handle || '@novo',
+          location: 'Brasil',
+          ownerId: actualUserId,
+          members: [{
+              userId: actualUserId, 
+              name: ownerDetails?.name || 'Admin', 
+              email: ownerDetails?.email, 
+              role: 'Admin', 
+              avatarUrl: '', 
+              permissions: { financial: true, cases: true, documents: true, settings: true }
+          }],
+          createdAt: new Date().toISOString(),
+          social: {}
+      };
+      
+      if (isSupabaseConfigured && supabase) {
+          const payload = {
+              name: newOffice.name,
+              handle: newOffice.handle,
+              location: newOffice.location,
+              owner_id: newOffice.ownerId,
+              members: newOffice.members,
+              created_at: newOffice.createdAt
+          };
+          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(payload).select().single();
+          if(error) throw error;
+          newOffice.id = data.id;
+      } else {
+          const offices = await this.getOffices();
+          offices.push(newOffice);
+          this.setLocal(LOCAL_KEYS.OFFICES, offices);
+      }
+      
+      this.logActivity(`Criou novo escritório: ${newOffice.name}`);
+      return newOffice;
+  }
+
+  async joinOffice(handle: string): Promise<Office> {
+      const offices = await this.getOffices();
+      const office = offices.find(o => o.handle === handle);
+      if(!office) throw new Error("Escritório não encontrado");
+      return office;
+  }
+  
+  async inviteUserToOffice(officeId: string, handle: string): Promise<boolean> { return true; }
+
+  async getCaseById(id: string) { return (await this.getCases()).find(c => c.id === id) || null; }
+  
+  async getCasesPaginated(page: number, limit: number, search: string, status: string | null, category: string | null, range: any) {
+      let data = await this.getCases();
+      // Filtering logic duplicated from previous implementation for brevity
+      if (search) {
+        const lower = search.toLowerCase();
+        data = data.filter(c => c.title.toLowerCase().includes(lower) || c.cnj.includes(lower) || c.client.name.toLowerCase().includes(lower));
+      }
+      if (status && status !== 'Todos') data = data.filter(c => c.status === status);
+      if (category && category !== 'Todos') data = data.filter(c => c.category === category);
+      
+      const start = (page - 1) * limit;
+      return { data: data.slice(start, start + limit), total: data.length };
   }
 
   // --- Helpers de Mapeamento ---
@@ -373,105 +671,6 @@ class StorageService {
       };
   }
 
-  async getFinancials() { return this.filterByOffice(this.getLocal<FinancialRecord[]>(LOCAL_KEYS.FINANCIAL, []), (await this.getUserSession()).officeId); }
-  async saveFinancial(r: FinancialRecord) { 
-      const session = await this.getUserSession();
-      if(session.officeId) {
-          r.officeId = session.officeId;
-          const list = this.getLocal<FinancialRecord[]>(LOCAL_KEYS.FINANCIAL, []);
-          list.push(r);
-          this.setLocal(LOCAL_KEYS.FINANCIAL, list);
-      }
-  }
-  async getDocuments() { return this.filterByOffice(this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []), (await this.getUserSession()).officeId); }
-  async saveDocument(d: SystemDocument) {
-      const session = await this.getUserSession();
-      if(session.officeId) {
-          d.officeId = session.officeId;
-          const list = this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []);
-          list.push(d);
-          this.setLocal(LOCAL_KEYS.DOCUMENTS, list);
-      }
-  }
-  async deleteDocument(id: string) {
-    if (isSupabaseConfigured && supabase) {
-      const session = await this.getUserSession();
-      if (!session.userId) return;
-      await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id).eq('office_id', session.officeId);
-    } else {
-      const list = this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []);
-      this.setLocal(LOCAL_KEYS.DOCUMENTS, list.filter(i => i.id !== id));
-    }
-  }
-
-  async getOffices(): Promise<Office[]> {
-      return this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
-  }
-  async getOfficeById(id: string): Promise<Office | undefined> {
-      return (await this.getOffices()).find(o => o.id === id);
-  }
-  async saveOffice(office: Office) {
-      const list = await this.getOffices();
-      const idx = list.findIndex(o => o.id === office.id);
-      if(idx >= 0) list[idx] = office;
-      this.setLocal(LOCAL_KEYS.OFFICES, list);
-  }
-  
-  async createOffice(officeData: Partial<Office>, userId?: string, ownerDetails?: any): Promise<Office> {
-      const actualUserId = userId || (await this.getUserSession()).userId || 'local';
-      
-      const newOffice: Office = {
-          id: `office-${Date.now()}`,
-          name: officeData.name || 'Novo',
-          handle: officeData.handle || '@novo',
-          location: 'Brasil',
-          ownerId: actualUserId,
-          members: [{
-              userId: actualUserId, 
-              name: ownerDetails?.name || 'Admin', 
-              email: ownerDetails?.email, 
-              role: 'Admin', 
-              avatarUrl: '', 
-              permissions: { financial: true, cases: true, documents: true, settings: true }
-          }],
-          createdAt: new Date().toISOString(),
-          social: {}
-      };
-      
-      const offices = await this.getOffices();
-      offices.push(newOffice);
-      this.setLocal(LOCAL_KEYS.OFFICES, offices);
-      return newOffice;
-  }
-
-  async joinOffice(handle: string): Promise<Office> {
-      const offices = await this.getOffices();
-      const office = offices.find(o => o.handle === handle);
-      if(!office) throw new Error("Escritório não encontrado");
-      return office;
-  }
-  
-  async inviteUserToOffice(officeId: string, handle: string): Promise<boolean> { return true; }
-
-  async getCaseById(id: string) { return (await this.getCases()).find(c => c.id === id) || null; }
-  async getTasksByCaseId(id: string) { return (await this.getTasks()).filter(t => t.caseId === id); }
-  async getFinancialsByCaseId(id: string) { return (await this.getFinancials()).filter(f => f.caseId === id); }
-  async getDocumentsByCaseId(id: string) { return (await this.getDocuments()).filter(d => d.caseId === id); }
-  
-  async getCasesPaginated(page: number, limit: number, search: string, status: string | null, category: string | null, range: any) {
-      let data = await this.getCases();
-      // Filtering logic duplicated from previous implementation for brevity
-      if (search) {
-        const lower = search.toLowerCase();
-        data = data.filter(c => c.title.toLowerCase().includes(lower) || c.cnj.includes(lower) || c.client.name.toLowerCase().includes(lower));
-      }
-      if (status && status !== 'Todos') data = data.filter(c => c.status === status);
-      if (category && category !== 'Todos') data = data.filter(c => c.category === category);
-      
-      const start = (page - 1) * limit;
-      return { data: data.slice(start, start + limit), total: data.length };
-  }
-
   getLogs() { return this.getLocal<ActivityLog[]>(LOCAL_KEYS.LOGS, []); }
   logActivity(action: string, status: 'Success'|'Warning'|'Failed' = 'Success') { 
       const l = this.getLogs(); 
@@ -485,7 +684,6 @@ class StorageService {
       const allCases = await this.getCases();
       const allTasks = await this.getTasks();
       
-      // Mocked implementation for brevity
       return {
           counts: { 
               activeCases: allCases.filter(c => c.status === CaseStatus.ACTIVE).length, 
@@ -535,8 +733,6 @@ class StorageService {
       const offices = this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
       if(offices.length === 0) {
           this.setLocal(LOCAL_KEYS.OFFICES, MOCK_OFFICES_DATA);
-          const officeId = MOCK_OFFICES_DATA[0].id;
-          
           this.setLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS);
           this.setLocal(LOCAL_KEYS.CASES, MOCK_CASES);
           this.setLocal(LOCAL_KEYS.TASKS, MOCK_TASKS);

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { motion } from 'framer-motion';
 
@@ -25,7 +26,7 @@ const pageVariants = {
 };
 
 const pageTransition = {
-  type: 'tween',
+  type: 'tween' as const,
   ease: 'anticipate',
   duration: 0.4
 };
