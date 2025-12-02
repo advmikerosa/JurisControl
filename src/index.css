@@ -1,10 +1,25 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 body {
   background-color: #F8FAFC; 
   color: #1e293b;
   min-height: 100vh;
-  font-family: 'Inter', sans-serif;
-  -webkit-font-smoothing: antialiased;
   transition: background-color 0.3s ease, color 0.3s ease;
+  overflow-x: hidden;
 }
 
 .dark body {
@@ -12,36 +27,55 @@ body {
   color: #f1f5f9;
 }
 
-/* Custom Scrollbar */
+/* --- Premium Custom Scrollbar --- */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent; 
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #94a3b8; 
-  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.3); /* Slate 400 with opacity */
+  border-radius: 100vh;
+  transition: background 0.2s ease;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b; 
+  background: rgba(148, 163, 184, 0.6); 
 }
 
-.dark ::-webkit-scrollbar-track {
-  background: #0f172a; 
-}
 .dark ::-webkit-scrollbar-thumb {
-  background: #334155; 
-}
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #475569; 
+  background: rgba(255, 255, 255, 0.1); 
 }
 
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2); 
+}
+
+/* Hide scrollbar for cleaner UI where needed */
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* --- Text Selection Color --- */
+::selection {
+  background-color: rgba(99, 102, 241, 0.25); /* Indigo 500 */
+  color: #4338ca; /* Indigo 700 */
+}
+
+.dark ::selection {
+  background-color: rgba(99, 102, 241, 0.35);
+  color: #ffffff;
+}
+
+/* --- Custom Utilities --- */
+.text-balance {
+  text-wrap: balance;
 }

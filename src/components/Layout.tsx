@@ -193,12 +193,39 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, [currentOffice, user]);
 
   return (
-    <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative selection:bg-indigo-500/30 selection:text-indigo-900 dark:selection:text-indigo-100 bg-slate-50 dark:bg-[#0f172a] transition-colors duration-300">
+    <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative selection:bg-indigo-500/30 selection:text-indigo-900 dark:selection:text-indigo-100 bg-slate-50 dark:bg-[#0f172a] transition-colors duration-500">
       
-      {/* Ambient Background */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden opacity-30 dark:opacity-100 transition-opacity">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-300/30 dark:bg-indigo-900/20 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-300/30 dark:bg-violet-900/20 rounded-full blur-[120px]" />
+      {/* Ambient Animated Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden opacity-30 dark:opacity-40 transition-opacity">
+        <motion.div 
+          animate={{ 
+            x: [0, 50, 0], 
+            y: [0, 30, 0], 
+            scale: [1, 1.1, 1],
+            opacity: [0.3, 0.5, 0.3]
+          }}
+          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-300/30 dark:bg-indigo-900/20 rounded-full blur-[120px]" 
+        />
+        <motion.div 
+          animate={{ 
+            x: [0, -50, 0], 
+            y: [0, -30, 0], 
+            scale: [1, 1.2, 1],
+            opacity: [0.3, 0.5, 0.3]
+          }}
+          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+          className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-violet-300/30 dark:bg-violet-900/20 rounded-full blur-[120px]" 
+        />
+        <motion.div 
+          animate={{ 
+            x: [0, 30, 0], 
+            y: [0, -50, 0],
+            opacity: [0.1, 0.3, 0.1]
+          }}
+          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 5 }}
+          className="absolute top-[40%] left-[30%] w-[30%] h-[30%] bg-emerald-300/10 dark:bg-emerald-900/10 rounded-full blur-[100px]" 
+        />
       </div>
 
       {/* Sidebar - Desktop */}
