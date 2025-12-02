@@ -15,16 +15,17 @@ class AiService {
     if (isSupabaseConfigured && supabase) {
       try {
         // Chamada à Edge Function 'juris-ai'
+        // Using 'as any' to bypass TypeScript validation for responseType: 'stream'
+        // which might be missing in some versions of @supabase/supabase-js definitions
         const { data, error } = await supabase.functions.invoke('juris-ai', {
           body: { action: 'chat', history, message },
-          responseType: 'stream', // Habilita streaming se a função suportar
+          responseType: 'stream',
         } as any);
 
         if (error) throw error;
 
         // Se a resposta for um ReadableStream (streaming real do backend)
-        // Nota: Dependendo da versão do client, 'data' pode já ser o body parsed ou um Response
-        if (data && data instanceof ReadableStream) {
+        if (data instanceof ReadableStream) {
             const reader = data.getReader();
             const decoder = new TextDecoder();
             
@@ -34,9 +35,9 @@ class AiService {
                 const chunk = decoder.decode(value, { stream: true });
                 yield { text: chunk };
             }
-        } else if (data && data.body) {
-            // Fallback para caso data seja um objeto Response-like
-            const reader = data.body.getReader();
+        } else if (data && typeof data === 'object' && 'body' in data && data.body instanceof ReadableStream) {
+             // Fallback para caso data seja um objeto Response-like
+            const reader = (data.body as ReadableStream).getReader();
             const decoder = new TextDecoder();
             
             while (true) {
@@ -46,8 +47,8 @@ class AiService {
                 yield { text: chunk };
             }
         } else {
-            // Fallback para resposta única se não houver stream
-            yield { text: typeof data === 'string' ? data : (data.text || "Resposta recebida.") };
+            // Fallback para resposta única se não houver stream ou se o SDK já parseou
+            yield { text: typeof data === 'string' ? data : (data?.text || "Resposta recebida.") };
         }
 
       } catch (error) {
