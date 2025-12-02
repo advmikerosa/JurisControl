@@ -16,6 +16,9 @@ export const Documents: React.FC = () => {
   // Preview State
   const [previewDoc, setPreviewDoc] = useState<SystemDocument | null>(null);
   
+  // Delete Modal State
+  const [docToDelete, setDocToDelete] = useState<SystemDocument | null>(null);
+  
   // Ref for hidden file input
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -84,11 +87,12 @@ export const Documents: React.FC = () => {
       fileInputRef.current?.click();
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Deseja realmente excluir este arquivo?')) {
-      await storageService.deleteDocument(id);
+  const handleDelete = async () => {
+    if (docToDelete) {
+      await storageService.deleteDocument(docToDelete.id);
       setDocs(await storageService.getDocuments());
       addToast('Documento excluído.', 'info');
+      setDocToDelete(null);
     }
   };
 
@@ -163,7 +167,7 @@ export const Documents: React.FC = () => {
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => setPreviewDoc(doc)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-indigo-400 transition-colors" title="Visualizar"><Eye size={18} /></button>
                         <button className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors" title="Baixar"><Download size={18} /></button>
-                        <button onClick={() => handleDelete(doc.id)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-rose-400 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                        <button onClick={() => setDocToDelete(doc)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-rose-400 transition-colors" title="Excluir"><Trash2 size={18} /></button>
                       </div>
                     </td>
                   </tr>
@@ -211,6 +215,23 @@ export const Documents: React.FC = () => {
                   </div>
               )}
           </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal 
+          isOpen={!!docToDelete} 
+          onClose={() => setDocToDelete(null)} 
+          title="Confirmar Exclusão"
+          footer={
+              <div className="flex justify-end gap-3 w-full">
+                  <button onClick={() => setDocToDelete(null)} className="px-4 py-2 text-slate-400 hover:text-white transition-colors">Cancelar</button>
+                  <button onClick={handleDelete} className="px-6 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-medium shadow-lg shadow-rose-500/20">Excluir</button>
+              </div>
+          }
+      >
+          <p className="text-slate-300">
+              Tem certeza que deseja excluir o documento <strong>{docToDelete?.name}</strong>? Esta ação não pode ser desfeita.
+          </p>
       </Modal>
     </div>
   );

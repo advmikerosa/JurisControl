@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storageService } from '../services/storageService';
 import { GlassCard } from '../components/ui/GlassCard';
-import { ArrowLeft, MapPin, Phone, Mail, Calendar, Building, User, Plus, Paperclip, Trash2, Scale, Clock, MessageSquare, Loader2, Tag, Save, Edit2, X, FileText, Send, CheckCircle, AlertCircle, Briefcase, MoreHorizontal, BellRing } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, Mail, Calendar, Building, User, Plus, Paperclip, Trash2, Scale, Clock, MessageSquare, Loader2, Tag, Save, Edit2, X, FileText, Send, CheckCircle, AlertCircle, Briefcase, MoreHorizontal, BellRing, CheckCircle2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { Client, LegalCase, ClientInteraction, ClientDocument, ClientType, ClientAlert } from '../types';
@@ -25,6 +25,9 @@ export const ClientDetails: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Client>>({});
   const [formErrors, setFormErrors] = useState<any>({});
+
+  // Confirm Delete State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   // Notes & Interactions
   const [noteText, setNoteText] = useState('');
@@ -191,14 +194,13 @@ export const ClientDetails: React.FC = () => {
 
   const handleDeleteClient = async () => {
       if (!clientData) return;
-      if (confirm('ATENÇÃO: Deseja realmente excluir este cliente e todo o seu histórico? Esta ação não pode ser desfeita.')) {
-          try {
-            await storageService.deleteClient(clientData.id);
-            addToast('Cliente excluído com sucesso.', 'success');
-            navigate('/clients');
-          } catch (e: any) {
-            addToast(e.message, 'error');
-          }
+      try {
+        await storageService.deleteClient(clientData.id);
+        addToast('Cliente excluído com sucesso.', 'success');
+        navigate('/clients');
+      } catch (e: any) {
+        addToast(e.message, 'error');
+        setIsDeleteModalOpen(false);
       }
   };
 
@@ -293,7 +295,7 @@ export const ClientDetails: React.FC = () => {
                     </div>
                     
                     <div className="flex gap-3 self-end md:self-center">
-                        <button onClick={handleDeleteClient} className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors" title="Excluir Cliente">
+                        <button onClick={() => setIsDeleteModalOpen(true)} className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors" title="Excluir Cliente">
                             <Trash2 size={20} />
                         </button>
                         <button onClick={openEditModal} className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors border border-white/5">
@@ -537,12 +539,15 @@ export const ClientDetails: React.FC = () => {
            <div className="space-y-4">
                <div>
                    <label className="text-xs text-slate-400 block mb-1">Nome Completo / Razão Social</label>
-                   <input 
-                       type="text" 
-                       value={editForm.name || ''} 
-                       onChange={e => setEditForm({...editForm, name: e.target.value})}
-                       className={`w-full bg-black/20 border rounded-lg p-2.5 text-white outline-none focus:border-indigo-500 ${formErrors.name ? 'border-rose-500' : 'border-white/10'}`}
-                   />
+                   <div className="relative">
+                        <input 
+                            type="text" 
+                            value={editForm.name || ''} 
+                            onChange={e => setEditForm({...editForm, name: e.target.value})}
+                            className={`w-full bg-black/20 border rounded-lg p-2.5 text-white outline-none focus:border-indigo-500 ${formErrors.name ? 'border-rose-500' : 'border-white/10'}`}
+                        />
+                        {editForm.name && !formErrors.name && <CheckCircle2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 pointer-events-none" />}
+                   </div>
                    {formErrors.name && <span className="text-rose-400 text-xs">{formErrors.name}</span>}
                </div>
                <div className="grid grid-cols-2 gap-4">
@@ -569,6 +574,7 @@ export const ClientDetails: React.FC = () => {
                        {formErrors.cnpj && <span className="text-rose-400 text-xs">{formErrors.cnpj}</span>}
                    </div>
                </div>
+               {/* ... rest of form inputs ... */}
                <div className="grid grid-cols-2 gap-4">
                    <div>
                        <label className="text-xs text-slate-400 block mb-1">Telefone</label>
@@ -669,6 +675,33 @@ export const ClientDetails: React.FC = () => {
                </div>
            </div>
        </Modal>
+
+        {/* Delete Confirmation Modal */}
+        <Modal 
+            isOpen={isDeleteModalOpen} 
+            onClose={() => setIsDeleteModalOpen(false)} 
+            title="Confirmar Exclusão"
+            footer={
+                <div className="flex justify-end gap-3 w-full">
+                    <button onClick={() => setIsDeleteModalOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white transition-colors">Cancelar</button>
+                    <button onClick={handleDeleteClient} className="px-6 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-medium shadow-lg shadow-rose-500/20">Excluir Permanentemente</button>
+                </div>
+            }
+        >
+            <div className="text-center p-4">
+                <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-rose-500/30">
+                    <Trash2 size={32} className="text-rose-500" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">Excluir Cliente?</h3>
+                <p className="text-slate-400 text-sm mb-4">
+                    Você está prestes a excluir <strong>{clientData.name}</strong>. 
+                    Isso removerá também todo o histórico de interações, documentos e alertas vinculados.
+                </p>
+                <div className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-lg text-xs text-rose-200">
+                    <strong>Atenção:</strong> Esta ação é irreversível.
+                </div>
+            </div>
+        </Modal>
     </div>
   );
 };

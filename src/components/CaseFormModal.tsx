@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Modal } from './ui/Modal';
-import { User, Search, CheckSquare, AlertCircle, Briefcase, ChevronRight, Info, Scale, Users, HelpCircle, ChevronLeft, Save, Loader2, Download, Check } from 'lucide-react';
+import { User, Search, CheckSquare, AlertCircle, Briefcase, ChevronRight, Info, Scale, Users, HelpCircle, ChevronLeft, Save, Loader2, Download, Check, CheckCircle2 } from 'lucide-react';
 import { Client, LegalCase, LegalCategory, CasePhase, CaseStatus } from '../types';
 import { storageService } from '../services/storageService';
 import { dataJudService } from '../services/dataJudService';
@@ -118,7 +118,8 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
     
     if (!formData.title?.trim()) newErrors.title = 'O título do processo é obrigatório.';
     if (!formData.client?.id) newErrors.client = 'Selecione um cliente.';
-    if (!formData.cnj?.trim()) newErrors.cnj = 'O número do CNJ é obrigatório.';
+    // CNJ agora é opcional na validação inicial
+    // if (!formData.cnj?.trim()) newErrors.cnj = 'O número do CNJ é obrigatório.';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -129,7 +130,7 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
         if (validateStep1()) {
             setStep(prev => prev + 1);
         } else {
-            addToast('Por favor, preencha os campos obrigatórios.', 'error');
+            addToast('Por favor, preencha os campos obrigatórios marcados com *.', 'error');
         }
     } else {
         setStep(prev => prev + 1);
@@ -147,6 +148,12 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
           });
       }
   };
+
+  const SuccessIcon = () => (
+    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 animate-fade-in pointer-events-none">
+        <CheckCircle2 size={16} />
+    </div>
+  );
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={initialData ? "Editar Processo" : "Novo Processo"} maxWidth="max-w-3xl"
@@ -196,7 +203,7 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                     <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                         <div>
                             <h4 className="text-blue-300 font-bold text-sm flex items-center gap-2"><Search size={16} /> Importação Automática</h4>
-                            <p className="text-blue-200/60 text-xs mt-1">Digite o CNJ para buscar dados automaticamente via DataJud.</p>
+                            <p className="text-blue-200/60 text-xs mt-1">Digite o CNJ para preencher os dados automaticamente via DataJud (Opcional).</p>
                         </div>
                         <div className="flex flex-col w-full sm:w-auto gap-1">
                             <div className="flex gap-2">
@@ -221,16 +228,19 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
 
                     <div className="space-y-1">
                         <label className="text-xs text-slate-400 ml-1">Título do Processo <span className="text-rose-400">*</span></label>
-                        <input 
-                            type="text" 
-                            value={formData.title || ''} 
-                            onChange={e => {
-                                setFormData({...formData, title: e.target.value});
-                                clearError('title');
-                            }}
-                            className={`w-full bg-white/5 border rounded-lg p-3 text-white outline-none transition-colors placeholder:text-slate-600 ${errors.title ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'}`}
-                            placeholder="Ex: Ação Trabalhista - Silva vs Empresa X"
-                        />
+                        <div className="relative">
+                            <input 
+                                type="text" 
+                                value={formData.title || ''} 
+                                onChange={e => {
+                                    setFormData({...formData, title: e.target.value});
+                                    clearError('title');
+                                }}
+                                className={`w-full bg-white/5 border rounded-lg p-3 pr-10 text-white outline-none transition-colors placeholder:text-slate-600 ${errors.title ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'}`}
+                                placeholder="Ex: Ação Trabalhista - Silva vs Empresa X"
+                            />
+                            {formData.title && !errors.title && <SuccessIcon />}
+                        </div>
                         {errors.title && <span className="text-[10px] text-rose-400 ml-1 flex items-center gap-1"><AlertCircle size={10} /> {errors.title}</span>}
                     </div>
 
@@ -243,7 +253,7 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                                     value={formData.client?.id || ''}
                                     onChange={e => {
                                         const client = availableClients.find(c => c.id === e.target.value);
-                                        setFormData({...formData, client});
+                                        setFormData(prev => ({...prev, client}));
                                         clearError('client');
                                     }}
                                     className={`w-full bg-white/5 border rounded-lg py-3 pl-10 pr-4 text-white outline-none appearance-none cursor-pointer transition-all ${errors.client ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'}`}
@@ -254,6 +264,9 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                                         <option key={c.id} value={c.id} className="bg-slate-900">{c.name}</option>
                                     ))}
                                 </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                    {formData.client?.id ? <CheckCircle2 size={16} className="text-emerald-500" /> : <ChevronRight size={16} className="text-slate-500 rotate-90" />}
+                                </div>
                             </div>
                             {errors.client && <span className="text-[10px] text-rose-400 ml-1">{errors.client}</span>}
                         </div>
@@ -270,6 +283,9 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                                         <option key={cat} value={cat} className="bg-slate-900">{cat}</option>
                                     ))}
                                 </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                    <ChevronRight size={16} className="text-slate-500 rotate-90" />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -291,15 +307,18 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                         </div>
                         <div className="space-y-1">
                             <label className="text-xs text-slate-400 ml-1">Fase Processual</label>
-                            <select 
-                                value={formData.phase}
-                                onChange={e => setFormData({...formData, phase: e.target.value as CasePhase})}
-                                className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-indigo-500 appearance-none cursor-pointer"
-                            >
-                                {CASE_PHASES.map(phase => (
-                                    <option key={phase} value={phase} className="bg-slate-900">{phase}</option>
-                                ))}
-                            </select>
+                            <div className="relative">
+                                <select 
+                                    value={formData.phase}
+                                    onChange={e => setFormData({...formData, phase: e.target.value as CasePhase})}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                                >
+                                    {CASE_PHASES.map(phase => (
+                                        <option key={phase} value={phase} className="bg-slate-900">{phase}</option>
+                                    ))}
+                                </select>
+                                <ChevronRight size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 rotate-90 pointer-events-none" />
+                            </div>
                         </div>
                     </div>
 
@@ -356,7 +375,7 @@ export const CaseFormModal: React.FC<CaseFormModalProps> = ({ isOpen, onClose, o
                             </div>
                             <div>
                                 <h3 className="text-white font-bold text-lg">{formData.title}</h3>
-                                <p className="text-slate-400 text-sm">{formData.cnj}</p>
+                                <p className="text-slate-400 text-sm">{formData.cnj || 'Sem CNJ informado'}</p>
                             </div>
                         </div>
                         
