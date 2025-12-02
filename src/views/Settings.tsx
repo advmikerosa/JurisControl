@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +8,7 @@ import { dataJudService } from '../services/dataJudService';
 import { emailService } from '../services/emailService';
 import { Modal } from '../components/ui/Modal';
 import { OfficeEditModal } from '../components/OfficeEditModal';
-import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Globe, Moon, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, Mail, Clock, List, Send, Calendar, DollarSign, Lock, Shield, Copy } from 'lucide-react';
+import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Globe, Moon, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, Mail, Clock, List, Send, Calendar, DollarSign, Lock, Shield, Copy, Trash2 } from 'lucide-react';
 import { AppSettings, Office, EmailLog } from '../types';
 
 export const Settings: React.FC = () => {
@@ -728,11 +727,11 @@ export const Settings: React.FC = () => {
                     <div>
                        <div className="flex justify-between items-center mb-3">
                            <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2"><Users size={16} /> Equipe</h4>
-                           <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded">{myOffice.members.length} Membros</span>
+                           <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded">{myOffice?.members?.length || 0} Membros</span>
                        </div>
                        <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                          {myOffice.members.map((member, idx) => (
-                              <div key={member.userId} className={`p-4 flex items-center justify-between ${idx !== myOffice.members.length - 1 ? 'border-b border-white/5' : ''}`}>
+                          {(myOffice?.members || []).map((member, idx) => (
+                              <div key={member.userId} className={`p-4 flex items-center justify-between ${idx !== (myOffice?.members?.length || 0) - 1 ? 'border-b border-white/5' : ''}`}>
                                   <div className="flex items-center gap-3">
                                       <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden">
                                           {member.avatarUrl ? <img src={member.avatarUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white font-bold">{member.name.charAt(0)}</div>}
@@ -740,7 +739,7 @@ export const Settings: React.FC = () => {
                                       <div>
                                           <p className="text-sm text-white font-medium">
                                               {member.name} {user?.id === member.userId && '(Você)'}
-                                              {member.userId === myOffice.ownerId && <span className="text-[10px] ml-2 text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">Dono</span>}
+                                              {myOffice && member.userId === myOffice.ownerId && <span className="text-[10px] ml-2 text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">Dono</span>}
                                           </p>
                                           <p className="text-xs text-slate-300">{member.role}</p>
                                       </div>
