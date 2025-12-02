@@ -1134,15 +1134,23 @@ class StorageService {
 
   async seedDatabase() {
     // Populate LOCAL STORAGE with initial mock data if empty
-    // We do NOT seed Supabase automatically to avoid polluting production DBs for every new user blindly
-    const clients = this.getLocal(LOCAL_KEYS.CLIENTS, []);
-    if (clients.length === 0) {
+    
+    // Check if offices exist. If so, assume initialized.
+    const offices = this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
+    
+    if (offices.length === 0) {
        console.info("Seeding LocalStorage with mock data...");
-       this.setLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS);
-       this.setLocal(LOCAL_KEYS.CASES, MOCK_CASES);
-       this.setLocal(LOCAL_KEYS.TASKS, MOCK_TASKS);
-       this.setLocal(LOCAL_KEYS.FINANCIAL, MOCK_FINANCIALS);
        this.setLocal(LOCAL_KEYS.OFFICES, MOCK_OFFICES_DATA);
+       
+       // Only seed other data if we are doing a fresh seed of offices
+       // Check if clients exist to avoid overwriting if somehow offices were empty but clients weren't (unlikely but safe)
+       const clients = this.getLocal<Client[]>(LOCAL_KEYS.CLIENTS, []);
+       if (clients.length === 0) {
+           this.setLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS);
+           this.setLocal(LOCAL_KEYS.CASES, MOCK_CASES);
+           this.setLocal(LOCAL_KEYS.TASKS, MOCK_TASKS);
+           this.setLocal(LOCAL_KEYS.FINANCIAL, MOCK_FINANCIALS);
+       }
     }
   }
 
