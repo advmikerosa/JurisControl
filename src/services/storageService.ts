@@ -495,7 +495,13 @@ class StorageService {
   async getOffices(): Promise<Office[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
+          // Use a join to get members
+          const { data, error } = await supabase
+            .from(TABLE_NAMES.OFFICES)
+            .select(`
+                *,
+                members:office_members(*)
+            `);
           if (error) throw error;
 
           return (data || []).map((o: any) => ({
@@ -507,7 +513,7 @@ class StorageService {
               logoUrl: o.logo_url,
               createdAt: o.created_at,
               areaOfActivity: o.area_of_activity,
-              members: o.members || []
+              members: this.mapMembers(o.members || [])
           }));
       } catch (e) {
           console.error("Error fetching offices:", e);
@@ -518,11 +524,31 @@ class StorageService {
     }
   }
 
+  private mapMembers(membersData: any[]): OfficeMember[] {
+      return membersData.map(m => ({
+          userId: m.user_id,
+          name: m.name || 'Membro', // Fallback or fetch from profile if needed
+          email: m.email || '',
+          avatarUrl: m.avatar_url,
+          role: m.role,
+          permissions: m.permissions || { financial: false, cases: false, documents: false, settings: false }
+      }));
+  }
+
   async getOfficeById(id: string): Promise<Office | undefined> {
     if (isSupabaseConfigured && supabase) {
        try {
-           const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', id).single();
+           const { data, error } = await supabase
+            .from(TABLE_NAMES.OFFICES)
+            .select(`
+                *,
+                members:office_members(*)
+            `)
+            .eq('id', id)
+            .single();
+           
            if (error || !data) return undefined;
+           
            return {
               id: data.id,
               name: data.name,
@@ -532,7 +558,7 @@ class StorageService {
               logoUrl: data.logo_url,
               createdAt: data.created_at,
               areaOfActivity: data.area_of_activity,
-              members: data.members || []
+              members: this.mapMembers(data.members || [])
            };
        } catch { return undefined; }
     }
@@ -542,6 +568,7 @@ class StorageService {
   
   async saveOffice(office: Office): Promise<void> {
     if (isSupabaseConfigured && supabase) {
+        // Only update office fields, members are handled via office_members table ops
         const payload = {
             id: office.id,
             name: office.name,
@@ -551,12 +578,24 @@ class StorageService {
             logo_url: office.logoUrl,
             created_at: office.createdAt,
             area_of_activity: office.areaOfActivity,
-            members: office.members,
             social: office.social
         };
         
         try {
             await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
+            
+            // If explicit member update is needed here (e.g. from modal), we iterate
+            // But ideally, add/remove should be separate. For now, assume this updates roles too.
+            // CAUTION: This is a heavy operation for 'saveOffice'.
+            for (const member of office.members) {
+                await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).upsert({
+                    office_id: office.id,
+                    user_id: member.userId,
+                    role: member.role,
+                    permissions: member.permissions
+                }, { onConflict: 'office_id, user_id' });
+            }
+
         } catch {
             console.warn("Saving office offline not fully supported.");
         }
@@ -572,11 +611,6 @@ class StorageService {
     }
   }
 
-  /**
-   * createOffice
-   * @param officeData Partial office data
-   * @param explicitOwnerId (Optional) Use this ID instead of fetching from session. Useful during registration.
-   */
   async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, ownerDetails?: any): Promise<Office> {
       const actualUserId = explicitOwnerId || (await this.getUserSession()).userId || 'local';
       const userStr = localStorage.getItem('@JurisControl:user');
@@ -585,6 +619,7 @@ class StorageService {
       let handle = officeData.handle || `@office${Date.now()}`;
       if (!handle.startsWith('@')) handle = '@' + handle;
 
+      // Base Office Object
       const newOffice: Office = {
           id: `office-${Date.now()}`,
           name: officeData.name || 'Novo Escritório',
@@ -604,21 +639,46 @@ class StorageService {
       };
       
       if (isSupabaseConfigured && supabase) {
-          const payload = {
+          // 1. Insert Office (without members array)
+          const officePayload = {
               name: newOffice.name,
               handle: newOffice.handle,
               location: newOffice.location,
               owner_id: newOffice.ownerId,
-              members: newOffice.members,
-              created_at: newOffice.createdAt
+              created_at: newOffice.createdAt,
+              social: newOffice.social
           };
-          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(payload).select().single();
-          if(error) {
-              if (error.code === '23505') throw new Error("Identificador (@handle) já existe.");
-              throw error;
+          
+          const { data: officeDataDb, error: officeError } = await supabase.from(TABLE_NAMES.OFFICES).insert(officePayload).select().single();
+          
+          if(officeError) {
+              if (officeError.code === '23505') throw new Error("Identificador (@handle) já existe.");
+              throw officeError;
           }
-          newOffice.id = data.id;
+          
+          newOffice.id = officeDataDb.id;
+
+          // 2. Insert Admin Member
+          const memberPayload = {
+              office_id: newOffice.id,
+              user_id: actualUserId,
+              role: 'Admin',
+              permissions: { financial: true, cases: true, documents: true, settings: true },
+              // Cache basic info to avoid complex joins if profile missing
+              name: userData.name,
+              email: userData.email,
+              avatar_url: userData.avatar || ''
+          };
+
+          const { error: memberError } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert(memberPayload);
+          if (memberError) {
+              console.error("Failed to add admin member:", memberError);
+              // Clean up office if member creation fails? 
+              // For now just warn.
+          }
+
       } else {
+          // LocalStorage fallback
           const offices = await this.getOffices();
           if (offices.some(o => o.handle.toLowerCase() === handle.toLowerCase())) {
               throw new Error("Handle já existe. Escolha outro.");
@@ -635,7 +695,12 @@ class StorageService {
       let office: Office | undefined;
 
       if (isSupabaseConfigured && supabase) {
-          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', handle).single();
+          const { data, error } = await supabase
+            .from(TABLE_NAMES.OFFICES)
+            .select('*, members:office_members(*)')
+            .eq('handle', handle)
+            .single();
+            
           if (error || !data) throw new Error("Escritório não encontrado ou identificador inválido.");
           
           office = {
@@ -647,7 +712,7 @@ class StorageService {
               logoUrl: data.logo_url,
               createdAt: data.created_at,
               areaOfActivity: data.area_of_activity,
-              members: data.members || []
+              members: this.mapMembers(data.members || [])
           };
       } else {
           const offices = await this.getOffices();
@@ -674,14 +739,28 @@ class StorageService {
           name: userData.name,
           email: userData.email,
           avatarUrl: userData.avatar,
-          role: 'Advogado', // Default role
+          role: 'Advogado',
           permissions: { financial: false, cases: true, documents: true, settings: false }
       };
 
-      office.members.push(newMember);
-      await this.saveOffice(office);
+      if (isSupabaseConfigured && supabase) {
+          await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert({
+              office_id: office.id,
+              user_id: session.userId,
+              role: newMember.role,
+              permissions: newMember.permissions,
+              name: newMember.name,
+              email: newMember.email,
+              avatar_url: newMember.avatarUrl
+          });
+          // Refresh members locally
+          office.members.push(newMember);
+      } else {
+          office.members.push(newMember);
+          await this.saveOffice(office);
+      }
+
       this.logActivity(`Entrou no escritório: ${office.name}`);
-      
       return office;
   }
   
