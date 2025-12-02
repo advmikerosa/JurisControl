@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Plus, MoreVertical, Calendar, Trash2, Loader2, Briefcase, AlignLeft, Flag, CheckCircle2, User, Link as LinkIcon, Search, GripVertical, X, ArrowRight } from 'lucide-react';
@@ -374,10 +373,10 @@ export const Kanban: React.FC = () => {
         return;
     }
     
-    let finalCaseId = undefined;
-    let finalCaseTitle = undefined;
-    let finalClientId = undefined;
-    let finalClientName = undefined;
+    let finalCaseId: string | undefined = undefined;
+    let finalCaseTitle: string | undefined = undefined;
+    let finalClientId: string | undefined = undefined;
+    let finalClientName: string | undefined = undefined;
 
     // Logic to handle Creation of New Entities
     if (formData.linkType === 'case') {
