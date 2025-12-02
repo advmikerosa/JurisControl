@@ -572,23 +572,31 @@ class StorageService {
     }
   }
 
-  // --- Helpers e Seeds ---
-  
-  async createOffice(officeData: Partial<Office>, userId?: string, ownerDetails?: any): Promise<Office> {
-      const actualUserId = userId || (await this.getUserSession()).userId || 'local';
-      
+  /**
+   * createOffice
+   * @param officeData Partial office data
+   * @param explicitOwnerId (Optional) Use this ID instead of fetching from session. Useful during registration.
+   */
+  async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, ownerDetails?: any): Promise<Office> {
+      const actualUserId = explicitOwnerId || (await this.getUserSession()).userId || 'local';
+      const userStr = localStorage.getItem('@JurisControl:user');
+      const userData = userStr ? JSON.parse(userStr) : { name: ownerDetails?.name || 'Admin', email: ownerDetails?.email || '', avatar: '' };
+
+      let handle = officeData.handle || `@office${Date.now()}`;
+      if (!handle.startsWith('@')) handle = '@' + handle;
+
       const newOffice: Office = {
           id: `office-${Date.now()}`,
-          name: officeData.name || 'Novo',
-          handle: officeData.handle || '@novo',
+          name: officeData.name || 'Novo Escritório',
+          handle: handle,
           location: officeData.location || 'Brasil',
           ownerId: actualUserId,
           members: [{
-              userId: actualUserId, 
-              name: ownerDetails?.name || 'Admin', 
-              email: ownerDetails?.email, 
-              role: 'Admin', 
-              avatarUrl: '', 
+              userId: actualUserId,
+              name: userData.name,
+              email: userData.email,
+              avatarUrl: userData.avatar || '',
+              role: 'Admin',
               permissions: { financial: true, cases: true, documents: true, settings: true }
           }],
           createdAt: new Date().toISOString(),
@@ -605,11 +613,14 @@ class StorageService {
               created_at: newOffice.createdAt
           };
           const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(payload).select().single();
-          if(error) throw error;
+          if(error) {
+              if (error.code === '23505') throw new Error("Identificador (@handle) já existe.");
+              throw error;
+          }
           newOffice.id = data.id;
       } else {
           const offices = await this.getOffices();
-          if (offices.some(o => o.handle.toLowerCase() === newOffice.handle.toLowerCase())) {
+          if (offices.some(o => o.handle.toLowerCase() === handle.toLowerCase())) {
               throw new Error("Handle já existe. Escolha outro.");
           }
           offices.push(newOffice);
@@ -621,9 +632,29 @@ class StorageService {
   }
 
   async joinOffice(handle: string): Promise<Office> {
-      const offices = await this.getOffices();
-      const office = offices.find(o => o.handle.toLowerCase() === handle.toLowerCase());
-      if(!office) throw new Error("Escritório não encontrado. Verifique o identificador.");
+      let office: Office | undefined;
+
+      if (isSupabaseConfigured && supabase) {
+          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', handle).single();
+          if (error || !data) throw new Error("Escritório não encontrado ou identificador inválido.");
+          
+          office = {
+              id: data.id,
+              name: data.name,
+              handle: data.handle,
+              location: data.location,
+              ownerId: data.owner_id,
+              logoUrl: data.logo_url,
+              createdAt: data.created_at,
+              areaOfActivity: data.area_of_activity,
+              members: data.members || []
+          };
+      } else {
+          const offices = await this.getOffices();
+          office = offices.find(o => o.handle.toLowerCase() === handle.toLowerCase());
+      }
+
+      if (!office) throw new Error("Escritório não encontrado.");
 
       const session = await this.getUserSession();
       if (!session.userId) throw new Error("Faça login para entrar.");
@@ -631,8 +662,7 @@ class StorageService {
       // Check duplicate
       const isMember = office.members.some(m => m.userId === session.userId);
       if (isMember) {
-          // Already member, just return
-          return office;
+          return office; // Already member, proceed
       }
 
       // Add member
@@ -643,6 +673,7 @@ class StorageService {
           userId: session.userId,
           name: userData.name,
           email: userData.email,
+          avatarUrl: userData.avatar,
           role: 'Advogado', // Default role
           permissions: { financial: false, cases: true, documents: true, settings: false }
       };
@@ -654,7 +685,11 @@ class StorageService {
       return office;
   }
   
-  async inviteUserToOffice(officeId: string, handle: string): Promise<boolean> { return true; }
+  async inviteUserToOffice(officeId: string, handle: string): Promise<boolean> { 
+      // Simulation of invitation
+      await new Promise(resolve => setTimeout(resolve, 800));
+      return true; 
+  }
 
   async getCaseById(id: string) { return (await this.getCases()).find(c => c.id === id) || null; }
   
@@ -761,7 +796,23 @@ class StorageService {
       };
   }
   
-  async searchGlobal(q: string): Promise<SearchResult[]> { return []; }
+  async searchGlobal(q: string): Promise<SearchResult[]> { 
+      if (!q || q.length < 2) return [];
+      const lower = q.toLowerCase();
+      const [clients, cases, tasks] = await Promise.all([this.getClients(), this.getCases(), this.getTasks()]);
+      const res: SearchResult[] = [];
+      
+      clients.forEach(c => {
+          if (c.name.toLowerCase().includes(lower)) res.push({ id: c.id, type: 'client', title: c.name, subtitle: c.type === 'PJ' ? c.cnpj : c.cpf, url: `/clients/${c.id}` });
+      });
+      cases.forEach(c => {
+          if (c.title.toLowerCase().includes(lower) || c.cnj.includes(lower)) res.push({ id: c.id, type: 'case', title: c.title, subtitle: c.cnj, url: `/cases/${c.id}` });
+      });
+      tasks.forEach(t => {
+          if (t.title.toLowerCase().includes(lower)) res.push({ id: t.id, type: 'task', title: t.title, subtitle: t.status, url: '/crm' });
+      });
+      return res.slice(0, 10);
+  }
 
   async deleteAccount() {
     const session = await this.getUserSession();
