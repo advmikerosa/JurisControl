@@ -1,4 +1,3 @@
-
 import React, { Component, Suspense, ReactNode, ErrorInfo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -7,6 +6,8 @@ import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { ConnectionProvider } from './context/ConnectionContext';
+import { ConnectionStatus } from './components/ConnectionStatus';
 import { Logo } from './components/Logo';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 
@@ -37,118 +38,71 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-// Error Boundary
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState = {
-    hasError: false,
-    error: null
-  };
+  public state: ErrorBoundaryState = { hasError: false, error: null };
   
-  readonly props: Readonly<ErrorBoundaryProps>;
+  // Explicitly declare props to fix TS error in some environments
+  public props: ErrorBoundaryProps;
 
-  constructor(props: ErrorBoundaryProps) {
+  constructor(props: ErrorBoundaryProps) { 
     super(props);
     this.props = props;
   }
-
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
-  }
-
-  handleReset = () => {
-    localStorage.clear();
-    window.location.reload();
-  };
+  
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState { return { hasError: true, error }; }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) { console.error("Uncaught error:", error, errorInfo); }
+  handleReset = () => { localStorage.clear(); window.location.reload(); };
 
   render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-[#0f172a] text-white p-6">
           <div className="max-w-md w-full bg-white/5 border border-white/10 rounded-2xl p-8 shadow-2xl text-center">
-            <div className="w-16 h-16 bg-rose-500/20 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle size={32} />
-            </div>
+            <div className="w-16 h-16 bg-rose-500/20 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6"><AlertTriangle size={32} /></div>
             <h1 className="text-2xl font-bold mb-2">Algo deu errado</h1>
-            <p className="text-slate-400 mb-6 text-sm">
-              O sistema encontrou um erro inesperado. Tente recarregar ou resetar a aplicação se o problema persistir.
-            </p>
-            <div className="bg-black/20 p-4 rounded-lg mb-6 text-left overflow-auto max-h-32">
-              <code className="text-xs text-rose-300 font-mono">
-                {this.state.error?.message || 'Erro desconhecido'}
-              </code>
-            </div>
+            <p className="text-slate-400 mb-6 text-sm">O sistema encontrou um erro inesperado.</p>
             <div className="flex gap-3 justify-center">
-              <button 
-                onClick={() => window.location.reload()}
-                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold transition-colors flex items-center gap-2"
-              >
-                <RefreshCw size={18} /> Recarregar
-              </button>
-              <button 
-                onClick={this.handleReset}
-                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-bold transition-colors flex items-center gap-2"
-              >
-                <Trash2 size={18} /> Resetar App
-              </button>
+              <button onClick={() => window.location.reload()} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold flex items-center gap-2"><RefreshCw size={18} /> Recarregar</button>
+              <button onClick={this.handleReset} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-bold flex items-center gap-2"><Trash2 size={18} /> Resetar</button>
             </div>
           </div>
         </div>
       );
     }
-
     return this.props.children;
   }
 }
 
-// Loading Spinner
 const LoadingScreen = () => (
   <div className="min-h-screen flex flex-col items-center justify-center bg-[#0f172a]">
     <div className="relative">
       <div className="w-16 h-16 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <Logo size={24} />
-      </div>
+      <div className="absolute inset-0 flex items-center justify-center"><Logo size={24} /></div>
     </div>
     <p className="mt-4 text-slate-400 font-medium animate-pulse">Carregando JurisControl...</p>
   </div>
 );
 
-// Protected Route Component
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
-
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
+  if (isLoading) return <LoadingScreen />;
+  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />;
   return <>{children}</>;
 };
 
-// Main App Component
 const AppContent = () => {
   const { isAuthenticated } = useAuth();
-
   return (
     <Router>
+      <ConnectionStatus />
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
-          {/* Public Routes */}
           <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" replace />} />
           <Route path="/confirm-email" element={<EmailConfirmation />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfUse />} />
-
-          {/* Protected Routes */}
           <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
           <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarView /></Layout></ProtectedRoute>} />
           <Route path="/cases" element={<ProtectedRoute><Layout><Cases /></Layout></ProtectedRoute>} />
@@ -160,8 +114,6 @@ const AppContent = () => {
           <Route path="/profile" element={<ProtectedRoute><Layout><UserProfile /></Layout></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
           <Route path="/documents" element={<ProtectedRoute><Layout><Documents /></Layout></ProtectedRoute>} />
-
-          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <CookieConsent />
@@ -173,15 +125,17 @@ const AppContent = () => {
 export default function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <ToastProvider>
-          <NotificationProvider>
-            <AuthProvider>
-              <AppContent />
-            </AuthProvider>
-          </NotificationProvider>
-        </ToastProvider>
-      </ThemeProvider>
+      <ConnectionProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <NotificationProvider>
+              <AuthProvider>
+                <AppContent />
+              </AuthProvider>
+            </NotificationProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </ConnectionProvider>
     </ErrorBoundary>
   );
 }

@@ -1,2 +1,2 @@
-// Este arquivo foi descontinuado. O sistema utiliza Supabase ou LocalStorage (storageService.ts).
+// This file is deprecated.
 export {};
