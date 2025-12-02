@@ -558,8 +558,6 @@ class StorageService {
         try {
             await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
         } catch {
-            // Office updates are critical, generally strictly required online, 
-            // but we can queue them for metadata updates.
             console.warn("Saving office offline not fully supported.");
         }
         this.logActivity(`Atualizou escritório: ${office.name}`);
@@ -574,7 +572,7 @@ class StorageService {
     }
   }
 
-  // --- Helpers e Seeds (Mantidos iguais, omitidos para brevidade se não alterados logicamente) ---
+  // --- Helpers e Seeds ---
   
   async createOffice(officeData: Partial<Office>, userId?: string, ownerDetails?: any): Promise<Office> {
       const actualUserId = userId || (await this.getUserSession()).userId || 'local';
@@ -583,7 +581,7 @@ class StorageService {
           id: `office-${Date.now()}`,
           name: officeData.name || 'Novo',
           handle: officeData.handle || '@novo',
-          location: 'Brasil',
+          location: officeData.location || 'Brasil',
           ownerId: actualUserId,
           members: [{
               userId: actualUserId, 
@@ -611,6 +609,9 @@ class StorageService {
           newOffice.id = data.id;
       } else {
           const offices = await this.getOffices();
+          if (offices.some(o => o.handle.toLowerCase() === newOffice.handle.toLowerCase())) {
+              throw new Error("Handle já existe. Escolha outro.");
+          }
           offices.push(newOffice);
           this.setLocal(LOCAL_KEYS.OFFICES, offices);
       }
@@ -621,8 +622,35 @@ class StorageService {
 
   async joinOffice(handle: string): Promise<Office> {
       const offices = await this.getOffices();
-      const office = offices.find(o => o.handle === handle);
-      if(!office) throw new Error("Escritório não encontrado");
+      const office = offices.find(o => o.handle.toLowerCase() === handle.toLowerCase());
+      if(!office) throw new Error("Escritório não encontrado. Verifique o identificador.");
+
+      const session = await this.getUserSession();
+      if (!session.userId) throw new Error("Faça login para entrar.");
+
+      // Check duplicate
+      const isMember = office.members.some(m => m.userId === session.userId);
+      if (isMember) {
+          // Already member, just return
+          return office;
+      }
+
+      // Add member
+      const userStr = localStorage.getItem('@JurisControl:user');
+      const userData = userStr ? JSON.parse(userStr) : { name: 'Novo Membro', email: '' };
+
+      const newMember: OfficeMember = {
+          userId: session.userId,
+          name: userData.name,
+          email: userData.email,
+          role: 'Advogado', // Default role
+          permissions: { financial: false, cases: true, documents: true, settings: false }
+      };
+
+      office.members.push(newMember);
+      await this.saveOffice(office);
+      this.logActivity(`Entrou no escritório: ${office.name}`);
+      
       return office;
   }
   

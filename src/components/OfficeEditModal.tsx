@@ -1,8 +1,8 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Modal } from './ui/Modal';
 import { Office, OfficeMember, MemberRole } from '../types';
-import { Camera, Building, Users, Settings as SettingsIcon, Save, Trash2, Plus, Mail, Phone, Globe, MapPin, Instagram, Linkedin, Facebook, Shield, DollarSign, FileText, Scale } from 'lucide-react';
+import { Camera, Building, Users, Settings as SettingsIcon, Save, Trash2, Plus, Mail, Phone, Globe, MapPin, Instagram, Linkedin, Facebook, DollarSign, FileText, Scale, User, Shield } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { storageService } from '../services/storageService';
 
@@ -59,6 +59,12 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
   const updateMemberRole = (userId: string, newRole: MemberRole) => {
     const updatedMembers = formData.members.map(m => {
         if (m.userId === userId) {
+            // Protect Owner
+            if (userId === formData.ownerId && newRole !== 'Admin') {
+                addToast('O proprietário deve ser sempre Admin.', 'error');
+                return m;
+            }
+
             // Default permissions based on role
             let perms = { ...m.permissions };
             if (newRole === 'Admin') perms = { financial: true, cases: true, documents: true, settings: true };
@@ -73,6 +79,8 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
   const togglePermission = (userId: string, key: keyof OfficeMember['permissions']) => {
       const updatedMembers = formData.members.map(m => {
           if (m.userId === userId) {
+              // Admin always has full permissions
+              if (m.role === 'Admin') return m;
               return { ...m, permissions: { ...m.permissions, [key]: !m.permissions[key] } };
           }
           return m;
@@ -81,6 +89,10 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
   };
 
   const removeMember = (userId: string) => {
+      if (userId === formData.ownerId) {
+          addToast('Não é possível remover o proprietário do escritório.', 'error');
+          return;
+      }
       if (confirm('Tem certeza que deseja remover este membro da equipe?')) {
           setFormData({ ...formData, members: formData.members.filter(m => m.userId !== userId) });
       }
@@ -102,7 +114,7 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
       };
       setFormData({ ...formData, members: [...formData.members, newMember] });
       setNewMemberEmail('');
-      addToast('Convite enviado (simulação). Membro adicionado.', 'success');
+      addToast('Membro adicionado (simulação).', 'success');
   };
 
   return (
@@ -201,14 +213,14 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                  <div className="space-y-6 animate-fade-in">
                      <div className="flex gap-2 p-4 bg-white/5 border border-white/10 rounded-xl items-end">
                          <div className="flex-1">
-                             <label className="text-xs text-slate-400 block mb-1">Adicionar Membro (E-mail)</label>
+                             <label className="text-xs text-slate-400 block mb-1">Convidar Membro (E-mail)</label>
                              <div className="relative">
                                  <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                                  <input type="email" value={newMemberEmail} onChange={e => setNewMemberEmail(e.target.value)} placeholder="novo.advogado@email.com" className="w-full bg-black/20 border border-white/10 rounded-lg p-2 pl-9 text-white text-sm outline-none focus:border-indigo-500" />
                              </div>
                          </div>
                          <button onClick={addMemberMock} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
-                             <Plus size={16} /> Convidar
+                             <Plus size={16} /> Adicionar
                          </button>
                      </div>
 
@@ -217,9 +229,16 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                              <div key={member.userId} className="p-4 rounded-xl bg-white/5 border border-white/10">
                                  <div className="flex justify-between items-start mb-4">
                                      <div className="flex items-center gap-3">
-                                         <img src={member.avatarUrl} alt={member.name} className="w-10 h-10 rounded-full" />
+                                         {member.avatarUrl ? (
+                                             <img src={member.avatarUrl} alt={member.name} className="w-10 h-10 rounded-full" />
+                                         ) : (
+                                             <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{member.name.charAt(0)}</div>
+                                         )}
                                          <div>
-                                             <p className="text-sm font-bold text-white">{member.name}</p>
+                                             <p className="text-sm font-bold text-white flex items-center gap-2">
+                                                 {member.name}
+                                                 {member.userId === formData.ownerId && <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/30">Dono</span>}
+                                             </p>
                                              <p className="text-xs text-slate-400">{member.email}</p>
                                          </div>
                                      </div>
@@ -228,15 +247,18 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                                             value={member.role}
                                             onChange={(e) => updateMemberRole(member.userId, e.target.value as MemberRole)}
                                             className="bg-black/20 border border-white/10 rounded-lg text-xs text-white font-medium py-1 px-2 outline-none focus:border-indigo-500 cursor-pointer"
+                                            disabled={member.userId === formData.ownerId}
                                          >
                                              <option value="Admin" className="bg-slate-800 text-white">Admin</option>
                                              <option value="Advogado" className="bg-slate-800 text-white">Advogado</option>
                                              <option value="Estagiário" className="bg-slate-800 text-white">Estagiário</option>
                                              <option value="Financeiro" className="bg-slate-800 text-white">Financeiro</option>
                                          </select>
-                                         <button onClick={() => removeMember(member.userId)} className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors" title="Remover Membro">
-                                             <Trash2 size={14} />
-                                         </button>
+                                         {member.userId !== formData.ownerId && (
+                                             <button onClick={() => removeMember(member.userId)} className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors" title="Remover Membro">
+                                                 <Trash2 size={14} />
+                                             </button>
+                                         )}
                                      </div>
                                  </div>
                                  
@@ -245,24 +267,28 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                                      <div className="flex flex-wrap gap-2">
                                          <button 
                                             onClick={() => togglePermission(member.userId, 'cases')}
+                                            disabled={member.role === 'Admin'}
                                             className={`px-3 py-1 rounded-md text-xs font-medium border flex items-center gap-1.5 transition-all ${member.permissions.cases ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300' : 'bg-transparent border-white/10 text-slate-500 opacity-50'}`}
                                          >
                                              <Scale size={12} /> Processos
                                          </button>
                                          <button 
                                             onClick={() => togglePermission(member.userId, 'financial')}
+                                            disabled={member.role === 'Admin'}
                                             className={`px-3 py-1 rounded-md text-xs font-medium border flex items-center gap-1.5 transition-all ${member.permissions.financial ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300' : 'bg-transparent border-white/10 text-slate-500 opacity-50'}`}
                                          >
                                              <DollarSign size={12} /> Financeiro
                                          </button>
                                          <button 
                                             onClick={() => togglePermission(member.userId, 'documents')}
+                                            disabled={member.role === 'Admin'}
                                             className={`px-3 py-1 rounded-md text-xs font-medium border flex items-center gap-1.5 transition-all ${member.permissions.documents ? 'bg-blue-500/20 border-blue-500/50 text-blue-300' : 'bg-transparent border-white/10 text-slate-500 opacity-50'}`}
                                          >
                                              <FileText size={12} /> Documentos
                                          </button>
                                          <button 
                                             onClick={() => togglePermission(member.userId, 'settings')}
+                                            disabled={member.role === 'Admin'}
                                             className={`px-3 py-1 rounded-md text-xs font-medium border flex items-center gap-1.5 transition-all ${member.permissions.settings ? 'bg-amber-500/20 border-amber-500/50 text-amber-300' : 'bg-transparent border-white/10 text-slate-500 opacity-50'}`}
                                          >
                                              <SettingsIcon size={12} /> Configurações
@@ -318,6 +344,7 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                          <button className="w-full p-3 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 transition-colors text-sm font-medium flex items-center justify-center gap-2">
                              <Trash2 size={16} /> Desativar ou Excluir Escritório
                          </button>
+                         <p className="text-[10px] text-rose-400/60 mt-2 text-center">Apenas o proprietário pode realizar esta ação.</p>
                      </div>
                  </div>
              )}
