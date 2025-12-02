@@ -1,9 +1,12 @@
+
+// This file was identified as duplicate and unnecessary during QA Audit.
+// The actual Layout component is located at src/components/Layout.tsx
+// This file is kept as a placeholder to ensure imports don't break if any exist, 
+// but it should be removed in the next refactor cycle.
+
 import React from 'react';
+import { Navigate } from 'react-router-dom';
 
-// This file seems to be a duplicate or incorrect location. 
-// The actual Layout is in src/components/Layout.tsx
-// Keeping this file valid but empty to avoid build errors if referenced by mistake.
-
-export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return <>{children}</>;
+export const Layout: React.FC = () => {
+  return <Navigate to="/" replace />;
 };
