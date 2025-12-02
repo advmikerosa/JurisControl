@@ -594,7 +594,6 @@ class StorageService {
   
   async getCasesPaginated(page: number, limit: number, search: string, status: string | null, category: string | null, range: any) {
       let data = await this.getCases();
-      // Filtering logic duplicated from previous implementation for brevity
       if (search) {
         const lower = search.toLowerCase();
         data = data.filter(c => c.title.toLowerCase().includes(lower) || c.cnj.includes(lower) || c.client.name.toLowerCase().includes(lower));
@@ -738,6 +737,51 @@ class StorageService {
           this.setLocal(LOCAL_KEYS.TASKS, MOCK_TASKS);
           this.setLocal(LOCAL_KEYS.FINANCIAL, MOCK_FINANCIALS);
       }
+  }
+
+  // --- Real-time Alerts Check ---
+  async checkRealtimeAlerts() {
+    const tasks = await this.getTasks();
+    const cases = await this.getCases();
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('pt-BR'); // DD/MM/YYYY
+
+    // Verificar se já alertamos nesta sessão para não spammar
+    const alertedKeys = JSON.parse(sessionStorage.getItem('juris_alerted_keys') || '[]');
+    const newAlerts: string[] = [];
+
+    // 1. Prazos/Tarefas de Hoje (Prazo Fatal)
+    // Se for 9h da manhã e ainda não alertamos
+    if (now.getHours() === 9 && now.getMinutes() < 30) {
+      tasks.forEach(t => {
+        if (t.status !== 'Concluído' && t.dueDate === todayStr) {
+          const key = `task-deadline-${t.id}-${todayStr}`;
+          if (!alertedKeys.includes(key)) {
+            notificationService.notify('Prazo Fatal Hoje', `Tarefa: ${t.title} vence hoje!`, 'warning');
+            newAlerts.push(key);
+          }
+        }
+      });
+    }
+
+    // 2. Reuniões e Audiências (30 min antes)
+    // Assume que tasks podem ter hora na descrição ou título, mas vamos focar em 'cases.nextHearing'
+    // Para simplificar, vamos verificar se há audiência hoje
+    cases.forEach(c => {
+      if (c.nextHearing === todayStr) {
+        const key = `hearing-${c.id}-${todayStr}`;
+        // Se ainda não alertou hoje, alerta
+        if (!alertedKeys.includes(key)) {
+           // Em um cenário real com horário, verificaria se now + 30min >= hearingTime
+           notificationService.notify('Audiência Hoje', `Processo ${c.cnj} tem audiência hoje.`, 'info');
+           newAlerts.push(key);
+        }
+      }
+    });
+
+    if (newAlerts.length > 0) {
+      sessionStorage.setItem('juris_alerted_keys', JSON.stringify([...alertedKeys, ...newAlerts]));
+    }
   }
 }
 

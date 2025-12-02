@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom';
 import { 
   Briefcase, 
@@ -28,16 +28,15 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storageService } from '../services/storageService';
+import { permissionService } from '../services/permissionService';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
-import { usePermission } from '../hooks/usePermission';
 import { Logo } from './Logo';
 import { SearchResult, Office } from '../types';
 import { Breadcrumbs } from './Breadcrumbs';
 import { AiAssistant } from './AiAssistant';
-import { SystemNotification } from '../services/notificationService';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -50,7 +49,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { logout, user } = useAuth();
   const { unreadCount, notifications, markAsRead, markAllAsRead, clearAll } = useNotifications();
   const { theme, toggleTheme } = useTheme();
-  const { can } = usePermission();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
@@ -93,14 +91,22 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 ? myOffices.find((o: Office) => o.id === user.currentOfficeId) 
                 : myOffices[0];
             setCurrentOffice(selected || myOffices[0]);
-        } else {
+        } else if (user) {
+            // Fallback dummy office with current user as Admin to ensure menu visibility
             setCurrentOffice({
                 id: 'default',
                 name: 'Meu Escritório',
                 handle: '@usuario',
-                ownerId: user?.id || '',
+                ownerId: user.id,
                 location: 'Brasil',
-                members: []
+                members: [{
+                  userId: user.id,
+                  name: user.name,
+                  email: user.email,
+                  role: 'Admin',
+                  permissions: { financial: true, cases: true, documents: true, settings: true }
+                }],
+                createdAt: new Date().toISOString()
             });
         }
       } catch (e) {
@@ -172,7 +178,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     return `${Math.floor(hours / 24)}d atrás`;
   };
 
-  const visibleNavItems = navItems.filter(item => can(item.resource as any, item.action as any));
+  // Calculate visible items based on current office permissions
+  const visibleNavItems = useMemo(() => {
+    if (!currentOffice || !user) return navItems; // Fail-safe: show all if loading to prevent flicker or show empty
+    return navItems.filter(item => 
+      permissionService.can(user, currentOffice, item.resource as any, item.action as any)
+    );
+  }, [currentOffice, user]);
 
   return (
     <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative selection:bg-indigo-500/30 selection:text-indigo-900 dark:selection:text-indigo-100 bg-slate-50 dark:bg-[#0f172a] transition-colors duration-300">
@@ -224,7 +236,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </nav>
 
         <div className="p-4 border-t border-slate-200 dark:border-white/10 space-y-1">
-          {can('settings', 'view') && (
+          {permissionService.can(user, currentOffice, 'settings', 'view') && (
             <NavLink 
               to="/settings"
               className={({ isActive }) => `flex items-center gap-3 px-4 py-3 w-full rounded-xl transition-colors text-sm font-medium ${isActive ? 'text-slate-900 dark:text-white bg-slate-100 dark:bg-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'}`}
@@ -284,7 +296,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                    ))}
                  </nav>
                  <div className="border-t border-slate-200 dark:border-white/10 pt-4 space-y-2">
-                    {can('settings', 'view') && (
+                    {permissionService.can(user, currentOffice, 'settings', 'view') && (
                       <NavLink 
                         to="/settings"
                         onClick={() => setIsMobileMenuOpen(false)}

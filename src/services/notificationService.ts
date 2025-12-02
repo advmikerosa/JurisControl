@@ -1,5 +1,6 @@
 
 import { AppSettings } from '../types';
+import { storageService } from './storageService';
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';
 
@@ -54,8 +55,7 @@ class NotificationService {
 
   private async simulateEmailDispatch(title: string, body: string) {
     // Em um cenário real, isso chamaria uma API de backend (ex: SendGrid, AWS SES)
-    console.group('📧 [Simulação de E-mail Enviado]');
-    console.log(`To: usuario@juriscontrol.com`);
+    console.groupCollapsed('📧 [Simulação de E-mail Enviado]');
     console.log(`Subject: ${title}`);
     console.log(`Body: ${body}`);
     console.groupEnd();
@@ -63,7 +63,6 @@ class NotificationService {
 
   // Send notification based on user settings
   public notify(title: string, body: string, type: NotificationType = 'info') {
-    // FIX: Avoid circular dependency by reading directly from storage instead of importing storageService
     let settings = { email: true, desktop: true, sound: false };
     try {
         const stored = localStorage.getItem('@JurisControl:settings');
@@ -93,27 +92,39 @@ class NotificationService {
       this.playSound();
     }
 
-    // 3. Desktop Notification
+    // 3. Desktop Notification (Browser Native)
     if (settings.desktop) {
-      if (Notification.permission === 'granted') {
-        new Notification(title, {
-          body,
-          icon: '/vite.svg', // Fallback icon
-          tag: 'juriscontrol-notification'
-        });
-      } else if (Notification.permission !== 'denied') {
-        // Try to request permission if not explicitly denied yet
-        this.requestDesktopPermission().then(granted => {
-          if (granted) {
-            new Notification(title, { body, icon: '/vite.svg' });
-          }
-        });
-      }
+      this.sendBrowserNotification(title, body);
     }
 
     // 4. Email Notification
-    if (settings.email) {
+    if (settings.email && type === 'error' || type === 'warning') {
+      // Only email on high priority items to avoid spam in this demo logic
       this.simulateEmailDispatch(title, body);
+    }
+  }
+
+  private sendBrowserNotification(title: string, body: string) {
+    if (!('Notification' in window)) return;
+
+    if (Notification.permission === 'granted') {
+      const n = new Notification(title, {
+        body,
+        icon: '/favicon.ico', // Tenta usar o favicon como ícone
+        tag: 'juriscontrol-notification',
+        requireInteraction: false // Fecha automaticamente após alguns segundos
+      });
+      
+      n.onclick = () => {
+        window.focus();
+        n.close();
+      };
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          this.sendBrowserNotification(title, body);
+        }
+      });
     }
   }
 
