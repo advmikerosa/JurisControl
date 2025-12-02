@@ -730,7 +730,7 @@ export const Settings: React.FC = () => {
                            <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded">{myOffice?.members?.length || 0} Membros</span>
                        </div>
                        <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                          {(myOffice?.members || []).map((member, idx) => (
+                          {myOffice?.members?.map((member, idx) => (
                               <div key={member.userId} className={`p-4 flex items-center justify-between ${idx !== (myOffice?.members?.length || 0) - 1 ? 'border-b border-white/5' : ''}`}>
                                   <div className="flex items-center gap-3">
                                       <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden">
@@ -739,6 +739,7 @@ export const Settings: React.FC = () => {
                                       <div>
                                           <p className="text-sm text-white font-medium">
                                               {member.name} {user?.id === member.userId && '(Você)'}
+                                              {/* Safe check for owner if needed */}
                                               {myOffice && member.userId === myOffice.ownerId && <span className="text-[10px] ml-2 text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">Dono</span>}
                                           </p>
                                           <p className="text-xs text-slate-300">{member.role}</p>
