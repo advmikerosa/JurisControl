@@ -1,3 +1,4 @@
+
 import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { notificationService } from './notificationService';
@@ -191,14 +192,66 @@ class StorageService {
     
     const list = this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
     const idx = list.findIndex(i => i.id === legalCase.id);
-    if (idx >= 0) list[idx] = legalCase;
-    else {
+    if (idx >= 0) {
+        list[idx] = legalCase;
+    } else {
         if (!legalCase.id || !legalCase.id.startsWith('case-')) legalCase.id = `case-${Date.now()}`;
         legalCase.userId = session.userId || 'local';
         list.push(legalCase);
     }
     this.setLocal(LOCAL_KEYS.CASES, list);
     this.logActivity(`Salvou processo (Local): ${legalCase.title}`);
+  }
+
+  async deleteCase(id: string) {
+    if (isSupabaseConfigured && supabase) {
+      const session = await this.getUserSession();
+      if (!session.userId) return;
+      await supabase.from(TABLE_NAMES.CASES).delete().eq('id', id).eq('office_id', session.officeId);
+    } else {
+      const list = this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
+      this.setLocal(LOCAL_KEYS.CASES, list.filter(i => i.id !== id));
+    }
+    this.logActivity(`Excluiu processo ID: ${id}`, 'Warning');
+  }
+
+  // --- Smart Movement Atomic Save ---
+  async saveSmartMovement(
+    caseId: string, 
+    movement: CaseMovement, 
+    tasks: Task[], 
+    document: SystemDocument | null
+  ) {
+    const session = await this.getUserSession();
+    if (!session.officeId) throw new Error("Erro de sessão.");
+
+    // 1. Get current Case
+    const currentCase = await this.getCaseById(caseId);
+    if (!currentCase) throw new Error("Processo não encontrado.");
+
+    // 2. Update Movements in Case
+    const updatedMovements = [movement, ...(currentCase.movements || [])];
+    const updatedCase = { ...currentCase, movements: updatedMovements, lastUpdate: new Date().toISOString() };
+    await this.saveCase(updatedCase);
+
+    // 3. Save Tasks
+    for (const task of tasks) {
+      task.officeId = session.officeId;
+      task.caseId = caseId;
+      task.clientId = currentCase.client.id;
+      task.clientName = currentCase.client.name;
+      task.caseTitle = currentCase.title;
+      await this.saveTask(task);
+    }
+
+    // 4. Save Document if exists
+    if (document) {
+      document.officeId = session.officeId;
+      document.caseId = caseId;
+      await this.saveDocument(document);
+    }
+
+    this.logActivity(`Upload Inteligente no processo ${caseId}`);
   }
 
   // --- Tarefas ---
@@ -242,6 +295,17 @@ class StorageService {
         list.push(task);
     }
     this.setLocal(LOCAL_KEYS.TASKS, list);
+  }
+  
+  async deleteTask(id: string) {
+    if (isSupabaseConfigured && supabase) {
+      const session = await this.getUserSession();
+      if (!session.userId) return;
+      await supabase.from(TABLE_NAMES.TASKS).delete().eq('id', id).eq('office_id', session.officeId);
+    } else {
+      const list = this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []);
+      this.setLocal(LOCAL_KEYS.TASKS, list.filter(i => i.id !== id));
+    }
   }
 
   // --- Helpers de Mapeamento ---
@@ -329,6 +393,16 @@ class StorageService {
           this.setLocal(LOCAL_KEYS.DOCUMENTS, list);
       }
   }
+  async deleteDocument(id: string) {
+    if (isSupabaseConfigured && supabase) {
+      const session = await this.getUserSession();
+      if (!session.userId) return;
+      await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id).eq('office_id', session.officeId);
+    } else {
+      const list = this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []);
+      this.setLocal(LOCAL_KEYS.DOCUMENTS, list.filter(i => i.id !== id));
+    }
+  }
 
   async getOffices(): Promise<Office[]> {
       return this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
@@ -379,19 +453,6 @@ class StorageService {
   
   async inviteUserToOffice(officeId: string, handle: string): Promise<boolean> { return true; }
 
-  async deleteCase(id: string) { 
-      const list = this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
-      this.setLocal(LOCAL_KEYS.CASES, list.filter(i => i.id !== id)); 
-  }
-  async deleteTask(id: string) { 
-      const list = this.getLocal<Task[]>(LOCAL_KEYS.TASKS, []);
-      this.setLocal(LOCAL_KEYS.TASKS, list.filter(i => i.id !== id)); 
-  }
-  async deleteDocument(id: string) { 
-      const list = this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []);
-      this.setLocal(LOCAL_KEYS.DOCUMENTS, list.filter(i => i.id !== id)); 
-  }
-  
   async getCaseById(id: string) { return (await this.getCases()).find(c => c.id === id) || null; }
   async getTasksByCaseId(id: string) { return (await this.getTasks()).filter(t => t.caseId === id); }
   async getFinancialsByCaseId(id: string) { return (await this.getFinancials()).filter(f => f.caseId === id); }
@@ -440,7 +501,34 @@ class StorageService {
   
   async searchGlobal(q: string): Promise<SearchResult[]> { return []; }
 
-  async deleteAccount() { localStorage.clear(); }
+  async deleteAccount() {
+    const session = await this.getUserSession();
+    
+    if (isSupabaseConfigured && supabase) {
+      if (!session.userId) return;
+      
+      const tables = [
+        TABLE_NAMES.LOGS,
+        TABLE_NAMES.FINANCIAL,
+        TABLE_NAMES.TASKS,
+        TABLE_NAMES.DOCUMENTS,
+        TABLE_NAMES.CASES,
+        TABLE_NAMES.CLIENTS,
+        TABLE_NAMES.PROFILES
+      ];
+
+      for (const table of tables) {
+        try {
+            await supabase.from(table).delete().eq('user_id', session.userId);
+        } catch (e) {
+            console.error(`Error deleting from ${table}`, e);
+        }
+      }
+      
+    } else {
+      localStorage.clear();
+    }
+  }
   factoryReset() { localStorage.clear(); window.location.reload(); }
 
   async seedDatabase() {

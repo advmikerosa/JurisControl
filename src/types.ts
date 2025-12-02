@@ -37,6 +37,24 @@ export type CasePhase =
 export type ClientType = 'PF' | 'PJ';
 export type ClientStatus = 'Ativo' | 'Inativo' | 'Sob Análise' | 'Em Litígio' | 'Lead';
 
+// --- AI Extraction Types ---
+export interface ExtractedDeadline {
+  title: string;
+  date: string; // YYYY-MM-DD
+  priority: Priority;
+  description?: string;
+}
+
+export interface ExtractedMovementData {
+  type: 'Andamento' | 'Despacho' | 'Petição' | 'Audiência' | 'Nota' | 'Sentença' | 'Decisão';
+  date: string; // YYYY-MM-DD or DD/MM/YYYY
+  title: string;
+  summary: string;
+  deadlines: ExtractedDeadline[];
+  value?: number;
+  confidence: number;
+}
+
 // --- Security & Permissions Types ---
 export type PermissionResource = 'financial' | 'cases' | 'clients' | 'documents' | 'settings' | 'team';
 export type PermissionAction = 'view' | 'create' | 'edit' | 'delete' | 'export';
@@ -131,7 +149,7 @@ export interface CaseMovement {
   date: string;
   title: string;
   description: string;
-  type: 'Andamento' | 'Despacho' | 'Petição' | 'Audiência' | 'Nota' | 'Sistema';
+  type: 'Andamento' | 'Despacho' | 'Petição' | 'Audiência' | 'Nota' | 'Sistema' | 'Sentença' | 'Decisão';
   author: string;
 }
 

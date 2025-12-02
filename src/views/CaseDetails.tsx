@@ -3,10 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storageService } from '../services/storageService';
 import { GlassCard } from '../components/ui/GlassCard';
-import { ArrowLeft, Calendar, User, DollarSign, Plus, Paperclip, Clock, CheckCircle, AlertTriangle, Send, Loader2, FileText, Edit2, Check, History } from 'lucide-react';
-import { LegalCase, Task, FinancialRecord, SystemDocument, CaseMovement, CasePhase } from '../types';
+import { ArrowLeft, Calendar, User, DollarSign, Plus, Paperclip, Clock, CheckCircle, AlertTriangle, Send, Loader2, FileText, Edit2, Check, History, Sparkles } from 'lucide-react';
+import { LegalCase, Task, FinancialRecord, SystemDocument, CaseMovement, CasePhase, ExtractedMovementData } from '../types';
 import { useToast } from '../context/ToastContext';
 import { CaseFormModal } from '../components/CaseFormModal';
+import { DocumentUpload } from '../components/DocumentUpload';
+import { Modal } from '../components/ui/Modal';
 import { CASE_PHASES } from '../utils/constants';
 
 export const CaseDetails: React.FC = () => {
@@ -24,6 +26,9 @@ export const CaseDetails: React.FC = () => {
   
   // Edit State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  
+  // Smart Upload State
+  const [isSmartUploadOpen, setIsSmartUploadOpen] = useState(false);
 
   const loadData = async () => {
     if (id) {
@@ -80,6 +85,57 @@ export const CaseDetails: React.FC = () => {
     setCaseData(updatedCase);
     setNewMovement('');
     addToast('Movimentação registrada.', 'success');
+  };
+
+  const handleSmartUploadSave = async (data: ExtractedMovementData, file: File) => {
+    if (!caseData) return;
+
+    try {
+        const movement: CaseMovement = {
+            id: `mov-${Date.now()}`,
+            date: new Date(data.date).toLocaleDateString('pt-BR'), // Converter para formato local
+            title: data.title,
+            description: data.summary,
+            type: data.type,
+            author: 'JurisAI'
+        };
+
+        const newTasks: Task[] = data.deadlines.map(dl => ({
+            id: `task-${Date.now()}-${Math.random().toString(36).substr(2,5)}`,
+            officeId: caseData.officeId,
+            title: dl.title,
+            dueDate: new Date(dl.date).toLocaleDateString('pt-BR'),
+            priority: dl.priority,
+            status: 'A Fazer',
+            assignedTo: caseData.responsibleLawyer,
+            description: dl.description,
+            caseId: caseData.id,
+            caseTitle: caseData.title,
+            clientId: caseData.client.id,
+            clientName: caseData.client.name
+        }));
+
+        const newDoc: SystemDocument = {
+            id: `doc-${Date.now()}`,
+            officeId: caseData.officeId,
+            name: file.name,
+            size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+            type: file.name.split('.').pop()?.toUpperCase() || 'FILE',
+            date: new Date().toLocaleDateString('pt-BR'),
+            category: 'Processual',
+            caseId: caseData.id
+        };
+
+        // Salvar tudo atomicamente (via serviço)
+        await storageService.saveSmartMovement(caseData.id, movement, newTasks, newDoc);
+        
+        setIsSmartUploadOpen(false);
+        addToast('Movimentação, Prazos e Documento salvos com sucesso!', 'success');
+        loadData(); // Refresh
+    } catch (e) {
+        console.error(e);
+        addToast('Erro ao salvar dados do upload inteligente.', 'error');
+    }
   };
 
   const handleEditSuccess = async () => {
@@ -207,6 +263,15 @@ export const CaseDetails: React.FC = () => {
                 <div className="space-y-6">
                     {/* Input Nova Movimentação */}
                     <GlassCard className="p-4">
+                        <div className="flex justify-between items-center mb-4">
+                            <h4 className="text-sm font-bold text-white">Nova Movimentação</h4>
+                            <button 
+                                onClick={() => setIsSmartUploadOpen(true)}
+                                className="text-xs bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all shadow-glow hover:scale-105"
+                            >
+                                <Sparkles size={12} /> Upload Inteligente (IA)
+                            </button>
+                        </div>
                         <div className="flex gap-3">
                             <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center shrink-0">
                                 <User size={20} className="text-slate-400" />
@@ -215,7 +280,7 @@ export const CaseDetails: React.FC = () => {
                                 <textarea 
                                     value={newMovement}
                                     onChange={(e) => setNewMovement(e.target.value)}
-                                    placeholder="Adicionar nota, andamento ou despacho..." 
+                                    placeholder="Adicionar nota, andamento ou despacho manualmente..." 
                                     className="w-full bg-transparent text-white placeholder:text-slate-500 outline-none resize-none h-20 text-sm"
                                 ></textarea>
                                 <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5">
@@ -223,7 +288,7 @@ export const CaseDetails: React.FC = () => {
                                     <button 
                                         onClick={handleAddMovement}
                                         disabled={!newMovement.trim()}
-                                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-2"
+                                        className="px-4 py-1.5 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-2"
                                     >
                                         <Send size={12} /> Registrar
                                     </button>
@@ -243,8 +308,12 @@ export const CaseDetails: React.FC = () => {
                                             <span className="text-xs font-bold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded">{mov.type}</span>
                                             <span className="text-xs text-slate-500">{mov.date}</span>
                                         </div>
-                                        <p className="text-sm text-slate-200 whitespace-pre-wrap">{mov.description}</p>
-                                        <p className="text-xs text-slate-500 mt-2">Registrado por: {mov.author}</p>
+                                        <h5 className="text-sm font-bold text-white mb-1">{mov.title}</h5>
+                                        <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{mov.description}</p>
+                                        <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
+                                            {mov.author === 'JurisAI' && <Sparkles size={10} className="text-indigo-400" />}
+                                            Registrado por: {mov.author}
+                                        </p>
                                     </div>
                                 </div>
                             ))
@@ -440,6 +509,20 @@ export const CaseDetails: React.FC = () => {
             initialData={caseData}
         />
       )}
+
+      {/* Smart Upload Modal */}
+      <Modal 
+        isOpen={isSmartUploadOpen}
+        onClose={() => setIsSmartUploadOpen(false)}
+        title="Upload Inteligente de Documento"
+        maxWidth="max-w-4xl"
+        footer={null} // Footer is handled inside DocumentUpload
+      >
+         <DocumentUpload 
+            onSave={handleSmartUploadSave}
+            onCancel={() => setIsSmartUploadOpen(false)}
+         />
+      </Modal>
     </div>
   );
 };
