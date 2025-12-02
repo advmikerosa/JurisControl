@@ -7,9 +7,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
-    // Define variáveis globais para substituir no código cliente
+    // Define variáveis globais (API Key removida por segurança)
     define: {
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || env.VITE_API_KEY),
+      // 'process.env.API_KEY': JSON.stringify(env.API_KEY), // REMOVIDO: Chave movida para Backend
     },
     build: {
       outDir: 'dist',

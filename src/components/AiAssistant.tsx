@@ -1,9 +1,7 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Sparkles, User, Bot, Loader2, Minimize2 } from 'lucide-react';
 import { aiService } from '../services/aiService';
-import { GenerateContentResponse } from '@google/genai';
 
 interface Message {
   id: string;
@@ -60,9 +58,8 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ isOpen, onClose }) => 
       let fullText = '';
       
       for await (const chunk of streamResult) {
-        const c = chunk as GenerateContentResponse;
-        if (c.text) {
-          fullText += c.text;
+        if (chunk.text) {
+          fullText += chunk.text;
           setMessages(prev => 
             prev.map(msg => msg.id === aiMsgId ? { ...msg, text: fullText } : msg)
           );
