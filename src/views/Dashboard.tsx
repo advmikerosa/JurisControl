@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Scale, Clock, AlertCircle, CheckCircle, Calendar, Briefcase, Gavel, Plus, ArrowRight, Activity, FileText, Scroll, ExternalLink, SlidersHorizontal, Eye, EyeOff, X } from 'lucide-react';
+import { Scale, Clock, AlertCircle, CheckCircle, Calendar, Briefcase, Gavel, Plus, ArrowRight, Activity, FileText, Scroll, ExternalLink, SlidersHorizontal, Eye, EyeOff, X, Sparkles } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { useNavigate } from 'react-router-dom';
 import { DashboardData } from '../types';
@@ -163,6 +163,31 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* ONBOARDING BANNER - Shown when DB is empty */}
+        {!isLoading && data && data.counts.activeCases === 0 && data.counts.wonCases === 0 && data.counts.pendingCases === 0 && (
+           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-2">
+              <GlassCard className="bg-gradient-to-r from-indigo-600 to-violet-600 border-none text-white relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-32 bg-white/10 blur-3xl rounded-full -mr-10 -mt-10"></div>
+                  <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6 p-2">
+                      <div>
+                          <h2 className="text-2xl font-bold mb-2 flex items-center gap-2"><Sparkles className="text-yellow-300" /> Bem-vindo ao JurisControl!</h2>
+                          <p className="text-indigo-100 max-w-xl text-sm leading-relaxed">
+                              Seu ambiente está pronto. Comece cadastrando seu primeiro cliente ou processo para ativar os painéis inteligentes e a IA.
+                          </p>
+                      </div>
+                      <div className="flex gap-3 shrink-0">
+                          <button onClick={() => navigate('/clients')} className="px-5 py-2.5 bg-white text-indigo-600 rounded-xl font-bold shadow-lg hover:bg-indigo-50 transition-colors text-sm">
+                              Cadastrar Cliente
+                          </button>
+                          <button onClick={() => navigate('/cases?action=new')} className="px-5 py-2.5 bg-indigo-800/50 text-white rounded-xl font-bold hover:bg-indigo-800 transition-colors border border-indigo-400/30 text-sm">
+                              Novo Processo
+                          </button>
+                      </div>
+                  </div>
+              </GlassCard>
+           </motion.div>
+        )}
+
         {/* AGENDA DO DIA */}
         <AnimatePresence>
           {config.agenda && !isLoading && data?.lists.todaysAgenda && data.lists.todaysAgenda.length > 0 && (
@@ -314,7 +339,7 @@ export const Dashboard: React.FC = () => {
                      </h3>
                      <div className="flex-1 w-full min-h-0 relative">
                        <div className="absolute inset-0">
-                         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                         <ResponsiveContainer width="100%" height="100%">
                            <BarChart data={data.charts.caseDistribution} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.1)" horizontal={false} />
                              <XAxis type="number" stroke="rgba(148, 163, 184, 0.5)" tick={{fill: '#94a3b8', fontSize: 11}} axisLine={false} />
