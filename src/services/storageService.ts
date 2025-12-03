@@ -126,7 +126,7 @@ class StorageService {
       if (idx >= 0) {
           list[idx] = client;
       } else {
-          if (!client.id || !client.id.startsWith('cli-')) client.id = `cli-${Date.now()}`;
+          if (!client.id || !client.id.startsWith('cli-') || !client.id) client.id = `cli-${Date.now()}`;
           client.userId = session.userId || 'local';
           list.unshift(client);
       }
@@ -495,7 +495,6 @@ class StorageService {
   async getOffices(): Promise<Office[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-          // Use a join to get members
           const { data, error } = await supabase
             .from(TABLE_NAMES.OFFICES)
             .select(`
@@ -527,7 +526,7 @@ class StorageService {
   private mapMembers(membersData: any[], ownerId?: string): OfficeMember[] {
       const members = membersData.map(m => ({
           userId: m.user_id,
-          name: m.name || 'Membro', // Fallback or fetch from profile if needed
+          name: m.name || 'Membro', 
           email: m.email || '',
           avatarUrl: m.avatar_url,
           role: m.role,
@@ -538,7 +537,7 @@ class StorageService {
       if (ownerId && !members.some(m => m.userId === ownerId)) {
           members.unshift({
               userId: ownerId,
-              name: 'Administrador (Dono)', // Placeholder if profile data not available
+              name: 'Administrador (Dono)', 
               role: 'Admin',
               permissions: { financial: true, cases: true, documents: true, settings: true },
               email: '', 
@@ -597,9 +596,6 @@ class StorageService {
         
         try {
             await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
-            
-            // Only sync members if explicit changes (skipping full sync to avoid recursion)
-            // Ideally should be separate add/remove methods
         } catch {
             console.warn("Saving office offline not fully supported.");
         }
@@ -609,17 +605,12 @@ class StorageService {
         const index = offices.findIndex(o => o.id === office.id);
         if (index >= 0) {
           offices[index] = office;
-          this.setLocal(LOCAL_KEYS.OFFICES, offices);
+          localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
           this.logActivity(`Atualizou dados do escritório: ${office.name}`);
         }
     }
   }
 
-  /**
-   * createOffice
-   * @param officeData Partial office data
-   * @param explicitOwnerId (Optional) Use this ID instead of fetching from session. Useful during registration.
-   */
   async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, ownerDetails?: any): Promise<Office> {
       const actualUserId = explicitOwnerId || (await this.getUserSession()).userId || 'local';
       const userStr = localStorage.getItem('@JurisControl:user');
@@ -628,9 +619,12 @@ class StorageService {
       let handle = officeData.handle || `@office${Date.now()}`;
       if (!handle.startsWith('@')) handle = '@' + handle;
 
-      // Base Office Object
+      // Ensure we have a valid ID format for Supabase if needed (text field in DB, but lets try to keep it clean)
+      // For local fallback we use a string prefix.
+      const newOfficeId = isSupabaseConfigured ? crypto.randomUUID() : `office-${Date.now()}`;
+
       const newOffice: Office = {
-          id: `office-${Date.now()}`,
+          id: newOfficeId,
           name: officeData.name || 'Novo Escritório',
           handle: handle,
           location: officeData.location || 'Brasil',
@@ -648,28 +642,48 @@ class StorageService {
       };
       
       if (isSupabaseConfigured && supabase) {
-          // 1. Insert Office (without members array)
+          // 1. Insert Office (without members array - Relational Normalized)
           const officePayload = {
+              id: newOffice.id,
               name: newOffice.name,
               handle: newOffice.handle,
               location: newOffice.location,
               owner_id: newOffice.ownerId,
+              logo_url: newOffice.logoUrl,
               created_at: newOffice.createdAt,
+              area_of_activity: newOffice.areaOfActivity,
               social: newOffice.social
           };
           
-          const { data: officeDataDb, error: officeError } = await supabase.from(TABLE_NAMES.OFFICES).insert(officePayload).select().single();
+          const { data: officeDataDb, error: officeError } = await supabase
+            .from(TABLE_NAMES.OFFICES)
+            .insert(officePayload)
+            .select()
+            .single();
           
           if(officeError) {
               if (officeError.code === '23505') throw new Error("Identificador (@handle) já existe.");
-              throw new Error(officeError.message);
+              throw new Error(`Erro ao criar escritório: ${officeError.message}`);
           }
           
-          newOffice.id = officeDataDb.id;
+          // 2. Insert Admin Member
+          const memberPayload = {
+              office_id: officeDataDb.id,
+              user_id: actualUserId,
+              role: 'Admin',
+              permissions: { financial: true, cases: true, documents: true, settings: true },
+              name: userData.name,
+              email: userData.email,
+              avatar_url: userData.avatar
+          };
 
-          // 2. Insert Admin Member - SKIPPED TO AVOID RLS RECURSION
-          // We rely on the owner_id field in offices table to grant access.
-          // The fetch methods (getOffices/getOfficeById) patch the member list to include the owner.
+          const { error: memberError } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert(memberPayload);
+          
+          if (memberError) {
+              // Rollback (best effort)
+              await supabase.from(TABLE_NAMES.OFFICES).delete().eq('id', officeDataDb.id);
+              throw new Error("Erro ao adicionar membro admin. Tente novamente.");
+          }
           
       } else {
           // LocalStorage fallback
@@ -721,7 +735,7 @@ class StorageService {
       // Check duplicate
       const isMember = office.members.some(m => m.userId === session.userId);
       if (isMember) {
-          return office; // Already member, proceed
+          return office;
       }
 
       // Add member
@@ -747,7 +761,6 @@ class StorageService {
               email: newMember.email,
               avatar_url: newMember.avatarUrl
           });
-          // Refresh members locally
           office.members.push(newMember);
       } else {
           office.members.push(newMember);
@@ -915,7 +928,6 @@ class StorageService {
   }
 
   async checkRealtimeAlerts() {
-    // Only fetch if local to avoid excessive requests, or simple query
     const tasks = await this.getTasks();
     const now = new Date();
     const todayStr = now.toLocaleDateString('pt-BR');
