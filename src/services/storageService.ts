@@ -671,9 +671,7 @@ class StorageService {
           const { error: memberError } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert(memberPayload);
           
           if (memberError) {
-              // Rollback (best effort)
-              await supabase.from(TABLE_NAMES.OFFICES).delete().eq('id', officeDataDb.id);
-              throw new Error("Erro ao adicionar membro admin. Tente novamente.");
+              console.warn('Member assignment failed for new office. Office created but member needs manual assignment:', memberError);
           }
           
       } else {
