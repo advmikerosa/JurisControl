@@ -52,14 +52,14 @@ class PermissionService {
   ): boolean {
     if (!user || !office) return false;
 
-    // 1. Encontrar o membro dentro do escritório
+    // 1. Verificar se é o Dono (Super Admin do escritório) - Prioridade máxima
+    if (office.ownerId === user.id) return true;
+
+    // 2. Encontrar o membro dentro do escritório
     const member = office.members.find(m => m.userId === user.id);
     
-    // Se não for membro, acesso negado (Isolamento de Escritório)
+    // Se não for membro, acesso negado
     if (!member) return false;
-
-    // 2. Verificar se é o Dono (Super Admin do escritório)
-    if (office.ownerId === user.id) return true;
 
     // 3. Verificar permissões baseadas no Papel (Role)
     const roleCaps = ROLE_CAPABILITIES[member.role];
@@ -71,10 +71,10 @@ class PermissionService {
     }
 
     // 4. (Opcional) Verificar permissões granulares/customizadas
-    // Se o sistema suportar overrides manuais no futuro (ex: member.permissions.custom...)
-    // A estrutura atual suporta flags booleanas simples em 'permissions', podemos mapear:
     if (resource === 'financial' && member.permissions.financial && action === 'view') return true;
     if (resource === 'cases' && member.permissions.cases && action === 'view') return true;
+    if (resource === 'documents' && member.permissions.documents && action === 'view') return true;
+    if (resource === 'settings' && member.permissions.settings && action === 'view') return true;
     
     return false;
   }
@@ -91,10 +91,10 @@ class PermissionService {
     if (!user) return 'Usuário não autenticado.';
     if (!office) return 'Contexto de escritório inválido.';
     
+    if (office.ownerId === user.id) return 'Acesso permitido (Proprietário).';
+
     const member = office.members.find(m => m.userId === user.id);
     if (!member) return 'Usuário não pertence a este escritório.';
-
-    if (office.ownerId === user.id) return 'Acesso permitido (Proprietário).';
 
     const roleCaps = ROLE_CAPABILITIES[member.role];
     if (roleCaps && roleCaps[resource]?.includes(action)) {

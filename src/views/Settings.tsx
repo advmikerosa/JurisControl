@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
@@ -49,8 +50,13 @@ export const Settings: React.FC = () => {
 
   const loadOfficeData = async () => {
     if (user && user.currentOfficeId) {
-      const office = await storageService.getOfficeById(user.currentOfficeId);
-      if (office) setMyOffice(office);
+      try {
+        const office = await storageService.getOfficeById(user.currentOfficeId);
+        if (office) setMyOffice(office);
+        else setMyOffice(null);
+      } catch {
+        setMyOffice(null);
+      }
     } else {
         setMyOffice(null);
     }
@@ -739,7 +745,6 @@ export const Settings: React.FC = () => {
                                       <div>
                                           <p className="text-sm text-white font-medium">
                                               {member.name} {user?.id === member.userId && '(Você)'}
-                                              {/* Safe check for owner if needed */}
                                               {myOffice && member.userId === myOffice.ownerId && <span className="text-[10px] ml-2 text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">Dono</span>}
                                           </p>
                                           <p className="text-xs text-slate-300">{member.role}</p>

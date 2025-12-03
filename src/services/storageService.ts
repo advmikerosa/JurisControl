@@ -513,7 +513,7 @@ class StorageService {
               logoUrl: o.logo_url,
               createdAt: o.created_at,
               areaOfActivity: o.area_of_activity,
-              members: this.mapMembers(o.members || [])
+              members: this.mapMembers(o.members || [], o.owner_id)
           }));
       } catch (e) {
           console.error("Error fetching offices:", e);
@@ -524,8 +524,8 @@ class StorageService {
     }
   }
 
-  private mapMembers(membersData: any[]): OfficeMember[] {
-      return membersData.map(m => ({
+  private mapMembers(membersData: any[], ownerId?: string): OfficeMember[] {
+      const members = membersData.map(m => ({
           userId: m.user_id,
           name: m.name || 'Membro', // Fallback or fetch from profile if needed
           email: m.email || '',
@@ -533,6 +533,20 @@ class StorageService {
           role: m.role,
           permissions: m.permissions || { financial: false, cases: false, documents: false, settings: false }
       }));
+
+      // Ensure owner is in the list (Virtual Member if missing from DB due to partial insert/trigger lag)
+      if (ownerId && !members.some(m => m.userId === ownerId)) {
+          members.unshift({
+              userId: ownerId,
+              name: 'Administrador (Dono)', // Placeholder if profile data not available
+              role: 'Admin',
+              permissions: { financial: true, cases: true, documents: true, settings: true },
+              email: '', 
+              avatarUrl: ''
+          });
+      }
+      
+      return members;
   }
 
   async getOfficeById(id: string): Promise<Office | undefined> {
@@ -558,7 +572,7 @@ class StorageService {
               logoUrl: data.logo_url,
               createdAt: data.created_at,
               areaOfActivity: data.area_of_activity,
-              members: this.mapMembers(data.members || [])
+              members: this.mapMembers(data.members || [], data.owner_id)
            };
        } catch { return undefined; }
     }
@@ -584,18 +598,8 @@ class StorageService {
         try {
             await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
             
-            // If explicit member update is needed here (e.g. from modal), we iterate
-            // But ideally, add/remove should be separate. For now, assume this updates roles too.
-            // CAUTION: This is a heavy operation for 'saveOffice'.
-            for (const member of office.members) {
-                await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).upsert({
-                    office_id: office.id,
-                    user_id: member.userId,
-                    role: member.role,
-                    permissions: member.permissions
-                }, { onConflict: 'office_id, user_id' });
-            }
-
+            // Only sync members if explicit changes (skipping full sync to avoid recursion)
+            // Ideally should be separate add/remove methods
         } catch {
             console.warn("Saving office offline not fully supported.");
         }
@@ -611,6 +615,11 @@ class StorageService {
     }
   }
 
+  /**
+   * createOffice
+   * @param officeData Partial office data
+   * @param explicitOwnerId (Optional) Use this ID instead of fetching from session. Useful during registration.
+   */
   async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, ownerDetails?: any): Promise<Office> {
       const actualUserId = explicitOwnerId || (await this.getUserSession()).userId || 'local';
       const userStr = localStorage.getItem('@JurisControl:user');
@@ -653,30 +662,15 @@ class StorageService {
           
           if(officeError) {
               if (officeError.code === '23505') throw new Error("Identificador (@handle) já existe.");
-              throw officeError;
+              throw new Error(officeError.message);
           }
           
           newOffice.id = officeDataDb.id;
 
-          // 2. Insert Admin Member
-          const memberPayload = {
-              office_id: newOffice.id,
-              user_id: actualUserId,
-              role: 'Admin',
-              permissions: { financial: true, cases: true, documents: true, settings: true },
-              // Cache basic info to avoid complex joins if profile missing
-              name: userData.name,
-              email: userData.email,
-              avatar_url: userData.avatar || ''
-          };
-
-          const { error: memberError } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert(memberPayload);
-          if (memberError) {
-              console.error("Failed to add admin member:", memberError);
-              // Clean up office if member creation fails? 
-              // For now just warn.
-          }
-
+          // 2. Insert Admin Member - SKIPPED TO AVOID RLS RECURSION
+          // We rely on the owner_id field in offices table to grant access.
+          // The fetch methods (getOffices/getOfficeById) patch the member list to include the owner.
+          
       } else {
           // LocalStorage fallback
           const offices = await this.getOffices();
@@ -712,7 +706,7 @@ class StorageService {
               logoUrl: data.logo_url,
               createdAt: data.created_at,
               areaOfActivity: data.area_of_activity,
-              members: this.mapMembers(data.members || [])
+              members: this.mapMembers(data.members || [], data.owner_id)
           };
       } else {
           const offices = await this.getOffices();
