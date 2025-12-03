@@ -341,21 +341,7 @@ class StorageService {
             .select('*')
             .eq('office_id', session.officeId);
         
-        return (data || []).map((f: any) => ({
-            id: f.id,
-            officeId: f.office_id,
-            title: f.title,
-            amount: Number(f.amount),
-            type: f.type,
-            category: f.category,
-            status: f.status,
-            dueDate: f.due_date,
-            paymentDate: f.payment_date,
-            clientId: f.client_id,
-            clientName: f.client_name,
-            caseId: f.case_id,
-            installment: f.installment
-        })) as FinancialRecord[];
+        return this.mapSupabaseFinancials(data || []);
       } catch { return []; }
     } else {
       return this.filterByOffice(this.getLocal<FinancialRecord[]>(LOCAL_KEYS.FINANCIAL, []), session.officeId);
@@ -611,6 +597,11 @@ class StorageService {
     }
   }
 
+  /**
+   * createOffice
+   * @param officeData Partial office data
+   * @param explicitOwnerId (Optional) Use this ID instead of fetching from session. Useful during registration.
+   */
   async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, ownerDetails?: any): Promise<Office> {
       const actualUserId = explicitOwnerId || (await this.getUserSession()).userId || 'local';
       const userStr = localStorage.getItem('@JurisControl:user');
@@ -856,6 +847,24 @@ class StorageService {
       };
   }
 
+  private mapSupabaseFinancials(data: any[]): FinancialRecord[] {
+      return data.map((f: any) => ({
+            id: f.id,
+            officeId: f.office_id,
+            title: f.title,
+            amount: Number(f.amount),
+            type: f.type,
+            category: f.category,
+            status: f.status,
+            dueDate: f.due_date,
+            paymentDate: f.payment_date,
+            clientId: f.client_id,
+            clientName: f.client_name,
+            caseId: f.case_id,
+            installment: f.installment
+      }));
+  }
+
   getLogs() { return this.getLocal<ActivityLog[]>(LOCAL_KEYS.LOGS, []); }
   logActivity(action: string, status: 'Success'|'Warning'|'Failed' = 'Success') { 
       const l = this.getLogs(); 
@@ -904,10 +913,35 @@ class StorageService {
     const session = await this.getUserSession();
     if (isSupabaseConfigured && supabase) {
       if (!session.userId) return;
-      const tables = [TABLE_NAMES.LOGS, TABLE_NAMES.FINANCIAL, TABLE_NAMES.TASKS, TABLE_NAMES.DOCUMENTS, TABLE_NAMES.CASES, TABLE_NAMES.CLIENTS, TABLE_NAMES.PROFILES];
-      for (const table of tables) {
-        try { await supabase.from(table).delete().eq('user_id', session.userId); } catch {}
+      
+      const userId = session.userId; // Explicit string
+
+      // 1. Delete from related tables (user_id = uuid)
+      const relatedTables = [
+        TABLE_NAMES.LOGS,
+        TABLE_NAMES.FINANCIAL,
+        TABLE_NAMES.TASKS,
+        TABLE_NAMES.DOCUMENTS,
+        TABLE_NAMES.CASES,
+        TABLE_NAMES.CLIENTS,
+        TABLE_NAMES.OFFICE_MEMBERS
+      ];
+
+      for (const table of relatedTables) {
+        try {
+            await supabase.from(table).delete().eq('user_id', userId);
+        } catch (e) {
+            console.error(`Error deleting from ${table}:`, e);
+        }
       }
+
+      // 2. Delete Profile (id = uuid)
+      try {
+          await supabase.from(TABLE_NAMES.PROFILES).delete().eq('id', userId);
+      } catch (e) {
+          console.error("Error deleting profile:", e);
+      }
+      
     } else {
       localStorage.clear();
     }
