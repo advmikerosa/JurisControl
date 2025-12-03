@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase, Loader2, Building, AtSign, Users } from 'lucide-react';
+import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase, Loader2, Building, AtSign, Users, SkipForward } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { Logo } from '../components/Logo';
 import { Modal } from '../components/ui/Modal';
@@ -31,6 +31,7 @@ export const Login: React.FC = () => {
   const [officeMode, setOfficeMode] = useState<'create' | 'join'>('create');
   const [officeName, setOfficeName] = useState('');
   const [officeHandle, setOfficeHandle] = useState('');
+  const [skipOfficeSetup, setSkipOfficeSetup] = useState(false);
 
   const handleOabChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setOab(masks.oab(e.target.value));
@@ -57,17 +58,20 @@ export const Login: React.FC = () => {
         if (password !== confirmPassword) throw new Error('As senhas não coincidem.');
         if (password.length < 6) throw new Error('A senha deve ter no mínimo 6 caracteres.');
         
-        if (officeMode === 'create') {
-            if (!officeName) throw new Error('Digite o nome do seu escritório.');
-            if (!officeHandle) throw new Error('Crie um identificador (@handle) para o escritório.');
-        }
-        if (!officeHandle && officeMode === 'join') throw new Error('Digite o identificador do escritório para entrar.');
-        
-        if (officeHandle && !/^@[a-z0-9_]{3,}$/.test(officeHandle)) {
-             throw new Error('O identificador do escritório deve começar com @ e ter pelo menos 3 caracteres.');
+        // Validação de Escritório apenas se não for pular
+        if (!skipOfficeSetup) {
+            if (officeMode === 'create') {
+                if (!officeName) throw new Error('Digite o nome do seu escritório.');
+                if (!officeHandle) throw new Error('Crie um identificador (@handle) para o escritório.');
+            }
+            if (!officeHandle && officeMode === 'join') throw new Error('Digite o identificador do escritório para entrar.');
+            
+            if (officeHandle && !/^@[a-z0-9_]{3,}$/.test(officeHandle)) {
+                 throw new Error('O identificador do escritório deve começar com @ e ter pelo menos 3 caracteres.');
+            }
         }
 
-        const needsVerification = await register(name, email, password, oab, {
+        const needsVerification = await register(name, email, password, oab, skipOfficeSetup ? undefined : {
             mode: officeMode,
             name: officeMode === 'create' ? officeName : undefined,
             handle: officeHandle
@@ -76,7 +80,7 @@ export const Login: React.FC = () => {
         if (needsVerification) {
            navigate('/confirm-email', { state: { email } });
         } else {
-           addToast(`Bem-vindo ao ${officeMode === 'create' ? officeName : 'escritório'}!`, 'success');
+           addToast(skipOfficeSetup ? 'Conta criada com sucesso!' : `Bem-vindo ao ${officeMode === 'create' ? officeName : 'escritório'}!`, 'success');
            navigate('/');
         }
       }
@@ -268,69 +272,90 @@ export const Login: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Office Setup */}
-                <div className="bg-white/5 border border-white/10 rounded-xl p-4 mt-2">
-                   <h3 className="text-xs font-bold text-white flex items-center gap-2 mb-3 uppercase tracking-wide">
-                      <Building size={14} className="text-indigo-400" /> Configuração do Escritório
-                   </h3>
-                   
-                   <div className="flex bg-black/20 rounded-lg p-1 mb-3">
-                      <button 
-                        type="button"
-                        onClick={() => setOfficeMode('create')}
-                        className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors ${officeMode === 'create' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                      >
-                        Criar Novo
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={() => setOfficeMode('join')}
-                        className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors ${officeMode === 'join' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                      >
-                        Entrar
-                      </button>
+                {/* Office Setup Header with Skip Option */}
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4 mt-2 transition-colors">
+                   <div className="flex items-center justify-between mb-3">
+                       <h3 className={`text-xs font-bold flex items-center gap-2 uppercase tracking-wide transition-colors ${skipOfficeSetup ? 'text-slate-500' : 'text-white'}`}>
+                          <Building size={14} className={skipOfficeSetup ? 'text-slate-600' : 'text-indigo-400'} /> Configuração do Escritório
+                       </h3>
+                       <button 
+                         type="button" 
+                         onClick={() => setSkipOfficeSetup(!skipOfficeSetup)}
+                         className="text-[10px] font-medium text-indigo-400 hover:text-white transition-colors flex items-center gap-1"
+                       >
+                         {skipOfficeSetup ? 'Configurar Agora' : 'Pular Etapa'} <ArrowRight size={10} />
+                       </button>
                    </div>
+                   
+                   {!skipOfficeSetup ? (
+                     <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                     >
+                       <div className="flex bg-black/20 rounded-lg p-1 mb-3">
+                          <button 
+                            type="button"
+                            onClick={() => setOfficeMode('create')}
+                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors ${officeMode === 'create' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                          >
+                            Criar Novo
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => setOfficeMode('join')}
+                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors ${officeMode === 'join' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                          >
+                            Entrar
+                          </button>
+                       </div>
 
-                   {officeMode === 'create' ? (
-                      <div className="space-y-3">
-                          <div className="space-y-1">
-                             <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Nome do Escritório</label>
-                             <input 
-                                type="text" 
-                                value={officeName}
-                                onChange={(e) => setOfficeName(e.target.value)}
-                                placeholder="Ex: Silva Advogados"
-                                className="w-full bg-black/20 border border-white/10 rounded-lg py-2 px-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none"
-                             />
+                       {officeMode === 'create' ? (
+                          <div className="space-y-3">
+                              <div className="space-y-1">
+                                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Nome do Escritório</label>
+                                 <input 
+                                    type="text" 
+                                    value={officeName}
+                                    onChange={(e) => setOfficeName(e.target.value)}
+                                    placeholder="Ex: Silva Advogados"
+                                    className="w-full bg-black/20 border border-white/10 rounded-lg py-2 px-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none"
+                                 />
+                              </div>
+                              <div className="space-y-1">
+                                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Identificador (@handle)</label>
+                                 <div className="relative">
+                                    <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                                    <input 
+                                        type="text" 
+                                        value={officeHandle}
+                                        onChange={handleOfficeHandleChange}
+                                        placeholder="@silva_adv"
+                                        className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none"
+                                    />
+                                 </div>
+                              </div>
                           </div>
+                       ) : (
                           <div className="space-y-1">
-                             <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Identificador (@handle)</label>
+                             <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Identificador do Escritório</label>
                              <div className="relative">
-                                <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                                <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
                                 <input 
                                     type="text" 
                                     value={officeHandle}
                                     onChange={handleOfficeHandleChange}
-                                    placeholder="@silva_adv"
+                                    placeholder="@exemplo_adv"
                                     className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none"
                                 />
                              </div>
                           </div>
-                      </div>
+                       )}
+                     </motion.div>
                    ) : (
-                      <div className="space-y-1">
-                         <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Identificador do Escritório</label>
-                         <div className="relative">
-                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
-                            <input 
-                                type="text" 
-                                value={officeHandle}
-                                onChange={handleOfficeHandleChange}
-                                placeholder="@exemplo_adv"
-                                className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none"
-                            />
-                         </div>
-                      </div>
+                     <div className="text-center py-2 text-slate-500 text-xs">
+                        Você poderá criar ou entrar em um escritório mais tarde nas configurações.
+                     </div>
                    )}
                 </div>
               </motion.div>
@@ -346,7 +371,7 @@ export const Login: React.FC = () => {
               <span className="flex items-center gap-2"><Loader2 className="animate-spin" size={20} /> Processando...</span>
             ) : (
               <>
-                {mode === 'login' ? 'Entrar no Sistema' : 'Criar Minha Conta'}
+                {mode === 'login' ? 'Entrar no Sistema' : (skipOfficeSetup ? 'Criar Minha Conta' : 'Criar Conta e Escritório')}
                 <ArrowRight size={20} />
               </>
             )}

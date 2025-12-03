@@ -209,7 +209,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
          throw new Error('Este email já está cadastrado.');
       }
 
-      // Se a sessão for criada (auto-confirm ou mock), criamos o escritório
+      // Se a sessão for criada (auto-confirm ou mock), criamos o escritório SE officeData for fornecido
       if (data.user && officeData) {
           try {
               if (officeData.mode === 'create' && officeData.name) {
@@ -237,6 +237,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
           } catch (officeError: any) {
               console.error("Falha ao configurar escritório:", officeError);
+              // Não falha o registro se o escritório falhar, usuário pode tentar depois
           }
       }
 
