@@ -510,7 +510,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                              Você ainda não faz parte de nenhum escritório.
                            </p>
                            <button 
-                             onClick={() => { setIsOfficeMenuOpen(false); navigate('/settings'); }}
+                             onClick={() => { setIsOfficeMenuOpen(false); navigate('/settings?tab=office'); }}
                              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-colors shadow-sm"
                            >
                              Criar ou Entrar

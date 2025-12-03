@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { GlassCard } from '../components/ui/GlassCard';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -15,6 +16,8 @@ import { AppSettings, Office, EmailLog } from '../types';
 export const Settings: React.FC = () => {
   const { logout, user, updateProfile } = useAuth();
   const { addToast } = useToast();
+  const location = useLocation();
+  
   const [activeTab, setActiveTab] = useState('general');
   const [confirmModal, setConfirmModal] = useState({ open: false, action: () => {} });
   const [deleteConfirmationInput, setDeleteConfirmationInput] = useState('');
@@ -41,6 +44,14 @@ export const Settings: React.FC = () => {
   // State para Entrar e Convidar
   const [joinOfficeHandle, setJoinOfficeHandle] = useState('');
   const [inviteUserHandle, setInviteUserHandle] = useState('');
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab && ['general', 'emails', 'office', 'danger'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [location]);
 
   useEffect(() => {
     setSettings(storageService.getSettings());
