@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { ExtractedMovementData, Priority } from '../types';
 
 // Interface para chunks de resposta do chat
@@ -7,80 +7,104 @@ interface AiResponseChunk {
 }
 
 class AiService {
+  private ai: GoogleGenAI | null = null;
+  private modelText: string = "gemini-2.5-flash";
+  private modelVision: string = "gemini-2.5-flash";
+
+  constructor() {
+    // Tenta inicializar com a chave do ambiente (Vite injeta process.env.API_KEY via define ou import.meta)
+    const apiKey = process.env.API_KEY || (import.meta.env && import.meta.env.VITE_API_KEY);
+    
+    if (apiKey) {
+      this.ai = new GoogleGenAI({ apiKey });
+    } else {
+      console.warn("JurisAI: API_KEY não encontrada. O assistente funcionará em modo DEMO.");
+    }
+  }
+
   /**
    * Envia uma mensagem para o modelo em modo chat com histórico.
-   * Utiliza Supabase Edge Function para proteger a API Key.
    */
   async *sendMessageStream(history: { role: string; parts: { text: string }[] }[], message: string): AsyncGenerator<AiResponseChunk> {
-    if (isSupabaseConfigured && supabase) {
+    if (this.ai) {
       try {
-        // Chamada à Edge Function 'juris-ai'
-        // Using 'as any' to bypass TypeScript validation for responseType: 'stream'
-        // which might be missing in some versions of @supabase/supabase-js definitions
-        const { data, error } = await supabase.functions.invoke('juris-ai', {
-          body: { action: 'chat', history, message },
-          responseType: 'stream',
-        } as any);
+        const chat = this.ai.chats.create({
+          model: this.modelText,
+          history: history,
+          config: {
+            systemInstruction: "Você é o JurisAI, um assistente jurídico sênior do sistema JurisControl. Responda de forma concisa, profissional e em PT-BR. Use Markdown.",
+          },
+        });
 
-        if (error) throw error;
-
-        // Se a resposta for um ReadableStream (streaming real do backend)
-        if (data instanceof ReadableStream) {
-            const reader = data.getReader();
-            const decoder = new TextDecoder();
-            
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                yield { text: chunk };
-            }
-        } else if (data && typeof data === 'object' && 'body' in data && data.body instanceof ReadableStream) {
-             // Fallback para caso data seja um objeto Response-like
-            const reader = (data.body as ReadableStream).getReader();
-            const decoder = new TextDecoder();
-            
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                yield { text: chunk };
-            }
-        } else {
-            // Fallback para resposta única se não houver stream ou se o SDK já parseou
-            yield { text: typeof data === 'string' ? data : (data?.text || "Resposta recebida.") };
+        const result = await chat.sendMessageStream({ message });
+        
+        for await (const chunk of result) {
+          const c = chunk as GenerateContentResponse;
+          if (c.text) {
+            yield { text: c.text };
+          }
         }
-
       } catch (error) {
-        console.error("JurisAI: Erro de comunicação com o backend.", error);
-        yield { text: "⚠️ Erro de conexão. Verifique se a Edge Function 'juris-ai' está implantada." };
+        console.error("JurisAI Error:", error);
+        yield { text: "⚠️ Erro ao conectar com a IA. Verifique sua chave de API ou conexão." };
       }
     } else {
-      // MOCK MODE (Para demonstração segura sem backend)
-      const mockResponse = `[MODO DEMO] Olá! Como o backend seguro não está conectado, estou simulando esta resposta. Em produção, sua mensagem "${message}" seria processada pela IA via Supabase Edge Functions para garantir a segurança dos dados.`;
+      // MOCK MODE
+      const mockResponse = `[MODO DEMO] Olá! A chave da API do Gemini não foi configurada no arquivo .env (VITE_API_KEY). \n\nSua mensagem: "${message}" foi processada localmente. \n\nPara ativar a IA real, configure a variável de ambiente.`;
       
-      // Simula o efeito de digitação
-      const chunks = mockResponse.split(/(.{5})/g).filter(Boolean); // Divide em pedaços de 5 caracteres
+      const chunks = mockResponse.split(/(.{5})/g).filter(Boolean);
       for (const chunk of chunks) {
-        await new Promise(r => setTimeout(r, 30)); // Delay artificial
+        await new Promise(r => setTimeout(r, 20));
         yield { text: chunk };
       }
     }
   }
 
   /**
-   * Analisa um documento (Imagem ou PDF) para extrair dados da movimentação processual.
-   * Delega o OCR e extração para o Backend Seguro.
+   * Analisa um documento (Imagem) para extrair dados.
+   * Nota: PDF parsing real requereria conversão para imagem ou texto no cliente antes de enviar ao Gemini Flash.
+   * Aqui assumimos que recebemos base64 de imagem ou texto extraído.
    */
   async analyzeLegalDocument(base64Data: string, mimeType: string): Promise<ExtractedMovementData> {
-    if (isSupabaseConfigured && supabase) {
+    if (this.ai) {
         try {
-            const { data, error } = await supabase.functions.invoke('juris-ai', {
-                body: { action: 'analyze', fileData: base64Data, mimeType }
+            // Se for PDF, o Gemini 1.5/2.0+ aceita nativamente se passar como inlineData application/pdf
+            // Mas para segurança e compatibilidade do flash-2.5, focamos em imagens ou texto.
+            
+            const prompt = `Analise este documento jurídico. Extraia:
+            1. Tipo do documento (Decisão, Sentença, Petição, etc).
+            2. Data do documento.
+            3. Título curto.
+            4. Resumo de 1 parágrafo.
+            5. Prazos identificados (título, data no formato YYYY-MM-DD, prioridade).
+            
+            Retorne APENAS um JSON válido com esta estrutura:
+            {
+              "type": "string",
+              "date": "YYYY-MM-DD",
+              "title": "string",
+              "summary": "string",
+              "confidence": number (0-100),
+              "deadlines": [{"title": "string", "date": "YYYY-MM-DD", "priority": "Alta"|"Média"|"Baixa", "description": "string"}]
+            }`;
+
+            const response = await this.ai.models.generateContent({
+                model: this.modelVision,
+                contents: {
+                    parts: [
+                        { inlineData: { mimeType, data: base64Data } },
+                        { text: prompt }
+                    ]
+                },
+                config: {
+                    responseMimeType: "application/json"
+                }
             });
 
-            if (error) throw new Error(error.message);
-            return data as ExtractedMovementData;
+            const text = response.text;
+            if (!text) throw new Error("Sem resposta da IA");
+            
+            return JSON.parse(text) as ExtractedMovementData;
 
         } catch (error) {
             console.error("Erro na análise de documento com IA:", error);
@@ -88,21 +112,21 @@ class AiService {
         }
     }
 
-    // MOCK DATA (Retorno simulado para testes de UI)
+    // MOCK DATA
     return new Promise(resolve => {
         setTimeout(() => {
             resolve({
                 type: 'Decisão',
                 date: new Date().toISOString().split('T')[0],
                 title: 'Decisão Interlocutória (Simulada)',
-                summary: 'Deferimento parcial da tutela de urgência. Esta é uma análise simulada pois a API Key não está exposta no cliente.',
+                summary: 'Deferimento parcial da tutela de urgência (Demo). Configure a API Key para análise real.',
                 confidence: 95,
                 deadlines: [
                     {
                         title: 'Prazo para Recurso',
-                        date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // +15 dias
+                        date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                         priority: Priority.HIGH,
-                        description: 'Prazo fatal de 15 dias úteis para Agravo de Instrumento.'
+                        description: 'Prazo de 15 dias úteis.'
                     }
                 ]
             });

@@ -3,13 +3,13 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   // Carrega variáveis de ambiente baseadas no modo (development/production)
-  const env = loadEnv(mode, '.', '');
+  const env = loadEnv(mode, (process as any).cwd(), '');
 
   return {
     plugins: [react()],
-    // Define variáveis globais (API Key removida por segurança)
+    // Define variáveis globais para o SDK do Google GenAI
     define: {
-      // 'process.env.API_KEY': JSON.stringify(env.API_KEY), // REMOVIDO: Chave movida para Backend
+      'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY),
     },
     build: {
       outDir: 'dist',

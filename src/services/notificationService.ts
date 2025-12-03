@@ -1,17 +1,9 @@
+import { AppSettings, SystemNotification, NotificationType } from '../types';
 
-import { AppSettings } from '../types';
-import { storageService } from './storageService';
+// Removido import do storageService para evitar dependência circular
+// import { storageService } from './storageService';
 
-export type NotificationType = 'info' | 'success' | 'warning' | 'error';
-
-export interface SystemNotification {
-  id: string;
-  title: string;
-  body: string;
-  type: NotificationType;
-  read: boolean;
-  timestamp: Date;
-}
+export type { NotificationType, SystemNotification };
 
 type NotificationListener = (notification: SystemNotification) => void;
 
@@ -54,25 +46,29 @@ class NotificationService {
   }
 
   private async simulateEmailDispatch(title: string, body: string) {
-    // Em um cenário real, isso chamaria uma API de backend (ex: SendGrid, AWS SES)
     console.groupCollapsed('📧 [Simulação de E-mail Enviado]');
     console.log(`Subject: ${title}`);
     console.log(`Body: ${body}`);
     console.groupEnd();
   }
 
-  // Send notification based on user settings
-  public notify(title: string, body: string, type: NotificationType = 'info') {
-    let settings = { email: true, desktop: true, sound: false };
+  // Helper to read settings safely avoiding circular dependency
+  private getNotificationSettings() {
     try {
         const stored = localStorage.getItem('@JurisControl:settings');
         if (stored) {
             const parsed = JSON.parse(stored) as AppSettings;
-            if (parsed.notifications) settings = parsed.notifications;
+            if (parsed.notifications) return parsed.notifications;
         }
     } catch (e) {
         console.warn("Failed to read notification settings", e);
     }
+    return { email: true, desktop: true, sound: false };
+  }
+
+  // Send notification based on user settings
+  public notify(title: string, body: string, type: NotificationType = 'info') {
+    const settings = this.getNotificationSettings();
 
     // Create internal notification object
     const newNotification: SystemNotification = {
@@ -98,8 +94,7 @@ class NotificationService {
     }
 
     // 4. Email Notification
-    if (settings.email && type === 'error' || type === 'warning') {
-      // Only email on high priority items to avoid spam in this demo logic
+    if (settings.email && (type === 'error' || type === 'warning')) {
       this.simulateEmailDispatch(title, body);
     }
   }
@@ -110,7 +105,7 @@ class NotificationService {
     if (Notification.permission === 'granted') {
       const n = new Notification(title, {
         body,
-        icon: '/favicon.ico', // Tenta usar o favicon como ícone
+        icon: '/vite.svg', // Tenta usar o favicon como ícone
         tag: 'juriscontrol-notification',
         requireInteraction: false // Fecha automaticamente após alguns segundos
       });

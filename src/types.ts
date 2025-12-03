@@ -411,3 +411,14 @@ export interface DashboardData {
     recentMovements: { id: string; caseId: string; caseTitle: string; description: string; date: string; type: string; sortTime?: number }[];
   };
 }
+
+export type NotificationType = 'info' | 'success' | 'warning' | 'error';
+
+export interface SystemNotification {
+  id: string;
+  title: string;
+  body: string;
+  type: NotificationType;
+  read: boolean;
+  timestamp: Date;
+}

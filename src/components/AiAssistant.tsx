@@ -66,6 +66,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ isOpen, onClose }) => 
         }
       }
     } catch (error) {
+      console.error(error);
       setMessages(prev => [...prev, { 
         id: Date.now().toString(), 
         role: 'model', 
