@@ -227,22 +227,26 @@ export interface FinancialRecord {
   userId?: string;
 }
 
+// Atualizado: OfficeMember agora reflete a tabela de junção
 export interface OfficeMember {
+  id?: string; 
   userId: string;
   name: string;
   role: MemberRole;
   permissions: OfficePermissions;
   email?: string;
   avatarUrl?: string;
+  joinedAt?: string;
 }
 
+// Atualizado: Office sem membros embutidos (são carregados separadamente ou via join)
 export interface Office {
   id: string;
   name: string;
   handle: string;
   ownerId: string;
   location: string;
-  members: OfficeMember[];
+  members: OfficeMember[]; 
   logoUrl?: string;
   createdAt?: string;
   
@@ -268,7 +272,7 @@ export interface User {
   email: string;
   avatar: string;
   provider: AuthProvider;
-  offices: string[];
+  offices: string[]; // Array de IDs de escritórios
   currentOfficeId?: string;
   twoFactorEnabled: boolean;
   emailVerified: boolean;

@@ -73,16 +73,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   // Load Offices Effect
   useEffect(() => {
+    let isMounted = true;
     const fetchOffices = async () => {
+      // Only attempt fetch if user exists
+      if (!user) return;
+
       try {
         const allOffices = await storageService.getOffices();
         
-        const myOffices: Office[] = user 
-            ? allOffices.filter((o: Office) => 
-                (user.offices && user.offices.includes(o.id)) || 
-                (o.members && o.members.some(m => m.userId === user.id))
-              )
-            : [];
+        if (!isMounted) return;
+
+        // In Supabase mode with corrected getOffices, allOffices should contain only relevant offices
+        // Filter locally just in case for demo/mock mode
+        const myOffices: Office[] = allOffices; 
             
         setUserOffices(myOffices);
 
@@ -91,12 +94,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 ? myOffices.find((o: Office) => o.id === user.currentOfficeId) 
                 : myOffices[0];
             setCurrentOffice(selected || myOffices[0]);
-        } else if (user) {
-            // Fallback dummy office with current user as Admin to ensure menu visibility
+        } else {
+            // Fallback: If no office found (e.g. error 500 prevented load or user has none)
+            // Show a placeholder to not break the UI
+            console.log("No offices loaded or user has none.");
             setCurrentOffice({
                 id: 'default',
-                name: 'Meu Escritório',
-                handle: '@usuario',
+                name: 'Sem Escritório',
+                handle: '@novo',
                 ownerId: user.id,
                 location: 'Brasil',
                 members: [{
@@ -114,6 +119,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       }
     };
     fetchOffices();
+    return () => { isMounted = false; };
   }, [user]);
 
   useEffect(() => {
@@ -507,7 +513,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                               <Briefcase size={20} />
                            </div>
                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-                             Você ainda não faz parte de nenhum escritório.
+                             Você ainda não faz parte de nenhum escritório ou os dados estão carregando.
                            </p>
                            <button 
                              onClick={() => { setIsOfficeMenuOpen(false); navigate('/settings?tab=office'); }}
