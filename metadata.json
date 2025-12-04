@@ -1,5 +1,7 @@
 {
   "name": "JurisControl",
   "description": "Sistema de Gestão Jurídica Inteligente com IA integrada.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }

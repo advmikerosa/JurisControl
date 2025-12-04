@@ -1,61 +1,37 @@
 # Configuração do Banco de Dados (Supabase)
 
-Para que o **JurisControl** funcione corretamente em modo de produção, você precisa configurar o banco de dados no Supabase.
+Para garantir que o **JurisControl** funcione corretamente e evitar erros de tipo (como `text = bigint`), recomenda-se **recriar a estrutura do banco de dados** do zero se você estiver enfrentando problemas.
 
-## 🚨 COMANDOS DE LIMPEZA (HARD RESET)
+## 🚨 COMANDOS DE RESET TOTAL (RECOMENDADO)
 
-Se você precisa limpar **todos** os dados do banco para recomeçar do zero (mantendo a estrutura das tabelas), execute o script abaixo no SQL Editor do Supabase.
+Execute este script no **SQL Editor** do Supabase para apagar as tabelas antigas e criar novas com a tipagem correta (UUID).
 
-**⚠️ ATENÇÃO: ISSO APAGARÁ TODOS OS CLIENTES, PROCESSOS E DADOS FINANCEIROS.**
-
-```sql
--- Limpa dados de todas as tabelas em ordem de dependência
-TRUNCATE TABLE 
-  public.activity_logs,
-  public.documents,
-  public.financial,
-  public.tasks,
-  public.movements, -- Se existir tabela separada
-  public.cases,
-  public.clients,
-  public.office_members,
-  public.offices,
-  public.profiles
-RESTART IDENTITY CASCADE;
-
--- Opcional: Se quiser remover usuários da autenticação (Requer privilégio de admin do Supabase)
--- delete from auth.users;
-```
-
----
-
-## Instruções de Instalação
-
-1. Acesse o painel do seu projeto no [Supabase](https://supabase.com/dashboard).
-2. Vá para a seção **SQL Editor** (ícone de terminal na barra lateral esquerda).
-3. Clique em **New Query**.
-4. Copie todo o código SQL abaixo e cole no editor.
-5. Clique em **Run**.
-
----
-
-## Script SQL Estrutural (Idempotente)
-
-Este script cria a estrutura necessária com suporte a Handles Únicos.
+**⚠️ ATENÇÃO: ISSO APAGARÁ TODOS OS DADOS DO SISTEMA.**
 
 ```sql
--- Habilita extensão para UUIDs
+-- 1. Limpeza (Drop) de tabelas existentes em ordem de dependência
+DROP TABLE IF EXISTS public.activity_logs CASCADE;
+DROP TABLE IF EXISTS public.documents CASCADE;
+DROP TABLE IF EXISTS public.financial CASCADE;
+DROP TABLE IF EXISTS public.tasks CASCADE;
+DROP TABLE IF EXISTS public.cases CASCADE;
+DROP TABLE IF EXISTS public.clients CASCADE;
+DROP TABLE IF EXISTS public.office_members CASCADE;
+DROP TABLE IF EXISTS public.offices CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+
+-- 2. Habilita extensão para UUIDs
 create extension if not exists "uuid-ossp";
 
 -- ============================================================
--- 1. TABELAS ESTRUTURAIS (Usuários e Escritórios)
+-- 3. TABELAS ESTRUTURAIS (Usuários e Escritórios)
 -- ============================================================
 
 -- Tabela Pública de Perfis (Espelho de auth.users)
-create table if not exists public.profiles (
+create table public.profiles (
   id uuid references auth.users on delete cascade not null primary key,
   full_name text,
-  username text unique not null, -- Handle único do usuário (ex: @drjoao)
+  username text unique not null,
   avatar_url text,
   email text,
   phone text,
@@ -65,10 +41,10 @@ create table if not exists public.profiles (
 );
 
 -- Tabela de Escritórios
-create table if not exists public.offices (
+create table public.offices (
   id uuid default uuid_generate_v4() primary key,
   name text not null,
-  handle text unique not null, -- Handle único do escritório (ex: @silva_adv)
+  handle text unique not null,
   owner_id uuid references public.profiles(id) not null,
   location text,
   logo_url text,
@@ -78,7 +54,7 @@ create table if not exists public.offices (
 );
 
 -- Tabela de Membros do Escritório (Junção User <-> Office)
-create table if not exists public.office_members (
+create table public.office_members (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
   user_id uuid references public.profiles(id) on delete cascade not null,
@@ -89,100 +65,80 @@ create table if not exists public.office_members (
 );
 
 -- ============================================================
--- 2. TABELAS DE DADOS (Clientes, Processos, etc.)
+-- 4. TABELAS DE DADOS (Clientes, Processos, etc.)
 -- ============================================================
 
 -- Clientes
-create table if not exists public.clients (
+create table public.clients (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
-  user_id uuid references public.profiles(id), -- Quem cadastrou
+  user_id uuid references public.profiles(id),
   name text not null,
   type text check (type in ('PF', 'PJ')),
   status text default 'Ativo',
   email text,
   phone text,
   avatar_url text,
-  
-  -- Endereço
   address text,
   city text,
   state text,
-  
-  -- Dados Específicos
   cpf text,
   rg text,
   cnpj text,
   corporate_name text,
-  
   notes text,
-  tags text[], -- Array de strings
-  
-  -- Campos JSON para estruturas complexas ou futuras
+  tags text[],
   history jsonb default '[]'::jsonb,
   documents jsonb default '[]'::jsonb,
   alerts jsonb default '[]'::jsonb,
-  
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Processos (Legal Cases)
-create table if not exists public.cases (
+create table public.cases (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
   user_id uuid references public.profiles(id),
   client_id uuid references public.clients(id) on delete set null,
-  
   cnj text,
   title text not null,
   status text default 'Ativo',
   category text,
   phase text,
-  
   value numeric(15, 2) default 0,
   responsible_lawyer text,
-  
   court text,
   next_hearing date,
-  
   description text,
   movements jsonb default '[]'::jsonb,
   change_log jsonb default '[]'::jsonb,
-  
   last_update timestamp with time zone default timezone('utc'::text, now()),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Tarefas (Tasks)
-create table if not exists public.tasks (
+create table public.tasks (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
   user_id uuid references public.profiles(id),
-  
   title text not null,
   due_date date,
   priority text check (priority in ('Alta', 'Média', 'Baixa')),
   status text default 'A Fazer',
   assigned_to text,
   description text,
-  
-  -- Vínculos Opcionais
   case_id uuid references public.cases(id) on delete set null,
   client_id uuid references public.clients(id) on delete set null,
-  
-  -- Cache de nomes para evitar joins complexos em listas simples
   case_title text,
   client_name text,
-  
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Financeiro
-create table if not exists public.financial (
+create table public.financial (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
   user_id uuid references public.profiles(id),
-  
   title text not null,
   amount numeric(15, 2) not null,
   type text check (type in ('Receita', 'Despesa')),
@@ -190,37 +146,30 @@ create table if not exists public.financial (
   status text default 'Pendente',
   due_date date,
   payment_date date,
-  
   case_id uuid references public.cases(id) on delete set null,
   client_id uuid references public.clients(id) on delete set null,
-  
   client_name text,
-  installment jsonb, -- { current: 1, total: 12 }
-  
+  installment jsonb,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Documentos do Sistema
-create table if not exists public.documents (
+create table public.documents (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
   user_id uuid references public.profiles(id),
-  
   name text not null,
   size text,
   type text,
   category text,
   date date default CURRENT_DATE,
-  
   case_id uuid references public.cases(id) on delete set null,
-  
-  storage_path text, -- Para integração com Supabase Storage
-  
+  storage_path text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Logs de Atividade
-create table if not exists public.activity_logs (
+create table public.activity_logs (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references public.profiles(id),
   action text not null,
@@ -231,7 +180,7 @@ create table if not exists public.activity_logs (
 );
 
 -- ============================================================
--- 3. TRIGGERS E FUNÇÕES (Automação)
+-- 5. TRIGGERS E FUNÇÕES
 -- ============================================================
 
 -- Função para lidar com novo usuário cadastrado no Auth
@@ -244,7 +193,7 @@ begin
     new.raw_user_meta_data->>'full_name',
     new.email,
     new.raw_user_meta_data->>'avatar_url',
-    -- Fallback se username não vier
+    -- Garante que o username seja text e único
     COALESCE(new.raw_user_meta_data->>'username', '@user_' || substr(new.id::text, 1, 8))
   )
   on conflict (id) do nothing; 
@@ -281,7 +230,7 @@ create trigger on_office_created
   for each row execute procedure public.add_creator_as_admin();
 
 -- ============================================================
--- 4. ROW LEVEL SECURITY (Segurança)
+-- 6. ROW LEVEL SECURITY (RLS)
 -- ============================================================
 
 -- Habilitar RLS em todas as tabelas
@@ -299,9 +248,10 @@ create policy "Public profiles are viewable by everyone" on public.profiles for 
 create policy "Users can update own profile" on public.profiles for update using ( auth.uid() = id );
 
 -- OFFICES
+-- Permite ver escritórios se for membro OU se souber o handle (para join)
 create policy "Offices are viewable by members or by handle" on public.offices for select using (
     auth.uid() in (select user_id from public.office_members where office_id = id)
-    or true -- Permite ver dados públicos do escritório (como nome/handle) para join
+    or true
 );
 create policy "Owners can update offices" on public.offices for update using ( auth.uid() = owner_id );
 create policy "Users can create offices" on public.offices for insert with check ( auth.uid() = owner_id );
@@ -310,7 +260,12 @@ create policy "Users can create offices" on public.offices for insert with check
 create policy "Members can view other members" on public.office_members for select using (
     auth.uid() in (select user_id from public.office_members as om where om.office_id = office_id)
 );
-create policy "Users can join offices" on public.office_members for insert with check ( auth.uid() = user_id );
+-- Permite inserção se o usuário estiver se adicionando (join) ou se for admin (invite) - Simplificado para:
+create policy "Users can join offices" on public.office_members for insert with check ( 
+    auth.uid() = user_id 
+    or 
+    exists (select 1 from public.office_members where office_id = office_id and user_id = auth.uid() and role = 'Admin')
+);
 
 -- DADOS (Clients, Cases, Tasks, Financial, Documents)
 -- Política padrão: Acesso apenas se o usuário for membro do escritório vinculado ao dado
@@ -334,3 +289,4 @@ create policy "Access financial from my offices" on public.financial for all usi
 create policy "Access documents from my offices" on public.documents for all using (
     exists (select 1 from public.office_members where office_id = public.documents.office_id and user_id = auth.uid())
 );
+```
