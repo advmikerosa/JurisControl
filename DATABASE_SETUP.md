@@ -245,6 +245,7 @@ ALTER TABLE public.cases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.financial ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY; -- Agora incluída!
 
 -- FUNÇÃO CRÍTICA: check_is_member
 -- Usamos SECURITY DEFINER para que esta função possa ler a tabela office_members
@@ -296,5 +297,11 @@ CREATE POLICY "Access Cases" ON public.cases FOR ALL USING (public.check_is_memb
 CREATE POLICY "Access Tasks" ON public.tasks FOR ALL USING (public.check_is_member(office_id));
 CREATE POLICY "Access Financial" ON public.financial FOR ALL USING (public.check_is_member(office_id));
 CREATE POLICY "Access Documents" ON public.documents FOR ALL USING (public.check_is_member(office_id));
+
+-- --- Activity Logs ---
+-- Usuários podem inserir logs onde eles são o autor
+CREATE POLICY "Insert own logs" ON public.activity_logs FOR INSERT WITH CHECK (auth.uid() = user_id);
+-- Usuários podem ver seus próprios logs
+CREATE POLICY "View own logs" ON public.activity_logs FOR SELECT USING (auth.uid() = user_id);
 
 ```
