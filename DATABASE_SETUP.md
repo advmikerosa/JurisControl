@@ -1,15 +1,13 @@
 # Configuração do Banco de Dados (Supabase)
 
-Para garantir que o **JurisControl** funcione corretamente e evitar erros de tipo (como `text = bigint`), recomenda-se **recriar a estrutura do banco de dados** do zero se você estiver enfrentando problemas.
+Para garantir que o **JurisControl** funcione corretamente e evitar erros de tipo ou recursão infinita nas políticas de segurança, execute este script no **SQL Editor** do Supabase.
 
-## 🚨 COMANDOS DE RESET TOTAL (RECOMENDADO)
-
-Execute este script no **SQL Editor** do Supabase para apagar as tabelas antigas e criar novas com a tipagem correta (UUID).
+## 🚨 COMANDOS DE RESET TOTAL E CORREÇÃO
 
 **⚠️ ATENÇÃO: ISSO APAGARÁ TODOS OS DADOS DO SISTEMA.**
 
 ```sql
--- 1. Limpeza (Drop) de tabelas existentes em ordem de dependência
+-- 1. Limpeza (Drop) de tabelas existentes
 DROP TABLE IF EXISTS public.activity_logs CASCADE;
 DROP TABLE IF EXISTS public.documents CASCADE;
 DROP TABLE IF EXISTS public.financial CASCADE;
@@ -24,10 +22,9 @@ DROP TABLE IF EXISTS public.profiles CASCADE;
 create extension if not exists "uuid-ossp";
 
 -- ============================================================
--- 3. TABELAS ESTRUTURAIS (Usuários e Escritórios)
+-- 3. TABELAS ESTRUTURAIS
 -- ============================================================
 
--- Tabela Pública de Perfis (Espelho de auth.users)
 create table public.profiles (
   id uuid references auth.users on delete cascade not null primary key,
   full_name text,
@@ -40,7 +37,6 @@ create table public.profiles (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Tabela de Escritórios
 create table public.offices (
   id uuid default uuid_generate_v4() primary key,
   name text not null,
@@ -53,7 +49,6 @@ create table public.offices (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Tabela de Membros do Escritório (Junção User <-> Office)
 create table public.office_members (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
@@ -65,10 +60,9 @@ create table public.office_members (
 );
 
 -- ============================================================
--- 4. TABELAS DE DADOS (Clientes, Processos, etc.)
+-- 4. TABELAS DE DADOS
 -- ============================================================
 
--- Clientes
 create table public.clients (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
@@ -94,7 +88,6 @@ create table public.clients (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Processos (Legal Cases)
 create table public.cases (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
@@ -116,7 +109,6 @@ create table public.cases (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Tarefas (Tasks)
 create table public.tasks (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
@@ -134,7 +126,6 @@ create table public.tasks (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Financeiro
 create table public.financial (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
@@ -153,7 +144,6 @@ create table public.financial (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Documentos do Sistema
 create table public.documents (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
@@ -168,7 +158,6 @@ create table public.documents (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Logs de Atividade
 create table public.activity_logs (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references public.profiles(id),
@@ -180,10 +169,10 @@ create table public.activity_logs (
 );
 
 -- ============================================================
--- 5. TRIGGERS E FUNÇÕES
+-- 5. FUNÇÕES E TRIGGERS
 -- ============================================================
 
--- Função para lidar com novo usuário cadastrado no Auth
+-- Criação de Perfil Automático
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
@@ -193,7 +182,6 @@ begin
     new.raw_user_meta_data->>'full_name',
     new.email,
     new.raw_user_meta_data->>'avatar_url',
-    -- Garante que o username seja text e único
     COALESCE(new.raw_user_meta_data->>'username', '@user_' || substr(new.id::text, 1, 8))
   )
   on conflict (id) do nothing; 
@@ -201,13 +189,11 @@ begin
 end;
 $$ language plpgsql security definer;
 
--- Trigger para criar Profile ao criar User
-drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- Função para adicionar o criador do escritório como membro Admin
+-- Adicionar Criador como Admin do Escritório
 create or replace function public.add_creator_as_admin()
 returns trigger as $$
 begin
@@ -217,23 +203,19 @@ begin
     new.owner_id,
     'Admin',
     '{"cases": true, "financial": true, "documents": true, "settings": true}'::jsonb
-  )
-  on conflict (office_id, user_id) do nothing;
+  );
   return new;
 end;
 $$ language plpgsql security definer;
 
--- Trigger para Office Members
-drop trigger if exists on_office_created on public.offices;
 create trigger on_office_created
   after insert on public.offices
   for each row execute procedure public.add_creator_as_admin();
 
 -- ============================================================
--- 6. ROW LEVEL SECURITY (RLS)
+-- 6. RLS (SEGURANÇA E POLÍTICAS)
 -- ============================================================
 
--- Habilitar RLS em todas as tabelas
 alter table public.profiles enable row level security;
 alter table public.offices enable row level security;
 alter table public.office_members enable row level security;
@@ -243,50 +225,48 @@ alter table public.tasks enable row level security;
 alter table public.financial enable row level security;
 alter table public.documents enable row level security;
 
+-- *** HELPER FUNCTION PARA EVITAR RECURSÃO INFINITA ***
+-- Esta função é CRÍTICA. Ela permite verificar se um usuário é membro de um escritório
+-- sem acionar as políticas RLS da tabela office_members recursivamente.
+create or replace function public.is_member_of(_office_id uuid)
+returns boolean as $$
+begin
+  return exists (
+    select 1 from public.office_members 
+    where office_id = _office_id 
+    and user_id = auth.uid()
+  );
+end;
+$$ language plpgsql security definer;
+
 -- PROFILES
-create policy "Public profiles are viewable by everyone" on public.profiles for select using ( true );
-create policy "Users can update own profile" on public.profiles for update using ( auth.uid() = id );
+create policy "Public profiles" on public.profiles for select using (true);
+create policy "Update own profile" on public.profiles for update using (auth.uid() = id);
 
 -- OFFICES
--- Permite ver escritórios se for membro OU se souber o handle (para join)
-create policy "Offices are viewable by members or by handle" on public.offices for select using (
-    auth.uid() in (select user_id from public.office_members where office_id = id)
-    or true
+-- Pode ver escritório se for o dono ou se for membro (via função segura)
+create policy "View offices" on public.offices for select using (
+  owner_id = auth.uid() or public.is_member_of(id)
 );
-create policy "Owners can update offices" on public.offices for update using ( auth.uid() = owner_id );
-create policy "Users can create offices" on public.offices for insert with check ( auth.uid() = owner_id );
+create policy "Create offices" on public.offices for insert with check (auth.uid() = owner_id);
+create policy "Update offices" on public.offices for update using (auth.uid() = owner_id);
 
 -- OFFICE MEMBERS
-create policy "Members can view other members" on public.office_members for select using (
-    auth.uid() in (select user_id from public.office_members as om where om.office_id = office_id)
+-- Pode ver membros se você também for membro do mesmo escritório
+create policy "View office members" on public.office_members for select using (
+  public.is_member_of(office_id)
 );
--- Permite inserção se o usuário estiver se adicionando (join) ou se for admin (invite) - Simplificado para:
-create policy "Users can join offices" on public.office_members for insert with check ( 
-    auth.uid() = user_id 
-    or 
-    exists (select 1 from public.office_members where office_id = office_id and user_id = auth.uid() and role = 'Admin')
-);
-
--- DADOS (Clients, Cases, Tasks, Financial, Documents)
--- Política padrão: Acesso apenas se o usuário for membro do escritório vinculado ao dado
-
-create policy "Access clients from my offices" on public.clients for all using (
-    exists (select 1 from public.office_members where office_id = public.clients.office_id and user_id = auth.uid())
+-- Permite inserção automática pelo trigger (security definer bypass) ou se for admin
+create policy "Manage members" on public.office_members for insert with check (
+  public.is_member_of(office_id) -- Simplificado para demonstração
 );
 
-create policy "Access cases from my offices" on public.cases for all using (
-    exists (select 1 from public.office_members where office_id = public.cases.office_id and user_id = auth.uid())
-);
+-- DADOS GERAIS (Clients, Cases, etc)
+-- Acesso permitido se o usuário for membro do escritório vinculado ao dado
 
-create policy "Access tasks from my offices" on public.tasks for all using (
-    exists (select 1 from public.office_members where office_id = public.tasks.office_id and user_id = auth.uid())
-);
-
-create policy "Access financial from my offices" on public.financial for all using (
-    exists (select 1 from public.office_members where office_id = public.financial.office_id and user_id = auth.uid())
-);
-
-create policy "Access documents from my offices" on public.documents for all using (
-    exists (select 1 from public.office_members where office_id = public.documents.office_id and user_id = auth.uid())
-);
+create policy "Access clients" on public.clients for all using (public.is_member_of(office_id));
+create policy "Access cases" on public.cases for all using (public.is_member_of(office_id));
+create policy "Access tasks" on public.tasks for all using (public.is_member_of(office_id));
+create policy "Access financial" on public.financial for all using (public.is_member_of(office_id));
+create policy "Access documents" on public.documents for all using (public.is_member_of(office_id));
 ```

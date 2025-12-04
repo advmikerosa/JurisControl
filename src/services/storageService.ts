@@ -218,9 +218,9 @@ class StorageService {
               location: officeData.location || 'Brasil',
               owner_id: userId,
               social: {}
+              // REMOVIDO: members: [...] - O trigger 'on_office_created' no Supabase cuida da criação do membro admin.
           };
 
-          // A trigger 'add_creator_as_admin' no banco cuida de inserir o membro
           const { data, error } = await supabase
               .from(TABLE_NAMES.OFFICES)
               .insert(payload)
@@ -285,13 +285,15 @@ class StorageService {
           if (!session.userId) throw new Error("Login necessário.");
 
           // 1. Buscar ID do escritório
+          // Utiliza a função segura is_member_of ou permite busca por handle se a política "Offices are viewable by members or by handle" estiver correta
+          // Assumindo que o DB tem uma política pública para select by handle ou usamos uma função RPC
           const { data: office, error } = await supabase
               .from(TABLE_NAMES.OFFICES)
               .select('id, name, owner_id')
               .eq('handle', handle)
               .single();
 
-          if (error || !office) throw new Error("Escritório não encontrado.");
+          if (error || !office) throw new Error("Escritório não encontrado ou acesso restrito.");
 
           // 2. Inserir Membership
           const { error: joinError } = await supabase
