@@ -10,11 +10,15 @@ Este script é **idempotente** (pode ser rodado múltiplas vezes, pois ele limpa
 -- CUIDADO: Isso apaga dados existentes nas tabelas do app
 -- ============================================================
 
+-- Remover triggers de tabelas de sistema primeiro para evitar conflitos
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-DROP FUNCTION IF EXISTS public.handle_new_user();
-DROP FUNCTION IF EXISTS public.add_creator_as_admin();
-DROP FUNCTION IF EXISTS public.check_is_member(uuid);
 
+-- Remover funções com CASCADE para apagar triggers dependentes automaticamente
+DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
+DROP FUNCTION IF EXISTS public.add_creator_as_admin() CASCADE;
+DROP FUNCTION IF EXISTS public.check_is_member(uuid) CASCADE;
+
+-- Remover tabelas (ordem reversa de dependência)
 DROP TABLE IF EXISTS public.activity_logs CASCADE;
 DROP TABLE IF EXISTS public.documents CASCADE;
 DROP TABLE IF EXISTS public.financial CASCADE;
