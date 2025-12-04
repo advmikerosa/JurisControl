@@ -461,11 +461,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* AI Assistant Toggle */}
             <button
               onClick={() => setIsAiOpen(!isAiOpen)}
-              className={`p-2 rounded-lg transition-colors relative ${isAiOpen ? 'bg-indigo-500/10 text-indigo-500 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'}`}
+              className={`p-2 rounded-lg transition-colors relative flex items-center gap-2 ${isAiOpen ? 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'}`}
               title="Assistente JurisAI"
             >
-              <Sparkles size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-500 rounded-full animate-pulse shadow-glow" />
+              <div className="relative">
+                <Sparkles size={20} />
+                {!isAiOpen && <span className="absolute -top-1 -right-1 w-2 h-2 bg-indigo-500 rounded-full animate-ping" />}
+              </div>
+              <span className="hidden md:inline text-xs font-bold">JurisAI</span>
             </button>
 
             {/* Theme Toggle */}
