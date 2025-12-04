@@ -58,7 +58,7 @@ export const Login: React.FC = () => {
         if (password !== confirmPassword) throw new Error('As senhas não coincidem.');
         if (password.length < 6) throw new Error('A senha deve ter no mínimo 6 caracteres.');
         
-        // Validação de Escritório apenas se não for pular
+        // Validação de Escritório
         if (!skipOfficeSetup) {
             if (officeMode === 'create') {
                 if (!officeName) throw new Error('Digite o nome do seu escritório.');
@@ -66,8 +66,9 @@ export const Login: React.FC = () => {
             }
             if (!officeHandle && officeMode === 'join') throw new Error('Digite o identificador do escritório para entrar.');
             
-            if (officeHandle && !/^@[a-z0-9_]{3,}$/.test(officeHandle)) {
-                 throw new Error('O identificador do escritório deve começar com @ e ter pelo menos 3 caracteres.');
+            // Validação estrita do handle
+            if (officeHandle && !/^@[a-z0-9_]{3,20}$/.test(officeHandle)) {
+                 throw new Error('O identificador deve começar com @, ter letras minúsculas, números ou underline (3-20 caracteres).');
             }
         }
 
@@ -331,9 +332,10 @@ export const Login: React.FC = () => {
                                         value={officeHandle}
                                         onChange={handleOfficeHandleChange}
                                         placeholder="@silva_adv"
-                                        className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none"
+                                        className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none font-mono"
                                     />
                                  </div>
+                                 <p className="text-[10px] text-slate-500 ml-1">Usado para links e convites. Ex: @adv_exemplo</p>
                               </div>
                           </div>
                        ) : (
@@ -346,7 +348,7 @@ export const Login: React.FC = () => {
                                     value={officeHandle}
                                     onChange={handleOfficeHandleChange}
                                     placeholder="@exemplo_adv"
-                                    className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none"
+                                    className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none font-mono"
                                 />
                              </div>
                           </div>

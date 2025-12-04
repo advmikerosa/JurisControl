@@ -2,7 +2,34 @@
 
 Para que o **JurisControl** funcione corretamente em modo de produção, você precisa configurar o banco de dados no Supabase.
 
-## Instruções
+## 🚨 COMANDOS DE LIMPEZA (HARD RESET)
+
+Se você precisa limpar **todos** os dados do banco para recomeçar do zero (mantendo a estrutura das tabelas), execute o script abaixo no SQL Editor do Supabase.
+
+**⚠️ ATENÇÃO: ISSO APAGARÁ TODOS OS CLIENTES, PROCESSOS E DADOS FINANCEIROS.**
+
+```sql
+-- Limpa dados de todas as tabelas em ordem de dependência
+TRUNCATE TABLE 
+  public.activity_logs,
+  public.documents,
+  public.financial,
+  public.tasks,
+  public.movements, -- Se existir tabela separada
+  public.cases,
+  public.clients,
+  public.office_members,
+  public.offices,
+  public.profiles
+RESTART IDENTITY CASCADE;
+
+-- Opcional: Se quiser remover usuários da autenticação (Requer privilégio de admin do Supabase)
+-- delete from auth.users;
+```
+
+---
+
+## Instruções de Instalação
 
 1. Acesse o painel do seu projeto no [Supabase](https://supabase.com/dashboard).
 2. Vá para a seção **SQL Editor** (ícone de terminal na barra lateral esquerda).
@@ -12,7 +39,9 @@ Para que o **JurisControl** funcione corretamente em modo de produção, você p
 
 ---
 
-## Script SQL
+## Script SQL Estrutural (Idempotente)
+
+Este script cria a estrutura necessária com suporte a Handles Únicos.
 
 ```sql
 -- Habilita extensão para UUIDs
@@ -23,10 +52,10 @@ create extension if not exists "uuid-ossp";
 -- ============================================================
 
 -- Tabela Pública de Perfis (Espelho de auth.users)
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid references auth.users on delete cascade not null primary key,
   full_name text,
-  username text,
+  username text unique not null, -- Handle único do usuário (ex: @drjoao)
   avatar_url text,
   email text,
   phone text,
@@ -36,10 +65,10 @@ create table public.profiles (
 );
 
 -- Tabela de Escritórios
-create table public.offices (
+create table if not exists public.offices (
   id uuid default uuid_generate_v4() primary key,
   name text not null,
-  handle text unique not null,
+  handle text unique not null, -- Handle único do escritório (ex: @silva_adv)
   owner_id uuid references public.profiles(id) not null,
   location text,
   logo_url text,
@@ -49,7 +78,7 @@ create table public.offices (
 );
 
 -- Tabela de Membros do Escritório (Junção User <-> Office)
-create table public.office_members (
+create table if not exists public.office_members (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
   user_id uuid references public.profiles(id) on delete cascade not null,
@@ -64,7 +93,7 @@ create table public.office_members (
 -- ============================================================
 
 -- Clientes
-create table public.clients (
+create table if not exists public.clients (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
   user_id uuid references public.profiles(id), -- Quem cadastrou
@@ -98,7 +127,7 @@ create table public.clients (
 );
 
 -- Processos (Legal Cases)
-create table public.cases (
+create table if not exists public.cases (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
   user_id uuid references public.profiles(id),
@@ -125,7 +154,7 @@ create table public.cases (
 );
 
 -- Tarefas (Tasks)
-create table public.tasks (
+create table if not exists public.tasks (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
   user_id uuid references public.profiles(id),
@@ -149,7 +178,7 @@ create table public.tasks (
 );
 
 -- Financeiro
-create table public.financial (
+create table if not exists public.financial (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
   user_id uuid references public.profiles(id),
@@ -172,7 +201,7 @@ create table public.financial (
 );
 
 -- Documentos do Sistema
-create table public.documents (
+create table if not exists public.documents (
   id uuid default uuid_generate_v4() primary key,
   office_id uuid references public.offices(id) on delete cascade not null,
   user_id uuid references public.profiles(id),
@@ -191,7 +220,7 @@ create table public.documents (
 );
 
 -- Logs de Atividade
-create table public.activity_logs (
+create table if not exists public.activity_logs (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references public.profiles(id),
   action text not null,
@@ -215,13 +244,16 @@ begin
     new.raw_user_meta_data->>'full_name',
     new.email,
     new.raw_user_meta_data->>'avatar_url',
-    new.raw_user_meta_data->>'username'
-  );
+    -- Fallback se username não vier
+    COALESCE(new.raw_user_meta_data->>'username', '@user_' || substr(new.id::text, 1, 8))
+  )
+  on conflict (id) do nothing; 
   return new;
 end;
 $$ language plpgsql security definer;
 
 -- Trigger para criar Profile ao criar User
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
@@ -236,12 +268,14 @@ begin
     new.owner_id,
     'Admin',
     '{"cases": true, "financial": true, "documents": true, "settings": true}'::jsonb
-  );
+  )
+  on conflict (office_id, user_id) do nothing;
   return new;
 end;
 $$ language plpgsql security definer;
 
 -- Trigger para Office Members
+drop trigger if exists on_office_created on public.offices;
 create trigger on_office_created
   after insert on public.offices
   for each row execute procedure public.add_creator_as_admin();
@@ -260,107 +294,43 @@ alter table public.tasks enable row level security;
 alter table public.financial enable row level security;
 alter table public.documents enable row level security;
 
--- PROFILES:
--- Todo mundo pode ler perfis básicos (necessário para colaboração)
-create policy "Public profiles are viewable by everyone"
-  on public.profiles for select
-  using ( true );
+-- PROFILES
+create policy "Public profiles are viewable by everyone" on public.profiles for select using ( true );
+create policy "Users can update own profile" on public.profiles for update using ( auth.uid() = id );
 
--- Usuário só edita seu próprio perfil
-create policy "Users can update own profile"
-  on public.profiles for update
-  using ( auth.uid() = id );
-
--- OFFICES:
--- Visível se o usuário for membro OU se for uma busca pública pelo Handle (para entrar)
-create policy "Offices are viewable by members or by handle"
-  on public.offices for select
-  using (
+-- OFFICES
+create policy "Offices are viewable by members or by handle" on public.offices for select using (
     auth.uid() in (select user_id from public.office_members where office_id = id)
-    or
-    true -- Permitir leitura pública para encontrar escritórios (pode restringir mais se desejar)
-  );
+    or true -- Permite ver dados públicos do escritório (como nome/handle) para join
+);
+create policy "Owners can update offices" on public.offices for update using ( auth.uid() = owner_id );
+create policy "Users can create offices" on public.offices for insert with check ( auth.uid() = owner_id );
 
--- Apenas o dono pode editar
-create policy "Owners can update offices"
-  on public.offices for update
-  using ( auth.uid() = owner_id );
-
-create policy "Users can create offices"
-  on public.offices for insert
-  with check ( auth.uid() = owner_id );
-
--- OFFICE MEMBERS:
--- Membros podem ver quem está no escritório
-create policy "Members can view other members"
-  on public.office_members for select
-  using (
-    auth.uid() in (
-      select user_id from public.office_members as om 
-      where om.office_id = office_id
-    )
-  );
-
--- Permitir auto-inserção (entrar no escritório) ou inserção por Admin (convite)
-create policy "Users can join offices"
-  on public.office_members for insert
-  with check ( auth.uid() = user_id );
+-- OFFICE MEMBERS
+create policy "Members can view other members" on public.office_members for select using (
+    auth.uid() in (select user_id from public.office_members as om where om.office_id = office_id)
+);
+create policy "Users can join offices" on public.office_members for insert with check ( auth.uid() = user_id );
 
 -- DADOS (Clients, Cases, Tasks, Financial, Documents)
--- Regra genérica: Usuário deve ser membro do escritório vinculado ao dado
+-- Política padrão: Acesso apenas se o usuário for membro do escritório vinculado ao dado
 
--- Clients
-create policy "Access clients from my offices"
-  on public.clients for all
-  using (
-    exists (
-      select 1 from public.office_members
-      where office_id = public.clients.office_id
-      and user_id = auth.uid()
-    )
-  );
+create policy "Access clients from my offices" on public.clients for all using (
+    exists (select 1 from public.office_members where office_id = public.clients.office_id and user_id = auth.uid())
+);
 
--- Cases
-create policy "Access cases from my offices"
-  on public.cases for all
-  using (
-    exists (
-      select 1 from public.office_members
-      where office_id = public.cases.office_id
-      and user_id = auth.uid()
-    )
-  );
+create policy "Access cases from my offices" on public.cases for all using (
+    exists (select 1 from public.office_members where office_id = public.cases.office_id and user_id = auth.uid())
+);
 
--- Tasks
-create policy "Access tasks from my offices"
-  on public.tasks for all
-  using (
-    exists (
-      select 1 from public.office_members
-      where office_id = public.tasks.office_id
-      and user_id = auth.uid()
-    )
-  );
+create policy "Access tasks from my offices" on public.tasks for all using (
+    exists (select 1 from public.office_members where office_id = public.tasks.office_id and user_id = auth.uid())
+);
 
--- Financial
-create policy "Access financial from my offices"
-  on public.financial for all
-  using (
-    exists (
-      select 1 from public.office_members
-      where office_id = public.financial.office_id
-      and user_id = auth.uid()
-    )
-  );
+create policy "Access financial from my offices" on public.financial for all using (
+    exists (select 1 from public.office_members where office_id = public.financial.office_id and user_id = auth.uid())
+);
 
--- Documents
-create policy "Access documents from my offices"
-  on public.documents for all
-  using (
-    exists (
-      select 1 from public.office_members
-      where office_id = public.documents.office_id
-      and user_id = auth.uid()
-    )
-  );
-```
+create policy "Access documents from my offices" on public.documents for all using (
+    exists (select 1 from public.office_members where office_id = public.documents.office_id and user_id = auth.uid())
+);

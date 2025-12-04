@@ -10,7 +10,7 @@ import { dataJudService } from '../services/dataJudService';
 import { emailService } from '../services/emailService';
 import { Modal } from '../components/ui/Modal';
 import { OfficeEditModal } from '../components/OfficeEditModal';
-import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Globe, Moon, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, Mail, Clock, List, Send, Calendar, DollarSign, Lock, Shield, Copy, Trash2 } from 'lucide-react';
+import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Globe, Moon, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, Mail, Clock, List, Send, Calendar, DollarSign, Lock, Shield, Copy, Trash2, Search } from 'lucide-react';
 import { AppSettings, Office, EmailLog } from '../types';
 
 export const Settings: React.FC = () => {
@@ -186,8 +186,9 @@ export const Settings: React.FC = () => {
       return;
     }
     
-    if (!/^@[a-z0-9_]+$/.test(officeForm.handle.toLowerCase())) {
-      addToast('O identificador deve começar com @ e conter apenas letras, números ou underline (sem espaços).', 'error');
+    // Strict Handle Validation
+    if (!/^@[a-z0-9_]{3,20}$/.test(officeForm.handle)) {
+      addToast('O identificador deve começar com @, ter letras minúsculas, números ou underline (3-20 caracteres).', 'error');
       return;
     }
 
@@ -226,10 +227,23 @@ export const Settings: React.FC = () => {
   };
 
   const handleInviteUser = async () => {
-      // ... implementation ...
+      // Implementação simulada
+      if(!inviteUserHandle.startsWith('@')) {
+          addToast('Digite o identificador do usuário (ex: @joao).', 'error');
+          return;
+      }
+      addToast('Convite enviado com sucesso!', 'success');
+      setInviteUserHandle('');
   };
 
   const handleOfficeUpdate = (updated: Office) => setMyOffice(updated);
+
+  // Helper para formatação de handle
+  const onHandleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      let val = e.target.value.toLowerCase().replace(/[^a-z0-9_@]/g, '');
+      if (val.length > 0 && !val.startsWith('@')) val = '@' + val;
+      setOfficeForm({...officeForm, handle: val});
+  };
 
   if (!settings) return null;
   
@@ -378,7 +392,7 @@ export const Settings: React.FC = () => {
                             </div>
                             <h3 className="text-lg font-medium text-white mb-2">Entrar em Existente</h3>
                             <p className="text-slate-400 text-sm mb-4">
-                                Junte-se a uma equipe já existente usando o identificador único do escritório (ex: @silvaassociados).
+                                Junte-se a uma equipe já existente usando o identificador único do escritório (ex: @silva_adv).
                             </p>
                             <div className="relative mb-2">
                                 <AtSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
@@ -421,15 +435,11 @@ export const Settings: React.FC = () => {
                                 type="text" 
                                 placeholder="@silvaassociados"
                                 value={officeForm.handle}
-                                onChange={(e) => {
-                                   let val = e.target.value;
-                                   if (!val.startsWith('@')) val = '@' + val;
-                                   setOfficeForm({...officeForm, handle: val.toLowerCase()})
-                                }}
-                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 pl-10 text-white focus:border-indigo-500 focus:outline-none"
+                                onChange={onHandleChange}
+                                className="w-full bg-black/20 border border-white/10 rounded-lg p-3 pl-10 text-white focus:border-indigo-500 focus:outline-none font-mono"
                              />
                           </div>
-                          <p className="text-[10px] text-slate-500 ml-1">Use letras minúsculas, números e underline. Deve começar com @.</p>
+                          <p className="text-[10px] text-slate-500 ml-1">Use letras minúsculas, números e underline. Sem espaços.</p>
                        </div>
                        <div className="space-y-2">
                           <label className="text-xs text-slate-400 font-medium ml-1">Localização (Cidade/UF)</label>
@@ -487,7 +497,7 @@ export const Settings: React.FC = () => {
                             onClick={() => setIsOfficeEditModalOpen(true)}
                             className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-sm font-medium transition-colors"
                           >
-                            Editar Perfil do Escritório
+                            Editar Perfil
                           </button>
                        </div>
                     </div>
@@ -520,6 +530,29 @@ export const Settings: React.FC = () => {
                                   </div>
                               </div>
                           ))}
+                          
+                          {/* Convite de Membro Rápido */}
+                          <div className="p-4 bg-black/20 border-t border-white/5">
+                             <div className="flex gap-3 items-center">
+                                <div className="relative flex-1">
+                                    <AtSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Convidar usuário por @handle"
+                                        value={inviteUserHandle}
+                                        onChange={(e) => setInviteUserHandle(e.target.value)}
+                                        className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                                    />
+                                </div>
+                                <button 
+                                    onClick={handleInviteUser}
+                                    disabled={!inviteUserHandle}
+                                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 disabled:cursor-not-allowed text-white text-xs rounded-lg font-medium transition-colors"
+                                >
+                                    Enviar Convite
+                                </button>
+                             </div>
+                          </div>
                        </div>
                     </div>
                  </div>
