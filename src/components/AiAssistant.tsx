@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Sparkles, User, Bot, Loader2, Minimize2, Mic, PhoneOff, Activity } from 'lucide-react';
+import { X, Send, Sparkles, User, Bot, Loader2, Minimize2 } from 'lucide-react';
 import { aiService } from '../services/aiService';
 
 interface Message {
@@ -21,10 +21,6 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ isOpen, onClose }) => 
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  // Live Mode States
-  const [isLiveActive, setIsLiveActive] = useState(false);
-  const [liveStatus, setLiveStatus] = useState('Desconectado');
-
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -34,17 +30,10 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ isOpen, onClose }) => 
 
   useEffect(() => {
     scrollToBottom();
-    if (isOpen && !isLiveActive) {
+    if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
-  }, [messages, isOpen, isLiveActive]);
-
-  // Clean up Live Session on close
-  useEffect(() => {
-    if (!isOpen && isLiveActive) {
-      handleStopLive();
-    }
-  }, [isOpen]);
+  }, [messages, isOpen]);
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -88,23 +77,6 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ isOpen, onClose }) => 
     }
   };
 
-  const handleStartLive = () => {
-    setIsLiveActive(true);
-    setLiveStatus("Conectando...");
-    aiService.startLiveSession((status) => {
-      setLiveStatus(status);
-      if (status === "Desconectado" || status.startsWith("Erro")) {
-        // Optional: Auto close on error after delay, or show error state
-      }
-    });
-  };
-
-  const handleStopLive = () => {
-    aiService.stopLiveSession();
-    setIsLiveActive(false);
-    setLiveStatus("Desconectado");
-  };
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -126,11 +98,6 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ isOpen, onClose }) => 
               </div>
             </div>
             <div className="flex items-center gap-1">
-                {!isLiveActive && (
-                  <button onClick={handleStartLive} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-white" title="Modo de Voz">
-                    <Mic size={16} />
-                  </button>
-                )}
                 <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg transition-colors">
                   <Minimize2 size={16} />
                 </button>
@@ -140,96 +107,65 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ isOpen, onClose }) => 
             </div>
           </div>
 
-          {/* Live Mode View */}
-          {isLiveActive ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-[#1e1b4b] to-[#0f172a] text-white relative overflow-hidden">
-               {/* Pulsing Orb */}
-               <div className="relative mb-8">
-                  <div className={`absolute inset-0 bg-indigo-500 rounded-full blur-xl opacity-30 ${liveStatus.includes('Falando') || liveStatus.includes('Ouvindo') ? 'animate-pulse' : ''}`}></div>
-                  <div className="w-32 h-32 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-full flex items-center justify-center shadow-2xl relative z-10 border-4 border-indigo-400/20">
-                     {liveStatus.includes('Falando') ? (
-                       <Activity size={48} className="text-white animate-bounce" />
-                     ) : (
-                       <Mic size={48} className="text-white" />
-                     )}
-                  </div>
-               </div>
-
-               <h3 className="text-lg font-bold mb-2">{liveStatus}</h3>
-               <p className="text-xs text-indigo-200/60 text-center max-w-[80%] mb-8">
-                 Fale naturalmente. O JurisAI está ouvindo e responderá em tempo real.
-               </p>
-
-               <button 
-                 onClick={handleStopLive}
-                 className="flex items-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-500 rounded-full font-bold shadow-lg shadow-rose-900/50 transition-all hover:scale-105"
-               >
-                 <PhoneOff size={20} /> Encerrar
-               </button>
-            </div>
-          ) : (
-            <>
-              {/* Chat Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50 dark:bg-black/20">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                      msg.role === 'user' 
-                        ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300' 
-                        : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-300'
-                    }`}>
-                      {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
+          {/* Chat Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-50/50 dark:bg-black/20">
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                  msg.role === 'user' 
+                    ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300' 
+                    : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-300'
+                }`}>
+                  {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
+                </div>
+                
+                <div className={`max-w-[80%] rounded-2xl p-3 text-sm leading-relaxed shadow-sm ${
+                  msg.role === 'user'
+                    ? 'bg-indigo-600 text-white rounded-tr-none'
+                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-tl-none'
+                }`}>
+                  {msg.text ? (
+                    <div className="whitespace-pre-wrap">{msg.text}</div>
+                  ) : (
+                    <div className="flex gap-1 items-center h-5">
+                      <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
-                    
-                    <div className={`max-w-[80%] rounded-2xl p-3 text-sm leading-relaxed shadow-sm ${
-                      msg.role === 'user'
-                        ? 'bg-indigo-600 text-white rounded-tr-none'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-tl-none'
-                    }`}>
-                      {msg.text ? (
-                        <div className="whitespace-pre-wrap">{msg.text}</div>
-                      ) : (
-                        <div className="flex gap-1 items-center h-5">
-                          <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Input */}
-              <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 shrink-0">
-                <form onSubmit={handleSend} className="relative flex items-center gap-2">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Digite sua mensagem..."
-                    className="w-full bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-950 rounded-xl py-3 pl-4 pr-12 text-sm outline-none transition-all text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
-                    disabled={isLoading}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!input.trim() || isLoading}
-                    className="absolute right-2 p-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg transition-colors shadow-sm"
-                  >
-                    {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                  </button>
-                </form>
-                <div className="text-[10px] text-center text-slate-400 mt-2">
-                  JurisAI pode cometer erros. Verifique informações importantes.
+                  )}
                 </div>
               </div>
-            </>
-          )}
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-white/10 shrink-0">
+            <form onSubmit={handleSend} className="relative flex items-center gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Digite sua mensagem..."
+                className="w-full bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-950 rounded-xl py-3 pl-4 pr-12 text-sm outline-none transition-all text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                disabled={isLoading}
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || isLoading}
+                className="absolute right-2 p-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg transition-colors shadow-sm"
+              >
+                {isLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              </button>
+            </form>
+            <div className="text-[10px] text-center text-slate-400 mt-2">
+              JurisAI pode cometer erros. Verifique informações importantes.
+            </div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
