@@ -8,7 +8,8 @@ Copie e cole o código abaixo no **SQL Editor** do Supabase. Este script corrige
 -- 1. CORREÇÃO DE PERMISSÕES (RLS)
 -- ============================================================
 
--- Permitir que qualquer usuário autenticado busque escritórios (necessário para o "Entrar no Escritório")
+-- Permitir que qualquer usuário autenticado busque escritórios
+-- (Necessário para validar se o @handle existe e para encontrar o ID ao entrar)
 DROP POLICY IF EXISTS "View offices" ON public.offices;
 CREATE POLICY "View offices" ON public.offices
 FOR SELECT
