@@ -126,6 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                setIsAuthenticated(false);
             } else if (session?.user) {
                // Apenas atualização de token ou initial session
+               // Para evitar loop, chamamos map diretamente se não for SIGNED_IN
                mapSupabaseUserToContext(session.user);
             }
           });
@@ -159,7 +160,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   /**
-   * Lógica Central de Validação de Usuário (Soft Delete / Reactivation)
+   * Process Pending Office Setup
+   * Checks if user has a pending office creation request from sign up and executes it.
+   */
+  const processPendingSetup = async (session: any) => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const sbUser = session.user;
+    const metadata = sbUser.user_metadata || {};
+    
+    if (metadata.pending_office_setup) {
+        console.log("Found pending office setup, processing...", metadata.pending_office_setup);
+        const { mode, name, handle } = metadata.pending_office_setup;
+        
+        try {
+            await storageService.ensureProfileExists();
+
+            if (mode === 'create' && name && handle) {
+                const newOffice = await storageService.createOffice({
+                    name,
+                    handle,
+                    location: 'Brasil'
+                }); // uses session implicitly via storageService internals
+
+                // Update metadata: clear pending, set current office (cache)
+                await supabase.auth.updateUser({
+                    data: { 
+                        pending_office_setup: null,
+                        offices: [newOffice.id],
+                        currentOfficeId: newOffice.id
+                    }
+                });
+                return true; // Indicates an update happened
+            } else if (mode === 'join' && handle) {
+                const joinedOffice = await storageService.joinOffice(handle);
+                
+                await supabase.auth.updateUser({
+                    data: { 
+                        pending_office_setup: null,
+                        offices: [joinedOffice.id],
+                        currentOfficeId: joinedOffice.id
+                    }
+                });
+                return true;
+            }
+        } catch (e) {
+            console.error("Error processing pending office setup:", e);
+            // We don't clear the pending setup on error so it might retry later or user can manually fix
+        }
+    }
+    return false;
+  };
+
+  /**
+   * Lógica Central de Validação de Usuário (Soft Delete / Reactivation / Pending Setup)
    */
   const handleUserSessionValidation = async (session: any) => {
       const sbUser = session.user;
@@ -177,7 +231,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               try {
                   await storageService.reactivateAccount();
                   addToast('Sua conta foi reativada com sucesso!', 'success');
-                  mapSupabaseUserToContext(sbUser); // Permitir acesso
+                  // Process pending setup after reactivation if needed
+                  await processPendingSetup(session);
+                  // Refresh user data
+                  const { data: { user: refreshedUser } } = await supabase.auth.getUser();
+                  mapSupabaseUserToContext(refreshedUser || sbUser);
               } catch (e) {
                   console.error("Erro na reativação automática", e);
                   await logout(false);
@@ -189,7 +247,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
       } else {
           // Conta ativa normal
-          mapSupabaseUserToContext(sbUser);
+          const updated = await processPendingSetup(session);
+          
+          if (updated) {
+             // If we updated metadata (processed office), fetch fresh user object
+             const { data: { user: refreshedUser } } = await supabase.auth.getUser();
+             mapSupabaseUserToContext(refreshedUser || sbUser);
+          } else {
+             mapSupabaseUserToContext(sbUser);
+          }
       }
   };
 
@@ -267,7 +333,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             full_name: name,
             role: 'Advogado',
             oab: oab || '',
-            username: '@' + name.toLowerCase().replace(/\s+/g, '')
+            username: '@' + name.toLowerCase().replace(/\s+/g, ''),
+            // CRITICAL: Save office intent in metadata for execution after email confirmation/login
+            pending_office_setup: officeData 
           }
         }
       });
@@ -277,39 +345,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
          throw new Error('Este email já está cadastrado.');
       }
 
-      if (data.user && officeData) {
+      // If we have a session immediately (auto-confirm enabled), we can try to process immediately to avoid delay
+      // Otherwise, the handleUserSessionValidation logic will pick it up on first login
+      if (data.session && officeData) {
           try {
               if (officeData.mode === 'create' && officeData.name) {
-                  // Wait for creation to ensure consistency before returning
                   const newOffice = await storageService.createOffice({
                       name: officeData.name,
                       handle: officeData.handle,
                       location: 'Brasil'
                   }, data.user.id, { name, email });
                   
-                  // Try to update metadata, but don't crash if it fails (e.g. unconfirmed email)
-                  // The real relationship is in the DB tables
-                  try {
-                      await supabase.auth.updateUser({
-                          data: { offices: [newOffice.id], currentOfficeId: newOffice.id }
-                      });
-                  } catch (metaError) {
-                      console.warn("Metadata update failed (likely unconfirmed email), but office created in DB.", metaError);
-                  }
+                  // Clear pending setup since we did it
+                  await supabase.auth.updateUser({
+                      data: { 
+                          pending_office_setup: null,
+                          offices: [newOffice.id], 
+                          currentOfficeId: newOffice.id 
+                      }
+                  });
 
               } else if (officeData.mode === 'join') {
                   const joinedOffice = await storageService.joinOffice(officeData.handle);
-                  try {
-                      await supabase.auth.updateUser({
-                          data: { offices: [joinedOffice.id], currentOfficeId: joinedOffice.id }
-                      });
-                  } catch (metaError) {
-                      console.warn("Metadata update failed, but joined office in DB.", metaError);
-                  }
+                  await supabase.auth.updateUser({
+                      data: { 
+                          pending_office_setup: null,
+                          offices: [joinedOffice.id], 
+                          currentOfficeId: joinedOffice.id 
+                      }
+                  });
               }
           } catch (officeError: any) {
-              console.error("Falha ao configurar escritório:", officeError);
-              // Don't throw here to allow user creation to succeed, but user might be office-less
+              console.warn("Immediate office creation failed (likely expected if session weak), will retry on login:", officeError);
+              // Do not throw here, user is created. We rely on the pending_office_setup metadata fallback.
           }
       }
       return !data.session; 
