@@ -65,8 +65,9 @@ export const Clients: React.FC = () => {
   };
 
   const filteredClients = clients.filter(client => {
+    // FIX: Adicionado (client.email || '') para garantir que seja string antes do toLowerCase()
     const matchesSearch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (client.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (client.cpf && client.cpf.includes(searchTerm)) ||
                           (client.cnpj && client.cnpj.includes(searchTerm));
     

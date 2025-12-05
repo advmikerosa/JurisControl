@@ -316,14 +316,15 @@ export const ClientDetails: React.FC = () => {
                            <Mail size={16} className="text-indigo-400 mt-0.5" />
                            <div className="overflow-hidden">
                                <span className="text-slate-500 text-xs block">E-mail</span>
-                               <a href={`mailto:${clientData.email}`} className="text-slate-200 hover:text-white hover:underline truncate block">{clientData.email}</a>
+                               {/* FIX: Handle undefined email safely */}
+                               <a href={`mailto:${clientData.email || ''}`} className="text-slate-200 hover:text-white hover:underline truncate block">{clientData.email || 'Não informado'}</a>
                            </div>
                        </div>
                        <div className="flex items-start gap-3">
                            <Phone size={16} className="text-indigo-400 mt-0.5" />
                            <div>
                                <span className="text-slate-500 text-xs block">Telefone</span>
-                               <span className="text-slate-200">{clientData.phone}</span>
+                               <span className="text-slate-200">{clientData.phone || 'Não informado'}</span>
                            </div>
                        </div>
                        <div className="flex items-start gap-3">
