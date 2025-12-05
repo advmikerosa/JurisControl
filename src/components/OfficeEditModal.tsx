@@ -2,9 +2,11 @@
 import React, { useState } from 'react';
 import { Modal } from './ui/Modal';
 import { Office, OfficeMember, MemberRole } from '../types';
-import { Camera, Building, Users, Settings as SettingsIcon, Save, Trash2, Plus, Mail, Phone, Globe, MapPin, Instagram, Linkedin, Facebook, DollarSign, FileText, Scale, User, Shield } from 'lucide-react';
+import { Camera, Building, Users, Settings as SettingsIcon, Save, Trash2, Plus, Mail, Phone, Globe, MapPin, Instagram, Linkedin, Facebook, DollarSign, FileText, Scale, User, Shield, AtSign } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { storageService } from '../services/storageService';
+import { useAuth } from '../context/AuthContext';
+import { permissionService } from '../services/permissionService';
 
 interface OfficeEditModalProps {
   isOpen: boolean;
@@ -15,9 +17,16 @@ interface OfficeEditModalProps {
 
 export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClose, office, onUpdate }) => {
   const { addToast } = useToast();
+  const { user } = useAuth();
+  
   const [activeTab, setActiveTab] = useState<'general' | 'team' | 'extras'>('general');
   const [formData, setFormData] = useState<Office>(office);
-  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [newMemberIdentifier, setNewMemberIdentifier] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
+  
+  // Verify permissions for the current user in this office context
+  const canEditSettings = permissionService.can(user, office, 'settings', 'edit');
+  const canManageTeam = permissionService.can(user, office, 'team', 'edit');
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -45,6 +54,10 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
   };
 
   const handleSave = async () => {
+    if (!canEditSettings) {
+        addToast('Você não tem permissão para salvar alterações.', 'error');
+        return;
+    }
     try {
       await storageService.saveOffice(formData);
       onUpdate(formData);
@@ -57,6 +70,8 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
 
   // Team Management
   const updateMemberRole = (userId: string, newRole: MemberRole) => {
+    if (!canManageTeam) return;
+
     const updatedMembers = formData.members.map(m => {
         if (m.userId === userId) {
             // Protect Owner
@@ -77,6 +92,8 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
   };
 
   const togglePermission = (userId: string, key: keyof OfficeMember['permissions']) => {
+      if (!canManageTeam) return;
+
       const updatedMembers = formData.members.map(m => {
           if (m.userId === userId) {
               // Admin always has full permissions
@@ -88,33 +105,50 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
       setFormData({ ...formData, members: updatedMembers });
   };
 
-  const removeMember = (userId: string) => {
+  const removeMember = async (userId: string) => {
+      if (!canManageTeam) return;
+
       if (userId === formData.ownerId) {
           addToast('Não é possível remover o proprietário do escritório.', 'error');
           return;
       }
       if (confirm('Tem certeza que deseja remover este membro da equipe?')) {
-          setFormData({ ...formData, members: formData.members.filter(m => m.userId !== userId) });
+          try {
+              await storageService.removeMemberFromOffice(office.id, userId);
+              setFormData({ ...formData, members: formData.members.filter(m => m.userId !== userId) });
+              addToast('Membro removido com sucesso.', 'success');
+          } catch(e) {
+              addToast('Erro ao remover membro.', 'error');
+          }
       }
   };
 
-  const addMemberMock = () => {
-      if (!newMemberEmail.includes('@')) {
-          addToast('E-mail inválido.', 'error');
+  const inviteMember = async () => {
+      if (!canManageTeam) {
+          addToast('Sem permissão para convidar.', 'error');
           return;
       }
-      // Mock adding a member
-      const newMember: OfficeMember = {
-          userId: `u-${Date.now()}`,
-          name: newMemberEmail.split('@')[0],
-          email: newMemberEmail,
-          role: 'Advogado',
-          avatarUrl: `https://ui-avatars.com/api/?name=${newMemberEmail}&background=random`,
-          permissions: { financial: false, cases: true, documents: true, settings: false }
-      };
-      setFormData({ ...formData, members: [...formData.members, newMember] });
-      setNewMemberEmail('');
-      addToast('Membro adicionado (simulação).', 'success');
+      if (!newMemberIdentifier.includes('@')) {
+          addToast('Digite um e-mail ou @usuario válido.', 'error');
+          return;
+      }
+      
+      setIsInviting(true);
+      try {
+          await storageService.inviteUserToOffice(office.id, newMemberIdentifier);
+          addToast('Usuário adicionado com sucesso!', 'success');
+          // Reload office data to show new member
+          const updatedOffice = await storageService.getOfficeById(office.id);
+          if (updatedOffice) {
+              setFormData(updatedOffice);
+              onUpdate(updatedOffice);
+          }
+          setNewMemberIdentifier('');
+      } catch (error: any) {
+          addToast(error.message || 'Erro ao convidar usuário.', 'error');
+      } finally {
+          setIsInviting(false);
+      }
   };
 
   return (
@@ -122,9 +156,11 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
       footer={
         <div className="flex justify-end gap-3 w-full">
             <button onClick={onClose} className="px-4 py-2 text-slate-400 hover:text-white transition-colors">Cancelar</button>
-            <button onClick={handleSave} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-indigo-500/20">
-                <Save size={18} /> Salvar Alterações
-            </button>
+            {canEditSettings && (
+                <button onClick={handleSave} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-indigo-500/20">
+                    <Save size={18} /> Salvar Alterações
+                </button>
+            )}
         </div>
       }
     >
@@ -157,29 +193,31 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                                      <span className="text-2xl font-bold text-slate-600">{formData.name.charAt(0)}</span>
                                  )}
                              </div>
-                             <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity rounded-xl">
-                                 <Camera className="text-white" size={20} />
-                                 <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
-                             </label>
+                             {canEditSettings && (
+                                <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity rounded-xl">
+                                    <Camera className="text-white" size={20} />
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                                </label>
+                             )}
                          </div>
                          <div className="flex-1">
                              <label className="text-xs text-slate-400 block mb-1">Nome do Escritório</label>
-                             <input type="text" name="name" value={formData.name} onChange={handleInputChange} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-indigo-500 outline-none" />
+                             <input type="text" name="name" value={formData.name} onChange={handleInputChange} disabled={!canEditSettings} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-indigo-500 outline-none disabled:opacity-50" />
                              <label className="text-xs text-slate-400 block mt-3 mb-1">Área de Atuação Principal</label>
-                             <input type="text" name="areaOfActivity" value={formData.areaOfActivity || ''} onChange={handleInputChange} placeholder="Ex: Full Service, Trabalhista..." className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-indigo-500 outline-none" />
+                             <input type="text" name="areaOfActivity" value={formData.areaOfActivity || ''} onChange={handleInputChange} disabled={!canEditSettings} placeholder="Ex: Full Service, Trabalhista..." className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-indigo-500 outline-none disabled:opacity-50" />
                          </div>
                      </div>
 
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <div>
                              <label className="text-xs text-slate-400 block mb-1">CNPJ</label>
-                             <input type="text" name="cnpj" value={formData.cnpj || ''} onChange={handleInputChange} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-indigo-500 outline-none" placeholder="00.000.000/0001-00" />
+                             <input type="text" name="cnpj" value={formData.cnpj || ''} onChange={handleInputChange} disabled={!canEditSettings} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-indigo-500 outline-none disabled:opacity-50" placeholder="00.000.000/0001-00" />
                          </div>
                          <div>
                              <label className="text-xs text-slate-400 block mb-1">Localização (Cidade/UF)</label>
                              <div className="relative">
                                 <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                                <input type="text" name="location" value={formData.location} onChange={handleInputChange} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white focus:border-indigo-500 outline-none" />
+                                <input type="text" name="location" value={formData.location} onChange={handleInputChange} disabled={!canEditSettings} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white focus:border-indigo-500 outline-none disabled:opacity-50" />
                              </div>
                          </div>
                      </div>
@@ -189,21 +227,21 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                              <label className="text-xs text-slate-400 block mb-1">Telefone</label>
                              <div className="relative">
                                 <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                                <input type="text" name="phone" value={formData.phone || ''} onChange={handleInputChange} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white focus:border-indigo-500 outline-none" placeholder="(00) 0000-0000" />
+                                <input type="text" name="phone" value={formData.phone || ''} onChange={handleInputChange} disabled={!canEditSettings} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white focus:border-indigo-500 outline-none disabled:opacity-50" placeholder="(00) 0000-0000" />
                              </div>
                          </div>
                          <div>
                              <label className="text-xs text-slate-400 block mb-1">Site</label>
                              <div className="relative">
                                 <Globe size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                                <input type="text" name="website" value={formData.website || ''} onChange={handleInputChange} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white focus:border-indigo-500 outline-none" placeholder="www.exemplo.com.br" />
+                                <input type="text" name="website" value={formData.website || ''} onChange={handleInputChange} disabled={!canEditSettings} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white focus:border-indigo-500 outline-none disabled:opacity-50" placeholder="www.exemplo.com.br" />
                              </div>
                          </div>
                      </div>
                      
                      <div>
                          <label className="text-xs text-slate-400 block mb-1">Descrição Institucional</label>
-                         <textarea name="description" value={formData.description || ''} onChange={handleInputChange} rows={3} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-indigo-500 outline-none resize-none" placeholder="Breve resumo sobre o escritório..." />
+                         <textarea name="description" value={formData.description || ''} onChange={handleInputChange} disabled={!canEditSettings} rows={3} className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 text-white focus:border-indigo-500 outline-none resize-none disabled:opacity-50" placeholder="Breve resumo sobre o escritório..." />
                      </div>
                  </div>
              )}
@@ -211,18 +249,24 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
              {/* --- TEAM TAB --- */}
              {activeTab === 'team' && (
                  <div className="space-y-6 animate-fade-in">
-                     <div className="flex gap-2 p-4 bg-white/5 border border-white/10 rounded-xl items-end">
-                         <div className="flex-1">
-                             <label className="text-xs text-slate-400 block mb-1">Convidar Membro (E-mail)</label>
-                             <div className="relative">
-                                 <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                                 <input type="email" value={newMemberEmail} onChange={e => setNewMemberEmail(e.target.value)} placeholder="novo.advogado@email.com" className="w-full bg-black/20 border border-white/10 rounded-lg p-2 pl-9 text-white text-sm outline-none focus:border-indigo-500" />
-                             </div>
-                         </div>
-                         <button onClick={addMemberMock} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
-                             <Plus size={16} /> Adicionar
-                         </button>
-                     </div>
+                     {canManageTeam ? (
+                        <div className="flex gap-2 p-4 bg-white/5 border border-white/10 rounded-xl items-end">
+                            <div className="flex-1">
+                                <label className="text-xs text-slate-400 block mb-1">Convidar Membro</label>
+                                <div className="relative">
+                                    <AtSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                    <input type="text" value={newMemberIdentifier} onChange={e => setNewMemberIdentifier(e.target.value)} placeholder="e-mail ou @usuario" className="w-full bg-black/20 border border-white/10 rounded-lg p-2 pl-9 text-white text-sm outline-none focus:border-indigo-500" />
+                                </div>
+                            </div>
+                            <button onClick={inviteMember} disabled={isInviting} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50">
+                                <Plus size={16} /> {isInviting ? 'Enviando...' : 'Adicionar'}
+                            </button>
+                        </div>
+                     ) : (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-200 text-xs text-center">
+                            Você não tem permissão para gerenciar a equipe.
+                        </div>
+                     )}
 
                      <div className="space-y-3">
                          {formData.members.map(member => (
@@ -246,15 +290,15 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                                          <select 
                                             value={member.role}
                                             onChange={(e) => updateMemberRole(member.userId, e.target.value as MemberRole)}
-                                            className="bg-black/20 border border-white/10 rounded-lg text-xs text-white font-medium py-1 px-2 outline-none focus:border-indigo-500 cursor-pointer"
-                                            disabled={member.userId === formData.ownerId}
+                                            className="bg-black/20 border border-white/10 rounded-lg text-xs text-white font-medium py-1 px-2 outline-none focus:border-indigo-500 cursor-pointer disabled:opacity-50"
+                                            disabled={!canManageTeam || member.userId === formData.ownerId}
                                          >
                                              <option value="Admin" className="bg-slate-800 text-white">Admin</option>
                                              <option value="Advogado" className="bg-slate-800 text-white">Advogado</option>
                                              <option value="Estagiário" className="bg-slate-800 text-white">Estagiário</option>
                                              <option value="Financeiro" className="bg-slate-800 text-white">Financeiro</option>
                                          </select>
-                                         {member.userId !== formData.ownerId && (
+                                         {canManageTeam && member.userId !== formData.ownerId && (
                                              <button onClick={() => removeMember(member.userId)} className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors" title="Remover Membro">
                                                  <Trash2 size={14} />
                                              </button>
@@ -267,28 +311,28 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                                      <div className="flex flex-wrap gap-2">
                                          <button 
                                             onClick={() => togglePermission(member.userId, 'cases')}
-                                            disabled={member.role === 'Admin'}
+                                            disabled={!canManageTeam || member.role === 'Admin'}
                                             className={`px-3 py-1 rounded-md text-xs font-medium border flex items-center gap-1.5 transition-all ${member.permissions.cases ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300' : 'bg-transparent border-white/10 text-slate-500 opacity-50'}`}
                                          >
                                              <Scale size={12} /> Processos
                                          </button>
                                          <button 
                                             onClick={() => togglePermission(member.userId, 'financial')}
-                                            disabled={member.role === 'Admin'}
+                                            disabled={!canManageTeam || member.role === 'Admin'}
                                             className={`px-3 py-1 rounded-md text-xs font-medium border flex items-center gap-1.5 transition-all ${member.permissions.financial ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300' : 'bg-transparent border-white/10 text-slate-500 opacity-50'}`}
                                          >
                                              <DollarSign size={12} /> Financeiro
                                          </button>
                                          <button 
                                             onClick={() => togglePermission(member.userId, 'documents')}
-                                            disabled={member.role === 'Admin'}
+                                            disabled={!canManageTeam || member.role === 'Admin'}
                                             className={`px-3 py-1 rounded-md text-xs font-medium border flex items-center gap-1.5 transition-all ${member.permissions.documents ? 'bg-blue-500/20 border-blue-500/50 text-blue-300' : 'bg-transparent border-white/10 text-slate-500 opacity-50'}`}
                                          >
                                              <FileText size={12} /> Documentos
                                          </button>
                                          <button 
                                             onClick={() => togglePermission(member.userId, 'settings')}
-                                            disabled={member.role === 'Admin'}
+                                            disabled={!canManageTeam || member.role === 'Admin'}
                                             className={`px-3 py-1 rounded-md text-xs font-medium border flex items-center gap-1.5 transition-all ${member.permissions.settings ? 'bg-amber-500/20 border-amber-500/50 text-amber-300' : 'bg-transparent border-white/10 text-slate-500 opacity-50'}`}
                                          >
                                              <SettingsIcon size={12} /> Configurações
@@ -309,15 +353,15 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                          <div className="space-y-3">
                              <div className="relative">
                                  <Linkedin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" />
-                                 <input type="text" value={formData.social?.linkedin || ''} onChange={e => handleSocialChange('linkedin', e.target.value)} placeholder="LinkedIn URL" className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white text-sm focus:border-indigo-500 outline-none" />
+                                 <input type="text" value={formData.social?.linkedin || ''} onChange={e => handleSocialChange('linkedin', e.target.value)} disabled={!canEditSettings} placeholder="LinkedIn URL" className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white text-sm focus:border-indigo-500 outline-none disabled:opacity-50" />
                              </div>
                              <div className="relative">
                                  <Instagram size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-pink-400" />
-                                 <input type="text" value={formData.social?.instagram || ''} onChange={e => handleSocialChange('instagram', e.target.value)} placeholder="@instagram" className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white text-sm focus:border-indigo-500 outline-none" />
+                                 <input type="text" value={formData.social?.instagram || ''} onChange={e => handleSocialChange('instagram', e.target.value)} disabled={!canEditSettings} placeholder="@instagram" className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white text-sm focus:border-indigo-500 outline-none disabled:opacity-50" />
                              </div>
                              <div className="relative">
                                  <Facebook size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600" />
-                                 <input type="text" value={formData.social?.facebook || ''} onChange={e => handleSocialChange('facebook', e.target.value)} placeholder="Facebook URL" className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white text-sm focus:border-indigo-500 outline-none" />
+                                 <input type="text" value={formData.social?.facebook || ''} onChange={e => handleSocialChange('facebook', e.target.value)} disabled={!canEditSettings} placeholder="Facebook URL" className="w-full bg-white/5 border border-white/10 rounded-lg p-2.5 pl-9 text-white text-sm focus:border-indigo-500 outline-none disabled:opacity-50" />
                              </div>
                          </div>
                      </div>
@@ -329,23 +373,25 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                                  <p className="text-sm text-white font-medium">Integração com Agenda Google</p>
                                  <p className="text-xs text-slate-500">Sincronizar prazos e audiências.</p>
                              </div>
-                             <button className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-slate-300 transition-colors">Conectar</button>
+                             <button disabled={!canEditSettings} className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-slate-300 transition-colors disabled:opacity-50">Conectar</button>
                          </div>
                          <div className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/10">
                              <div>
                                  <p className="text-sm text-white font-medium">Recorte Digital (OAB)</p>
                                  <p className="text-xs text-slate-500">Monitoramento automático de publicações.</p>
                              </div>
-                             <button className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-slate-300 transition-colors">Configurar</button>
+                             <button disabled={!canEditSettings} className="text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-slate-300 transition-colors disabled:opacity-50">Configurar</button>
                          </div>
                      </div>
 
-                     <div className="pt-6 border-t border-white/10">
-                         <button className="w-full p-3 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 transition-colors text-sm font-medium flex items-center justify-center gap-2">
-                             <Trash2 size={16} /> Desativar ou Excluir Escritório
-                         </button>
-                         <p className="text-[10px] text-rose-400/60 mt-2 text-center">Apenas o proprietário pode realizar esta ação.</p>
-                     </div>
+                     {user?.id === formData.ownerId && (
+                        <div className="pt-6 border-t border-white/10">
+                            <button className="w-full p-3 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 transition-colors text-sm font-medium flex items-center justify-center gap-2">
+                                <Trash2 size={16} /> Desativar ou Excluir Escritório
+                            </button>
+                            <p className="text-[10px] text-rose-400/60 mt-2 text-center">Ação exclusiva do proprietário. Irreversível.</p>
+                        </div>
+                     )}
                  </div>
              )}
          </div>

@@ -8,6 +8,7 @@ import { storageService } from '../services/storageService';
 import { notificationService } from '../services/notificationService';
 import { dataJudService } from '../services/dataJudService';
 import { emailService } from '../services/emailService';
+import { permissionService } from '../services/permissionService';
 import { Modal } from '../components/ui/Modal';
 import { OfficeEditModal } from '../components/OfficeEditModal';
 import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Globe, Moon, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, Mail, RefreshCw } from 'lucide-react';
@@ -60,10 +61,8 @@ export const Settings: React.FC = () => {
   }, [user, location]);
 
   const loadOfficeData = async () => {
-    // 1. Try to use current preference
     let targetId = user?.currentOfficeId;
 
-    // 2. Fallback: If no preference, fetch list and use first one
     if (!targetId) {
         try {
             const offices = await storageService.getOffices();
@@ -256,13 +255,22 @@ export const Settings: React.FC = () => {
   };
 
   const handleInviteUser = async () => {
-      // Implementação simulada
-      if(!inviteUserHandle.startsWith('@')) {
-          addToast('Digite o identificador do usuário (ex: @joao).', 'error');
+      if(!myOffice) return;
+      if (!permissionService.can(user, myOffice, 'team', 'create')) {
+          addToast('Você não tem permissão para convidar novos membros.', 'error');
           return;
       }
-      addToast('Convite enviado com sucesso!', 'success');
-      setInviteUserHandle('');
+      if(!inviteUserHandle.includes('@')) {
+          addToast('Digite o e-mail ou @usuario do membro.', 'error');
+          return;
+      }
+      try {
+          await storageService.inviteUserToOffice(myOffice.id, inviteUserHandle);
+          addToast(`Convite enviado para ${inviteUserHandle}!`, 'success');
+          setInviteUserHandle('');
+      } catch (error: any) {
+          addToast(error.message, 'error');
+      }
   };
 
   const handleOfficeUpdate = (updated: Office) => setMyOffice(updated);
@@ -522,12 +530,14 @@ export const Settings: React.FC = () => {
                           </div>
                        </div>
                        <div className="flex gap-3 relative z-10">
-                          <button 
-                            onClick={() => setIsOfficeEditModalOpen(true)}
-                            className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-sm font-medium transition-colors"
-                          >
-                            Editar Perfil
-                          </button>
+                          {permissionService.can(user, myOffice, 'settings', 'edit') && (
+                            <button 
+                                onClick={() => setIsOfficeEditModalOpen(true)}
+                                className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-lg text-sm font-medium transition-colors"
+                            >
+                                Editar Perfil
+                            </button>
+                          )}
                        </div>
                     </div>
 
@@ -561,27 +571,29 @@ export const Settings: React.FC = () => {
                           ))}
                           
                           {/* Convite de Membro Rápido */}
-                          <div className="p-4 bg-black/20 border-t border-white/5">
-                             <div className="flex gap-3 items-center">
-                                <div className="relative flex-1">
-                                    <AtSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                                    <input 
-                                        type="text" 
-                                        placeholder="Convidar usuário por @handle"
-                                        value={inviteUserHandle}
-                                        onChange={(e) => setInviteUserHandle(e.target.value)}
-                                        className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-indigo-500 focus:outline-none"
-                                    />
+                          {permissionService.can(user, myOffice, 'team', 'create') && (
+                            <div className="p-4 bg-black/20 border-t border-white/5">
+                                <div className="flex gap-3 items-center">
+                                    <div className="relative flex-1">
+                                        <AtSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Convidar usuário por @handle"
+                                            value={inviteUserHandle}
+                                            onChange={(e) => setInviteUserHandle(e.target.value)}
+                                            className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-9 pr-4 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={handleInviteUser}
+                                        disabled={!inviteUserHandle}
+                                        className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 disabled:cursor-not-allowed text-white text-xs rounded-lg font-medium transition-colors"
+                                    >
+                                        Enviar Convite
+                                    </button>
                                 </div>
-                                <button 
-                                    onClick={handleInviteUser}
-                                    disabled={!inviteUserHandle}
-                                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 disabled:cursor-not-allowed text-white text-xs rounded-lg font-medium transition-colors"
-                                >
-                                    Enviar Convite
-                                </button>
-                             </div>
-                          </div>
+                            </div>
+                          )}
                        </div>
                     </div>
                  </div>

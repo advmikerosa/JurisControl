@@ -169,9 +169,13 @@ class StorageService {
            
            if (offError || !office) return undefined;
 
+           // Join com Profiles para pegar dados reais dos membros
            const { data: membersData, error: memError } = await supabase
                .from(TABLE_NAMES.OFFICE_MEMBERS)
-               .select('id, user_id, role, permissions, joined_at')
+               .select(`
+                  id, user_id, role, permissions, joined_at,
+                  profile:profiles ( full_name, email, avatar_url, username )
+               `)
                .eq('office_id', id);
 
            if (memError) throw memError;
@@ -179,7 +183,9 @@ class StorageService {
            const members: OfficeMember[] = (membersData || []).map((m: any) => ({
                id: m.id,
                userId: m.user_id,
-               name: 'Membro',
+               name: m.profile?.full_name || 'Usuário',
+               email: m.profile?.email,
+               avatarUrl: m.profile?.avatar_url,
                role: m.role,
                permissions: m.permissions,
                joinedAt: m.joined_at
@@ -205,7 +211,8 @@ class StorageService {
   
   async saveOffice(office: Office): Promise<void> {
     if (isSupabaseConfigured && supabase) {
-        const payload = {
+        // Atualiza dados do escritório
+        const officePayload = {
             id: office.id,
             name: office.name,
             handle: office.handle,
@@ -216,8 +223,19 @@ class StorageService {
             area_of_activity: office.areaOfActivity,
             social: office.social
         };
-        
-        await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
+        await supabase.from(TABLE_NAMES.OFFICES).upsert(officePayload);
+
+        // Atualiza permissões/roles dos membros
+        for (const member of office.members) {
+            await supabase.from(TABLE_NAMES.OFFICE_MEMBERS)
+                .update({ 
+                    role: member.role, 
+                    permissions: member.permissions 
+                })
+                .eq('office_id', office.id)
+                .eq('user_id', member.userId);
+        }
+
         this.logActivity(`Atualizou escritório: ${office.name}`);
     } else {
         const offices = await this.getOffices();
@@ -230,11 +248,6 @@ class StorageService {
     }
   }
 
-  /**
-   * createOffice
-   * @param officeData Partial office data
-   * @param explicitOwnerId (Optional) Use this ID instead of fetching from session. Useful during registration.
-   */
   async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, userDetails?: { name: string, email: string }): Promise<Office> {
       const session = await this.getUserSession();
       const userId = explicitOwnerId || session.userId || 'local';
@@ -258,7 +271,6 @@ class StorageService {
       if (isSupabaseConfigured && supabase) {
           await this.ensureProfileExists();
           
-          // FIX: Remover 'members' do payload. O trigger 'on_office_created' no banco adiciona o dono automaticamente.
           const payload = {
               name: officeData.name || 'Novo Escritório',
               handle: handle,
@@ -276,7 +288,6 @@ class StorageService {
           
           this.logActivity(`Criou novo escritório (Supabase): ${payload.name}`);
           
-          // Retornar objeto Office estruturado para o frontend
           return {
               id: data.id,
               name: data.name,
@@ -295,7 +306,6 @@ class StorageService {
           } as Office;
 
       } else {
-          // MOCK MODE
           const offices = this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
           if (offices.some(o => o.handle.toLowerCase() === handle.toLowerCase())) {
             throw new Error("Este identificador de escritório (@handle) já está em uso.");
@@ -323,16 +333,12 @@ class StorageService {
           if (!session.userId) throw new Error("Login necessário.");
           await this.ensureProfileExists();
           
-          // 1. Busca o ID do escritório pelo handle (Permitido pelo RLS 'View offices')
           const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('id, name, owner_id, handle').eq('handle', handle).single();
           
           if (error || !office) {
-              console.error("Join Office Find Error:", error);
-              throw new Error("Escritório não encontrado com este identificador.");
+              throw new Error("Escritório não encontrado ou acesso restrito.");
           }
           
-          // 2. Tenta inserir na tabela de membros (Permitido pelo RLS 'Join or Manage members')
-          // Primeiro verifica se já existe para evitar erro 409
           const { data: existing } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS)
                 .select('id')
                 .eq('office_id', office.id)
@@ -347,10 +353,7 @@ class StorageService {
                   permissions: { financial: false, cases: true, documents: true, settings: false }
               });
               
-              if (joinError) {
-                  console.error("Join Office Insert Error:", joinError);
-                  throw new Error("Não foi possível entrar no escritório. Tente novamente.");
-              }
+              if (joinError) throw new Error("Não foi possível entrar no escritório.");
           }
 
           this.logActivity(`Entrou no escritório: ${office.name}`);
@@ -363,210 +366,170 @@ class StorageService {
               location: '', 
               members: [] 
           };
+
       } else {
-          // MOCK MODE
           const offices = this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
-          const office = offices.find(o => o.handle === handle);
-          if (!office) throw new Error("Escritório não encontrado.");
-          return office;
+          const targetOffice = offices.find(o => o.handle.toLowerCase() === handle.toLowerCase());
+          if (!targetOffice) throw new Error("Escritório não encontrado.");
+          return targetOffice;
       }
   }
 
-  async saveOfficeUpdate(office: Office) {
-      // Wrapper para compatibilidade com interface antiga se necessário
-      return this.saveOffice(office);
+  async removeMemberFromOffice(officeId: string, userIdToRemove: string) {
+      if (isSupabaseConfigured && supabase) {
+          await supabase.from(TABLE_NAMES.OFFICE_MEMBERS)
+              .delete()
+              .eq('office_id', officeId)
+              .eq('user_id', userIdToRemove);
+              
+          this.logActivity(`Removeu membro do escritório.`);
+      }
   }
 
-  async inviteUserToOffice(officeId: string, userHandle: string): Promise<boolean> {
-     return true; 
+  async inviteUserToOffice(officeId: string, identifier: string): Promise<boolean> {
+     if (isSupabaseConfigured && supabase) {
+         let query = supabase.from(TABLE_NAMES.PROFILES).select('id');
+         
+         if (identifier.includes('@') && !identifier.startsWith('@')) {
+             query = query.eq('email', identifier);
+         } else {
+             const username = identifier.startsWith('@') ? identifier : '@' + identifier;
+             query = query.eq('username', username);
+         }
+         
+         const { data: userFound, error } = await query.maybeSingle();
+         
+         if (error || !userFound) {
+             throw new Error("Usuário não encontrado na plataforma. Peça para ele se cadastrar primeiro.");
+         }
+
+         const { data: existing } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS)
+             .select('id')
+             .eq('office_id', officeId)
+             .eq('user_id', userFound.id)
+             .maybeSingle();
+             
+         if (existing) {
+             throw new Error("Este usuário já é membro do escritório.");
+         }
+
+         const { error: insertError } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert({
+             office_id: officeId,
+             user_id: userFound.id,
+             role: 'Advogado',
+             permissions: { financial: false, cases: true, documents: true, settings: false }
+         });
+
+         if (insertError) throw new Error("Erro ao adicionar membro.");
+         
+         this.logActivity(`Convidou usuário ${identifier} para o escritório.`);
+         return true;
+     } else {
+         await new Promise(resolve => setTimeout(resolve, 800));
+         return true; 
+     }
   }
 
   // --- Clientes ---
   async getClients(): Promise<Client[]> {
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const session = await this.getUserSession();
-        if (!session.officeId) return [];
-
-        const { data, error } = await supabase
-          .from(TABLE_NAMES.CLIENTS)
-          .select('id, name, type, status, email, phone, address, city, state, avatar_url, cpf, cnpj, corporate_name, created_at, tags')
-          .eq('office_id', session.officeId)
-          .order('name');
-        
-        if (error) throw error;
-        
-        return (data || []).map((c: any) => ({
-            id: c.id,
-            officeId: session.officeId!,
-            name: c.name,
-            type: c.type,
-            status: c.status,
-            email: c.email || '',
-            phone: c.phone || '',
-            address: c.address || '', 
-            city: c.city || '',
-            state: c.state || '',
-            avatarUrl: c.avatar_url || '',
-            cpf: c.cpf || '',
-            cnpj: c.cnpj || '',
-            corporateName: c.corporate_name || '',
-            createdAt: c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '',
-            tags: c.tags || [],
-            alerts: [],
-            documents: [],
-            history: [] 
-        })) as Client[];
-      } catch (error) { 
-        return []; 
-      }
-    } else {
-      const all = this.getLocal<Client[]>(LOCAL_KEYS.CLIENTS, []);
-      const session = await this.getUserSession();
-      return session.officeId ? this.filterByOffice(all, session.officeId) : all;
-    }
+    return this.genericGet(TABLE_NAMES.CLIENTS, LOCAL_KEYS.CLIENTS);
   }
-  
+
+  async saveClient(client: Client) { return this.genericSave(TABLE_NAMES.CLIENTS, LOCAL_KEYS.CLIENTS, client); }
+  async deleteClient(id: string) { return this.genericDelete(TABLE_NAMES.CLIENTS, LOCAL_KEYS.CLIENTS, id); }
+
   // --- Processos (Cases) ---
   async getCases(): Promise<LegalCase[]> {
     if (isSupabaseConfigured && supabase) {
-      try {
-        const session = await this.getUserSession();
-        if (!session.officeId) return [];
-
+        const s = await this.getUserSession();
+        if(!s.officeId) return [];
         const { data, error } = await supabase
-          .from(TABLE_NAMES.CASES)
-          .select(`
-            id, cnj, title, status, category, phase, value,
-            responsible_lawyer, court, next_hearing, created_at,
-            last_update, description, movements,
-            client:clients!cases_client_id_fkey(id, name, type, avatar_url)
-          `)
-          .eq('office_id', session.officeId);
+            .from(TABLE_NAMES.CASES)
+            .select('*, client:clients(*)')
+            .eq('office_id', s.officeId);
+            
+        if(error) {
+            console.error("Error fetching cases:", error);
+            return [];
+        }
         
-        if (error) throw error;
-        
-        const mappedData = (data || []).map((item: any) => {
-          const clientData = item.client;
-          const mappedClient = clientData ? {
-              id: clientData.id,
-              name: clientData.name,
-              type: clientData.type,
-              avatarUrl: clientData.avatar_url
-          } : { id: 'unknown', name: 'Cliente Desconhecido', type: 'PF', avatarUrl: '' };
-
-          return {
-            id: item.id,
-            officeId: session.officeId!,
-            cnj: item.cnj,
-            title: item.title,
-            status: item.status,
-            category: item.category,
-            phase: item.phase,
-            value: Number(item.value),
-            responsibleLawyer: item.responsible_lawyer,
-            court: item.court,
-            nextHearing: item.next_hearing,
-            distributionDate: item.created_at,
-            description: item.description,
-            movements: item.movements, 
-            lastUpdate: item.last_update,
-            client: mappedClient
-          };
-        });
-
-        return mappedData as LegalCase[];
-      } catch (e) { 
-        return []; 
-      }
-    } else {
-      const all = this.getLocal<LegalCase[]>(LOCAL_KEYS.CASES, []);
-      const session = await this.getUserSession();
-      return session.officeId ? this.filterByOffice(all, session.officeId) : all;
+        return (data || []).map((item: any) => ({
+            ...item,
+            client: item.client // Ensure mapping is correct
+        })) as LegalCase[];
     }
+    return this.genericGet(TABLE_NAMES.CASES, LOCAL_KEYS.CASES);
   }
 
-  async getCaseById(id: string): Promise<LegalCase | null> {
+  async getCaseById(id: string): Promise<LegalCase | undefined> {
     if (isSupabaseConfigured && supabase) {
-      try {
-        const session = await this.getUserSession();
-        if (!session.officeId) return null;
-
+        const s = await this.getUserSession();
+        if(!s.officeId) return undefined;
         const { data, error } = await supabase
-          .from(TABLE_NAMES.CASES)
-          .select(`*, client:clients!cases_client_id_fkey(*)`)
-          .eq('id', id)
-          .eq('office_id', session.officeId)
-          .single();
-        
-        if (error) throw error;
-        
-        const clientData = data.client;
-        const mappedClient = clientData ? {
-            id: clientData.id,
-            name: clientData.name,
-            type: clientData.type,
-            avatarUrl: clientData.avatar_url,
-            email: clientData.email,
-            phone: clientData.phone
-        } : { id: 'unknown', name: 'Cliente Desconhecido' };
-
-        return {
-            id: data.id,
-            officeId: data.office_id,
-            cnj: data.cnj,
-            title: data.title,
-            status: data.status,
-            category: data.category,
-            phase: data.phase,
-            value: Number(data.value),
-            responsibleLawyer: data.responsible_lawyer,
-            court: data.court,
-            nextHearing: data.next_hearing,
-            distributionDate: data.created_at,
-            description: data.description,
-            movements: data.movements,
-            changeLog: data.change_log,
-            lastUpdate: data.last_update,
-            client: mappedClient
-        } as LegalCase;
-      } catch (e) { 
-        return null; 
-      }
-    } else {
-      const cases = await this.getCases();
-      return cases.find(c => c.id === id) || null;
+            .from(TABLE_NAMES.CASES)
+            .select('*, client:clients(*)')
+            .eq('id', id)
+            .eq('office_id', s.officeId)
+            .single();
+            
+        if(error || !data) return undefined;
+        return { ...data, client: data.client } as LegalCase;
     }
+    const cases = await this.getCases();
+    return cases.find(c => c.id === id);
   }
 
-  async getCasesPaginated(page: number, limit: number, searchTerm: string, statusFilter: any, categoryFilter: any, dateRange: any) {
-      const allCases = await this.getCases();
-      let filtered = allCases;
-      if (searchTerm) {
-        const lower = searchTerm.toLowerCase();
-        filtered = filtered.filter(c => c.title.toLowerCase().includes(lower) || c.cnj.includes(lower) || c.client.name.toLowerCase().includes(lower));
-      }
-      if (statusFilter && statusFilter !== 'Todos') filtered = filtered.filter(c => c.status === statusFilter);
-      if (categoryFilter && categoryFilter !== 'Todos') filtered = filtered.filter(c => c.category === categoryFilter);
-      if (dateRange && dateRange.start && dateRange.end) {
-          filtered = filtered.filter(c => { const d = c.lastUpdate ? c.lastUpdate.split('T')[0] : ''; return d >= dateRange.start && d <= dateRange.end; });
-      }
-      const start = (page - 1) * limit;
-      return { data: filtered.slice(start, start + limit), total: filtered.length };
+  async getCasesPaginated(
+    page: number = 1, 
+    limit: number = 20, 
+    searchTerm: string = '', 
+    statusFilter: string | null = null,
+    categoryFilter: string | null = null, 
+    dateRange: { start: string, end: string } | null = null
+  ): Promise<{ data: LegalCase[], total: number }> {
+    const allCases = await this.getCases();
+    
+    let filtered = allCases;
+
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      filtered = filtered.filter(c => 
+        c.title.toLowerCase().includes(lower) || 
+        c.cnj.includes(lower) || 
+        c.client.name.toLowerCase().includes(lower)
+      );
+    }
+    if (statusFilter && statusFilter !== 'Todos') filtered = filtered.filter(c => c.status === statusFilter);
+    if (categoryFilter && categoryFilter !== 'Todos') filtered = filtered.filter(c => c.category === categoryFilter);
+    if (dateRange && dateRange.start && dateRange.end) {
+        filtered = filtered.filter(c => {
+            const d = c.lastUpdate ? c.lastUpdate.split('T')[0] : '';
+            return d >= dateRange.start && d <= dateRange.end;
+        });
+    }
+
+    const start = (page - 1) * limit;
+    return {
+        data: filtered.slice(start, start + limit),
+        total: filtered.length
+    };
   }
 
-  // --- CRUD Genérico ---
-  async saveClient(client: Client) { return this.genericSave(TABLE_NAMES.CLIENTS, LOCAL_KEYS.CLIENTS, client); }
-  async deleteClient(id: string) { return this.genericDelete(TABLE_NAMES.CLIENTS, LOCAL_KEYS.CLIENTS, id); }
   async saveCase(c: LegalCase) { return this.genericSave(TABLE_NAMES.CASES, LOCAL_KEYS.CASES, c); }
   async deleteCase(id: string) { return this.genericDelete(TABLE_NAMES.CASES, LOCAL_KEYS.CASES, id); }
+
+  // --- Tarefas ---
   async getTasks(): Promise<Task[]> { return this.genericGet(TABLE_NAMES.TASKS, LOCAL_KEYS.TASKS); }
   async getTasksByCaseId(id: string) { return (await this.getTasks()).filter(t=>t.caseId===id); }
   async saveTask(t: Task) { return this.genericSave(TABLE_NAMES.TASKS, LOCAL_KEYS.TASKS, t); }
   async deleteTask(id: string) { return this.genericDelete(TABLE_NAMES.TASKS, LOCAL_KEYS.TASKS, id); }
+
+  // --- Financeiro ---
   async getFinancials(): Promise<FinancialRecord[]> { return this.genericGet(TABLE_NAMES.FINANCIAL, LOCAL_KEYS.FINANCIAL); }
   async getFinancialsByCaseId(id: string) { return (await this.getFinancials()).filter(f=>f.caseId===id); }
   async saveFinancial(f: FinancialRecord) { return this.genericSave(TABLE_NAMES.FINANCIAL, LOCAL_KEYS.FINANCIAL, f); }
+
+  // --- Documentos ---
   async getDocuments(): Promise<SystemDocument[]> { return this.genericGet(TABLE_NAMES.DOCUMENTS, LOCAL_KEYS.DOCUMENTS); }
   async getDocumentsByCaseId(id: string) { return (await this.getDocuments()).filter(d=>d.caseId===id); }
   async saveDocument(d: SystemDocument) { return this.genericSave(TABLE_NAMES.DOCUMENTS, LOCAL_KEYS.DOCUMENTS, d); }
@@ -661,7 +624,7 @@ class StorageService {
   getSettings(): AppSettings {
       try {
           const s = localStorage.getItem(LOCAL_KEYS.SETTINGS);
-          return s ? JSON.parse(s) : { general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' }, notifications: { email: true, desktop: true, sound: false, dailyDigest: false }, automation: { autoArchiveWonCases: false, autoSaveDrafts: true } };
+          return s ? JSON.parse(s) : { general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' }, notifications: { email: true, desktop: true, sound: false, dailyDigest: false }, emailPreferences: { enabled: false, frequency: 'immediate', categories: { deadlines: true, processes: true, events: true, financial: false, marketing: true }, deadlineAlerts: { sevenDays: true, threeDays: true, oneDay: true, onDueDate: true } }, automation: { autoArchiveWonCases: false, autoSaveDrafts: true } };
       } catch { return {} as any; }
   }
   saveSettings(settings: AppSettings) { localStorage.setItem(LOCAL_KEYS.SETTINGS, JSON.stringify(settings)); }
