@@ -20,6 +20,7 @@ interface AuthContextData {
   recoverPassword: (email: string) => Promise<boolean>;
   socialLogin: (provider: AuthProviderType) => Promise<void>;
   updateProfile: (data: Partial<User>) => void;
+  reactivate: () => Promise<void>; // Nova função
   logout: () => void;
   isLoading: boolean;
 }
@@ -109,14 +110,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (mounted) {
               if (data.session?.user) {
-                mapSupabaseUserToContext(data.session.user);
+                // Checar se está suspenso
+                const status = await storageService.checkAccountStatus(data.session.user.id);
+                if (status.deleted_at) {
+                    await logout(false); // Força logout se estiver deletado
+                } else {
+                    mapSupabaseUserToContext(data.session.user);
+                }
               } else {
                 setUser(null);
                 setIsAuthenticated(false);
               }
           }
           
-          const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             if (!mounted) return;
             if (session?.user) {
                mapSupabaseUserToContext(session.user);
@@ -177,8 +184,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback(async (email: string, password: string) => {
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // 1. Authenticate with Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message);
+
+      // 2. Check "Soft Delete" status immediately
+      if (data.user) {
+          const status = await storageService.checkAccountStatus(data.user.id);
+          
+          if (status.deleted_at) {
+              // Account is marked as deleted/suspended
+              // Keep session momentarily to allow reactivation flow, but DO NOT set isAuthenticated=true
+              const err = new Error('Esta conta foi excluída e está em período de retenção.');
+              (err as any).code = 'ACCOUNT_SUSPENDED'; 
+              throw err;
+          }
+      }
     } else {
       const user = await authMockService.login(email, password);
       setUser(user);
@@ -188,9 +209,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const reactivate = useCallback(async () => {
+      // Assuming a session exists from the recent login attempt (even if blocked by UI)
+      try {
+          await storageService.reactivateAccount();
+          // Force refresh session/user data
+          if (isSupabaseConfigured && supabase) {
+              const { data } = await supabase.auth.getUser();
+              if (data.user) {
+                  mapSupabaseUserToContext(data.user);
+                  setIsAuthenticated(true);
+              }
+          }
+      } catch (e: any) {
+          throw new Error("Falha na reativação: " + e.message);
+      }
+  }, []);
+
   const register = useCallback(async (name: string, email: string, password: string, oab?: string, officeData?: OfficeRegistrationData): Promise<boolean> => {
     if (isSupabaseConfigured && supabase) {
-      // 1. Create User
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -209,11 +246,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
          throw new Error('Este email já está cadastrado.');
       }
 
-      // Se a sessão for criada (auto-confirm ou mock), criamos o escritório SE officeData for fornecido
       if (data.user && officeData) {
           try {
               if (officeData.mode === 'create' && officeData.name) {
-                  // Passamos o ID explicitamente pois a sessão pode não estar propagada no contexto do storageService ainda
                   const newOffice = await storageService.createOffice({
                       name: officeData.name,
                       handle: officeData.handle,
@@ -221,29 +256,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   }, data.user.id, { name, email });
                   
                   await supabase.auth.updateUser({
-                      data: { 
-                          offices: [newOffice.id],
-                          currentOfficeId: newOffice.id
-                      }
+                      data: { offices: [newOffice.id], currentOfficeId: newOffice.id }
                   });
               } else if (officeData.mode === 'join') {
                   const joinedOffice = await storageService.joinOffice(officeData.handle);
                   await supabase.auth.updateUser({
-                      data: { 
-                          offices: [joinedOffice.id],
-                          currentOfficeId: joinedOffice.id
-                      }
+                      data: { offices: [joinedOffice.id], currentOfficeId: joinedOffice.id }
                   });
               }
           } catch (officeError: any) {
               console.error("Falha ao configurar escritório:", officeError);
-              // Não falha o registro se o escritório falhar, usuário pode tentar depois
           }
       }
-
-      return !data.session; // Retorna true se precisar verificar email
+      return !data.session; 
     } else {
-      // Mock Service
       const user = await authMockService.register(name, email, password, oab, officeData);
       setUser(user);
       setIsAuthenticated(true);
@@ -312,9 +338,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     recoverPassword,
     socialLogin,
     updateProfile,
+    reactivate,
     logout: () => logout(false),
     isLoading
-  }), [isAuthenticated, user, login, register, recoverPassword, socialLogin, updateProfile, logout, isLoading]);
+  }), [isAuthenticated, user, login, register, recoverPassword, socialLogin, updateProfile, reactivate, logout, isLoading]);
 
   return (
     <AuthContext.Provider value={contextValue}>

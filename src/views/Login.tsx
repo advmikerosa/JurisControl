@@ -3,22 +3,29 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase, Loader2, Building, AtSign, Users, SkipForward } from 'lucide-react';
+import { Lock, Mail, ArrowRight, User as UserIcon, Check, Briefcase, Loader2, Building, AtSign, Users, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { Logo } from '../components/Logo';
 import { Modal } from '../components/ui/Modal';
 import { masks } from '../utils/formatters';
 
 export const Login: React.FC = () => {
-  const { login, register, recoverPassword } = useAuth();
+  const { login, register, recoverPassword, reactivate, logout } = useAuth();
   const navigate = useNavigate();
   const { addToast } = useToast();
   
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
+  
+  // Recovery State
   const [recoverEmail, setRecoverEmail] = useState('');
   const [isRecovering, setIsRecovering] = useState(false);
+
+  // Reactivation State
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
+  const [reactivateConfirmEmail, setReactivateConfirmEmail] = useState('');
+  const [isReactivating, setIsReactivating] = useState(false);
 
   // Form States
   const [email, setEmail] = useState('');
@@ -58,15 +65,12 @@ export const Login: React.FC = () => {
         if (password !== confirmPassword) throw new Error('As senhas não coincidem.');
         if (password.length < 6) throw new Error('A senha deve ter no mínimo 6 caracteres.');
         
-        // Validação de Escritório
         if (!skipOfficeSetup) {
             if (officeMode === 'create') {
                 if (!officeName) throw new Error('Digite o nome do seu escritório.');
                 if (!officeHandle) throw new Error('Crie um identificador (@handle) para o escritório.');
             }
             if (!officeHandle && officeMode === 'join') throw new Error('Digite o identificador do escritório para entrar.');
-            
-            // Validação estrita do handle
             if (officeHandle && !/^@[a-z0-9_]{3,20}$/.test(officeHandle)) {
                  throw new Error('O identificador deve começar com @, ter letras minúsculas, números ou underline (3-20 caracteres).');
             }
@@ -86,17 +90,48 @@ export const Login: React.FC = () => {
         }
       }
     } catch (err: any) {
-      let errorMessage = err.message || 'Ocorreu um erro.';
-      if (errorMessage === 'Invalid login credentials') {
-        errorMessage = 'E-mail ou senha incorretos.';
+      // Handle Account Suspended Check
+      if (err.code === 'ACCOUNT_SUSPENDED') {
+          setShowReactivateModal(true);
+      } else {
+          let errorMessage = err.message || 'Ocorreu um erro.';
+          if (errorMessage === 'Invalid login credentials') {
+            errorMessage = 'E-mail ou senha incorretos.';
+          }
+          addToast(errorMessage, 'error');
       }
-      addToast(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
+  const handleReactivate = async () => {
+      if (reactivateConfirmEmail !== email) {
+          addToast('O e-mail de confirmação não confere.', 'error');
+          return;
+      }
+      setIsReactivating(true);
+      try {
+          await reactivate();
+          addToast('Conta reativada com sucesso! Bem-vindo de volta.', 'success');
+          setShowReactivateModal(false);
+          navigate('/');
+      } catch (error: any) {
+          addToast(error.message, 'error');
+          // If fail, ensure cleanup
+          logout(); 
+      } finally {
+          setIsReactivating(false);
+      }
+  };
+
+  const handleCancelReactivate = () => {
+      setShowReactivateModal(false);
+      logout();
+      setReactivateConfirmEmail('');
+  };
+
+  const handleForgotPassword = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!recoverEmail) {
         addToast('Digite seu e-mail para continuar.', 'error');
@@ -137,10 +172,8 @@ export const Login: React.FC = () => {
         transition={{ duration: 0.5, ease: "easeOut" }}
         className="w-full max-w-md bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl p-8 relative z-10 overflow-hidden"
       >
-        {/* Subtle inner highlight */}
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-50" />
 
-        {/* Header */}
         <div className="flex flex-col items-center mb-8">
           <motion.div 
             initial={{ scale: 0 }}
@@ -154,268 +187,93 @@ export const Login: React.FC = () => {
           <p className="text-slate-400 text-sm mt-2 text-center">Acesse seu escritório digital</p>
         </div>
 
-        {/* Toggle Switch */}
         <div className="bg-black/20 p-1 rounded-xl flex relative border border-white/5 mb-6">
           <motion.div 
             layoutId="tab-bg"
             className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white/10 rounded-lg border border-white/10 shadow-sm ${mode === 'login' ? 'left-1' : 'left-[calc(50%+2px)]'}`}
             transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
           />
-          <button 
-            type="button"
-            onClick={() => setMode('login')}
-            className={`flex-1 py-2 text-sm font-bold relative z-10 transition-colors ${mode === 'login' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            Entrar
-          </button>
-          <button 
-            type="button"
-            onClick={() => setMode('register')}
-            className={`flex-1 py-2 text-sm font-bold relative z-10 transition-colors ${mode === 'register' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            Criar Conta
-          </button>
+          <button type="button" onClick={() => setMode('login')} className={`flex-1 py-2 text-sm font-bold relative z-10 transition-colors ${mode === 'login' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}>Entrar</button>
+          <button type="button" onClick={() => setMode('register')} className={`flex-1 py-2 text-sm font-bold relative z-10 transition-colors ${mode === 'register' ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}>Criar Conta</button>
         </div>
 
-        {/* Forms */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <AnimatePresence mode="wait">
             {mode === 'register' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-4 overflow-hidden"
-              >
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome Completo</label>
-                  <div className="relative group">
-                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
-                    <input 
-                      type="text" 
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:bg-white/5 focus:outline-none transition-all text-sm"
-                      placeholder="Dr. João Silva"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">OAB (Opcional)</label>
-                  <div className="relative group">
-                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
-                    <input 
-                      type="text" 
-                      value={oab}
-                      onChange={handleOabChange}
-                      className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:bg-white/5 focus:outline-none transition-all text-sm"
-                      placeholder="UF/000.000"
-                    />
-                  </div>
-                </div>
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-4 overflow-hidden">
+                <div className="space-y-1"><label className="text-xs font-bold text-slate-400 uppercase ml-1">Nome Completo</label><div className="relative group"><UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} /><input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:bg-white/5 focus:outline-none transition-all text-sm" placeholder="Dr. João Silva" /></div></div>
+                <div className="space-y-1"><label className="text-xs font-bold text-slate-400 uppercase ml-1">OAB (Opcional)</label><div className="relative group"><Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} /><input type="text" value={oab} onChange={handleOabChange} className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:bg-white/5 focus:outline-none transition-all text-sm" placeholder="UF/000.000" /></div></div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-400 uppercase ml-1">E-mail</label>
-            <div className="relative group">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
-              <input 
-                type="email" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:bg-white/5 focus:outline-none transition-all text-sm"
-                placeholder="nome@escritorio.com"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Senha</label>
-            <div className="relative group">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
-              <input 
-                type="password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:bg-white/5 focus:outline-none transition-all text-sm"
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
+          <div className="space-y-1"><label className="text-xs font-bold text-slate-400 uppercase ml-1">E-mail</label><div className="relative group"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} /><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:bg-white/5 focus:outline-none transition-all text-sm" placeholder="nome@escritorio.com" /></div></div>
+          <div className="space-y-1"><label className="text-xs font-bold text-slate-400 uppercase ml-1">Senha</label><div className="relative group"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} /><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-indigo-500 focus:bg-white/5 focus:outline-none transition-all text-sm" placeholder="••••••••" /></div></div>
 
           <AnimatePresence mode="wait">
             {mode === 'register' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-4 overflow-hidden pt-1"
-              >
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase ml-1">Confirmar Senha</label>
-                  <div className="relative group">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} />
-                    <input 
-                      type="password" 
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`w-full bg-black/20 border rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:outline-none transition-all text-sm focus:bg-white/5 ${
-                        confirmPassword && confirmPassword !== password ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'
-                      }`}
-                      placeholder="••••••••"
-                    />
-                    {confirmPassword && confirmPassword === password && (
-                      <Check className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" size={16} />
-                    )}
-                  </div>
-                </div>
-
-                {/* Office Setup Header with Skip Option */}
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="space-y-4 overflow-hidden pt-1">
+                <div className="space-y-1"><label className="text-xs font-bold text-slate-400 uppercase ml-1">Confirmar Senha</label><div className="relative group"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors" size={18} /><input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={`w-full bg-black/20 border rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:outline-none transition-all text-sm focus:bg-white/5 ${confirmPassword && confirmPassword !== password ? 'border-rose-500 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'}`} placeholder="••••••••" />{confirmPassword && confirmPassword === password && (<Check className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" size={16} />)}</div></div>
                 <div className="bg-white/5 border border-white/10 rounded-xl p-4 mt-2 transition-colors">
-                   <div className="flex items-center justify-between mb-3">
-                       <h3 className={`text-xs font-bold flex items-center gap-2 uppercase tracking-wide transition-colors ${skipOfficeSetup ? 'text-slate-500' : 'text-white'}`}>
-                          <Building size={14} className={skipOfficeSetup ? 'text-slate-600' : 'text-indigo-400'} /> Configuração do Escritório
-                       </h3>
-                       <button 
-                         type="button" 
-                         onClick={() => setSkipOfficeSetup(!skipOfficeSetup)}
-                         className="text-[10px] font-medium text-indigo-400 hover:text-white transition-colors flex items-center gap-1"
-                       >
-                         {skipOfficeSetup ? 'Configurar Agora' : 'Pular Etapa'} <ArrowRight size={10} />
-                       </button>
-                   </div>
-                   
-                   {!skipOfficeSetup ? (
-                     <motion.div 
-                        initial={{ opacity: 0 }} 
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                     >
-                       <div className="flex bg-black/20 rounded-lg p-1 mb-3">
-                          <button 
-                            type="button"
-                            onClick={() => setOfficeMode('create')}
-                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors ${officeMode === 'create' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                          >
-                            Criar Novo
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => setOfficeMode('join')}
-                            className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors ${officeMode === 'join' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                          >
-                            Entrar
-                          </button>
-                       </div>
-
-                       {officeMode === 'create' ? (
-                          <div className="space-y-3">
-                              <div className="space-y-1">
-                                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Nome do Escritório</label>
-                                 <input 
-                                    type="text" 
-                                    value={officeName}
-                                    onChange={(e) => setOfficeName(e.target.value)}
-                                    placeholder="Ex: Silva Advogados"
-                                    className="w-full bg-black/20 border border-white/10 rounded-lg py-2 px-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none"
-                                 />
-                              </div>
-                              <div className="space-y-1">
-                                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Identificador (@handle)</label>
-                                 <div className="relative">
-                                    <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
-                                    <input 
-                                        type="text" 
-                                        value={officeHandle}
-                                        onChange={handleOfficeHandleChange}
-                                        placeholder="@silva_adv"
-                                        className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none font-mono"
-                                    />
-                                 </div>
-                                 <p className="text-[10px] text-slate-500 ml-1">Usado para links e convites. Ex: @adv_exemplo</p>
-                              </div>
-                          </div>
-                       ) : (
-                          <div className="space-y-1">
-                             <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Identificador do Escritório</label>
-                             <div className="relative">
-                                <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
-                                <input 
-                                    type="text" 
-                                    value={officeHandle}
-                                    onChange={handleOfficeHandleChange}
-                                    placeholder="@exemplo_adv"
-                                    className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none font-mono"
-                                />
-                             </div>
-                          </div>
-                       )}
-                     </motion.div>
-                   ) : (
-                     <div className="text-center py-2 text-slate-500 text-xs">
-                        Você poderá criar ou entrar em um escritório mais tarde nas configurações.
-                     </div>
-                   )}
+                   <div className="flex items-center justify-between mb-3"><h3 className={`text-xs font-bold flex items-center gap-2 uppercase tracking-wide transition-colors ${skipOfficeSetup ? 'text-slate-500' : 'text-white'}`}><Building size={14} className={skipOfficeSetup ? 'text-slate-600' : 'text-indigo-400'} /> Configuração do Escritório</h3><button type="button" onClick={() => setSkipOfficeSetup(!skipOfficeSetup)} className="text-[10px] font-medium text-indigo-400 hover:text-white transition-colors flex items-center gap-1">{skipOfficeSetup ? 'Configurar Agora' : 'Pular Etapa'} <ArrowRight size={10} /></button></div>
+                   {!skipOfficeSetup ? (<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}><div className="flex bg-black/20 rounded-lg p-1 mb-3"><button type="button" onClick={() => setOfficeMode('create')} className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors ${officeMode === 'create' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>Criar Novo</button><button type="button" onClick={() => setOfficeMode('join')} className={`flex-1 py-1.5 text-[10px] font-bold uppercase rounded-md transition-colors ${officeMode === 'join' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>Entrar</button></div>{officeMode === 'create' ? (<div className="space-y-3"><div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Nome do Escritório</label><input type="text" value={officeName} onChange={(e) => setOfficeName(e.target.value)} placeholder="Ex: Silva Advogados" className="w-full bg-black/20 border border-white/10 rounded-lg py-2 px-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none" /></div><div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Identificador (@handle)</label><div className="relative"><AtSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} /><input type="text" value={officeHandle} onChange={handleOfficeHandleChange} placeholder="@silva_adv" className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none font-mono" /></div><p className="text-[10px] text-slate-500 ml-1">Usado para links e convites. Ex: @adv_exemplo</p></div></div>) : (<div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase ml-1">Identificador do Escritório</label><div className="relative"><Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} /><input type="text" value={officeHandle} onChange={handleOfficeHandleChange} placeholder="@exemplo_adv" className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-9 pr-3 text-sm text-white focus:border-indigo-500 focus:bg-white/5 focus:outline-none font-mono" /></div></div>)}</motion.div>) : (<div className="text-center py-2 text-slate-500 text-xs">Você poderá criar ou entrar em um escritório mais tarde nas configurações.</div>)}
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          <button 
-            type="submit"
-            disabled={loading}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed mt-4 hover:scale-[1.02] active:scale-[0.98]"
-          >
-            {loading ? (
-              <span className="flex items-center gap-2"><Loader2 className="animate-spin" size={20} /> Processando...</span>
-            ) : (
-              <>
-                {mode === 'login' ? 'Entrar no Sistema' : (skipOfficeSetup ? 'Criar Minha Conta' : 'Criar Conta e Escritório')}
-                <ArrowRight size={20} />
-              </>
-            )}
+          <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed mt-4 hover:scale-[1.02] active:scale-[0.98]">
+            {loading ? (<span className="flex items-center gap-2"><Loader2 className="animate-spin" size={20} /> Processando...</span>) : (<>{mode === 'login' ? 'Entrar no Sistema' : (skipOfficeSetup ? 'Criar Minha Conta' : 'Criar Conta e Escritório')}<ArrowRight size={20} /></>)}
           </button>
         </form>
 
-        {mode === 'login' && (
-          <div className="mt-6 text-center">
-            <button 
-              type="button"
-              onClick={() => setShowForgotModal(true)}
-              className="text-xs font-medium text-slate-500 hover:text-indigo-400 transition-colors"
-            >
-              Esqueceu sua senha?
-            </button>
-          </div>
-        )}
+        {mode === 'login' && (<div className="mt-6 text-center"><button type="button" onClick={() => setShowForgotModal(true)} className="text-xs font-medium text-slate-500 hover:text-indigo-400 transition-colors">Esqueceu sua senha?</button></div>)}
       </motion.div>
 
       {/* Forgot Password Modal */}
       <Modal isOpen={showForgotModal} onClose={() => setShowForgotModal(false)} title="Recuperar Senha" maxWidth="max-w-sm">
-         <form onSubmit={handleForgotPassword} className="space-y-4">
-            <p className="text-sm text-slate-400">Digite seu e-mail para receber as instruções de redefinição de senha.</p>
-            <div className="relative">
-               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-               <input 
-                 type="email" 
-                 required
-                 value={recoverEmail}
-                 onChange={(e) => setRecoverEmail(e.target.value)}
-                 className="w-full bg-black/20 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white focus:border-indigo-500 focus:outline-none"
-                 placeholder="seu@email.com"
-               />
+         <div className="space-y-4">
+            <p className="text-sm text-slate-400">Digite seu e-mail para receber as instruções.</p>
+            <div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} /><input type="email" required value={recoverEmail} onChange={(e) => setRecoverEmail(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-lg py-3 pl-10 pr-4 text-white focus:border-indigo-500 focus:outline-none" placeholder="seu@email.com" /></div>
+            <div className="flex justify-end gap-2 pt-2"><button onClick={() => setShowForgotModal(false)} className="px-4 py-2 text-slate-400 hover:text-white rounded-lg transition-colors text-sm font-medium">Cancelar</button><button onClick={handleForgotPassword} disabled={isRecovering} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-70 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold flex items-center gap-2">{isRecovering ? <Loader2 size={16} className="animate-spin" /> : 'Enviar Link'}</button></div>
+         </div>
+      </Modal>
+
+      {/* Reactivation Modal */}
+      <Modal isOpen={showReactivateModal} onClose={handleCancelReactivate} title="Conta Suspensa" maxWidth="max-w-md">
+         <div className="space-y-6">
+            <div className="flex justify-center"><div className="p-4 bg-amber-500/10 rounded-full border border-amber-500/30 text-amber-500"><AlertTriangle size={32} /></div></div>
+            <div className="text-center">
+                <h3 className="text-white font-bold text-lg">Esta conta foi excluída recentemente.</h3>
+                <p className="text-slate-400 text-sm mt-2">Você está dentro do período de retenção de 30 dias. Deseja reativar sua conta e recuperar todos os seus dados?</p>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-               <button type="button" onClick={() => setShowForgotModal(false)} className="px-4 py-2 text-slate-400 hover:text-white rounded-lg transition-colors text-sm font-medium">Cancelar</button>
-               <button type="submit" disabled={isRecovering} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-70">
-                  {isRecovering ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-                  {isRecovering ? 'Enviando...' : 'Enviar Link'}
-               </button>
+            
+            <div className="bg-black/20 p-4 rounded-xl border border-white/10">
+                <label className="text-xs text-slate-400 font-bold uppercase mb-2 block">Confirme seu E-mail para Reativar</label>
+                <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                    <input 
+                        type="email" 
+                        value={reactivateConfirmEmail}
+                        onChange={(e) => setReactivateConfirmEmail(e.target.value)}
+                        placeholder={email}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 pl-9 text-white focus:border-emerald-500 outline-none transition-all"
+                    />
+                </div>
             </div>
-         </form>
+
+            <div className="flex justify-end gap-3 pt-2">
+                <button onClick={handleCancelReactivate} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar e Sair</button>
+                <button 
+                    onClick={handleReactivate} 
+                    disabled={isReactivating || !reactivateConfirmEmail}
+                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                >
+                    {isReactivating ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                    Reativar Conta
+                </button>
+            </div>
+         </div>
       </Modal>
     </div>
   );

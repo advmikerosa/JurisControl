@@ -1,30 +1,41 @@
-# Modificação do Banco de Dados - Exclusão de Conta
+# Modificação do Banco de Dados - Suspensão e Reativação de Conta
 
-Para permitir que o usuário exclua sua própria conta e todos os dados associados (Escritórios, Processos, Clientes, Login) de forma segura, execute o comando SQL abaixo no **SQL Editor** do Supabase.
-
-Esta função utiliza `SECURITY DEFINER` para permitir que o usuário autenticado delete seu próprio registro na tabela de sistema `auth.users`, algo que normalmente é restrito.
+Execute os comandos abaixo no **SQL Editor** do Supabase para atualizar a lógica de exclusão para "Soft Delete" (Suspensão de 30 dias).
 
 ```sql
--- Função para Excluir a Própria Conta
+-- 1. Adicionar coluna de controle na tabela de perfis
+ALTER TABLE public.profiles 
+ADD COLUMN IF NOT EXISTS deleted_at timestamp with time zone;
+
+-- 2. Atualizar a função de exclusão para "Soft Delete"
+-- Ao invés de apagar, marca a data de exclusão.
 CREATE OR REPLACE FUNCTION public.delete_own_account()
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
-DECLARE
-  current_user_id uuid;
 BEGIN
-  current_user_id := auth.uid();
-
-  -- 1. Excluir escritórios onde o usuário é o DONO.
-  -- Devido às configurações de CASCADE nas tabelas filhas (clients, cases, etc),
-  -- isso limpará todos os dados operacionais vinculados a esses escritórios.
-  DELETE FROM public.offices WHERE owner_id = current_user_id;
-
-  -- 2. Excluir o usuário da tabela de autenticação do Supabase.
-  -- Isso automaticamente dispara a exclusão na tabela public.profiles (se configurada com CASCADE)
-  -- e remove o acesso de login.
-  DELETE FROM auth.users WHERE id = current_user_id;
+  UPDATE public.profiles 
+  SET deleted_at = NOW() 
+  WHERE id = auth.uid();
 END;
 $$;
+
+-- 3. Criar função de Reativação
+-- Limpa a data de exclusão, restaurando o acesso.
+CREATE OR REPLACE FUNCTION public.reactivate_own_account()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.profiles 
+  SET deleted_at = NULL 
+  WHERE id = auth.uid();
+END;
+$$;
+
+-- 4. (Opcional) Política de segurança para impedir leitura de dados de usuários excluídos por outros
+-- Isso garante que o usuário "suma" das listas de membros enquanto estiver suspenso, se desejado.
+-- (Não incluído neste script básico para manter a integridade referencial visual, mas recomendado em produção)
 ```
