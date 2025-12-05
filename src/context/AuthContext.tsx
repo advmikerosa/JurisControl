@@ -184,7 +184,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }); // uses session implicitly via storageService internals
 
                 // Update metadata: clear pending, set current office (cache)
-                await supabase.auth.updateUser({
+                // Use non-null assertion (!) because we guarded isSupabaseConfigured && supabase at top
+                await supabase!.auth.updateUser({
                     data: { 
                         pending_office_setup: null,
                         offices: [newOffice.id],
@@ -195,7 +196,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } else if (mode === 'join' && handle) {
                 const joinedOffice = await storageService.joinOffice(handle);
                 
-                await supabase.auth.updateUser({
+                await supabase!.auth.updateUser({
                     data: { 
                         pending_office_setup: null,
                         offices: [joinedOffice.id],
@@ -234,8 +235,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   // Process pending setup after reactivation if needed
                   await processPendingSetup(session);
                   // Refresh user data
-                  const { data: { user: refreshedUser } } = await supabase.auth.getUser();
-                  mapSupabaseUserToContext(refreshedUser || sbUser);
+                  if (supabase) {
+                    const { data: { user: refreshedUser } } = await supabase.auth.getUser();
+                    mapSupabaseUserToContext(refreshedUser || sbUser);
+                  }
               } catch (e) {
                   console.error("Erro na reativação automática", e);
                   await logout(false);
@@ -249,7 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Conta ativa normal
           const updated = await processPendingSetup(session);
           
-          if (updated) {
+          if (updated && supabase) {
              // If we updated metadata (processed office), fetch fresh user object
              const { data: { user: refreshedUser } } = await supabase.auth.getUser();
              mapSupabaseUserToContext(refreshedUser || sbUser);
@@ -347,7 +350,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // If we have a session immediately (auto-confirm enabled), we can try to process immediately to avoid delay
       // Otherwise, the handleUserSessionValidation logic will pick it up on first login
-      if (data.session && officeData) {
+      if (data.session && data.user && officeData) {
           try {
               if (officeData.mode === 'create' && officeData.name) {
                   const newOffice = await storageService.createOffice({
