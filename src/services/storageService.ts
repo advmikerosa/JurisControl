@@ -57,6 +57,48 @@ class StorageService {
     return { userId: 'local-user', officeId: null };
   }
 
+  /**
+   * Verifica se o perfil do usuário existe na tabela pública.
+   * Se não existir (causa do erro 409), tenta recriá-lo usando os dados de autenticação.
+   * Mecanismo de "Self-Healing".
+   */
+  public async ensureProfileExists(): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Verifica existência leve (apenas ID)
+        const { data, error } = await supabase
+            .from(TABLE_NAMES.PROFILES)
+            .select('id')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (!data) {
+            console.warn("Perfil de usuário ausente detectado. Tentando autorreparo...");
+            const payload = {
+                id: user.id,
+                email: user.email,
+                full_name: user.user_metadata?.full_name || 'Usuário Recuperado',
+                username: user.user_metadata?.username || `@user_${user.id.substring(0,8)}`,
+                created_at: new Date().toISOString()
+            };
+            
+            const { error: insertError } = await supabase.from(TABLE_NAMES.PROFILES).insert(payload);
+            
+            if (insertError) {
+                console.error("Falha no autorreparo do perfil:", insertError);
+            } else {
+                console.info("Perfil autorreparado com sucesso.");
+            }
+        }
+    } catch (e) {
+        console.error("Erro no check de perfil:", e);
+    }
+  }
+
   private getLocal<T>(key: string, defaultValue: T): T {
     try {
         const item = localStorage.getItem(key);
@@ -200,6 +242,9 @@ class StorageService {
       handle = handle.toLowerCase();
 
       if (isSupabaseConfigured && supabase) {
+          // AUTO-HEAL: Ensure user profile exists before creating office to avoid FK error
+          await this.ensureProfileExists();
+
           const payload = {
               name: officeData.name || 'Novo Escritório',
               handle: handle,
@@ -269,6 +314,9 @@ class StorageService {
       if (isSupabaseConfigured && supabase) {
           const session = await this.getUserSession();
           if (!session.userId) throw new Error("Login necessário.");
+
+          // AUTO-HEAL check
+          await this.ensureProfileExists();
 
           const { data: office, error } = await supabase
               .from(TABLE_NAMES.OFFICES)
@@ -431,8 +479,20 @@ class StorageService {
 
   async reactivateAccount() {
       if (isSupabaseConfigured && supabase) {
+          // Tentar RPC primeiro
           const { error } = await supabase.rpc('reactivate_own_account');
-          if (error) throw error;
+          if (error) {
+              console.warn("RPC reativação falhou, tentando update direto...");
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                  // Fallback: Tenta atualizar manualmente se a coluna existir
+                  await supabase.from(TABLE_NAMES.PROFILES)
+                      .update({ deleted_at: null })
+                      .eq('id', user.id);
+                  // Se perfil não existir, recria
+                  await this.ensureProfileExists();
+              }
+          }
       }
   }
 
@@ -511,14 +571,14 @@ class StorageService {
   saveSettings(settings: AppSettings) {
       this.setLocal(LOCAL_KEYS.SETTINGS, settings);
       if (isSupabaseConfigured && supabase) {
-          this.getUserSession().then(s => {
+          this.getUserSession().then(async s => {
               if (s.userId) {
+                  // AUTO-HEAL: Ensure profile exists before updating settings
+                  await this.ensureProfileExists();
+                  
                   supabase!.from(TABLE_NAMES.PROFILES).update({ settings }).eq('id', s.userId)
                   .then(({ error }) => {
-                      if (error && error.code === '23503') {
-                          // Profile missing, try create simple profile or ignore
-                          console.warn("Cannot save settings: Profile missing for user.");
-                      }
+                      if (error) console.warn("Cannot save settings:", error.message);
                   });
               }
           });

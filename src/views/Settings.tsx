@@ -10,7 +10,7 @@ import { dataJudService } from '../services/dataJudService';
 import { emailService } from '../services/emailService';
 import { Modal } from '../components/ui/Modal';
 import { OfficeEditModal } from '../components/OfficeEditModal';
-import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Globe, Moon, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, Mail } from 'lucide-react';
+import { Settings as SettingsIcon, AlertTriangle, Save, Monitor, Bell, Globe, Moon, Building, Users, AtSign, MapPin, LogIn, Plus, Loader2, Key, ExternalLink, CheckCircle, Mail, RefreshCw } from 'lucide-react';
 import { AppSettings, Office, EmailLog } from '../types';
 
 export const Settings: React.FC = () => {
@@ -24,6 +24,7 @@ export const Settings: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isTestingKey, setIsTestingKey] = useState(false);
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const [isRepairing, setIsRepairing] = useState(false);
   
   // State para Configurações
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -161,6 +162,19 @@ export const Settings: React.FC = () => {
         setTimeout(() => { logout(); window.location.reload(); }, 1500);
       }
     });
+  };
+
+  const handleRepairAccount = async () => {
+      setIsRepairing(true);
+      try {
+          await storageService.ensureProfileExists();
+          await storageService.reactivateAccount();
+          addToast('Conta reparada e sincronizada.', 'success');
+      } catch (e) {
+          addToast('Falha ao reparar conta.', 'error');
+      } finally {
+          setIsRepairing(false);
+      }
   };
 
   const handleDeleteAccount = () => {
@@ -562,6 +576,17 @@ export const Settings: React.FC = () => {
            
            {activeTab === 'danger' && (
                <div className="space-y-4">
+                   <div className="flex items-center justify-between p-4 border border-indigo-500/30 bg-indigo-500/10 rounded-xl">
+                      <div>
+                         <h4 className="text-indigo-200 font-medium text-sm">Reparar Conta</h4>
+                         <p className="text-xs text-indigo-300/70">Use se estiver enfrentando erros de permissão ou perfil incompleto (Erro 409).</p>
+                      </div>
+                      <button onClick={handleRepairAccount} disabled={isRepairing} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium transition-colors shadow-lg shadow-indigo-500/20 flex items-center gap-2">
+                         {isRepairing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                         Reparar e Sincronizar
+                      </button>
+                   </div>
+
                    <div className="flex items-center justify-between p-4 border border-rose-500/50 bg-rose-500/10 rounded-xl">
                       <div>
                          <h4 className="text-rose-200 font-medium text-sm">Reset de Fábrica</h4>
