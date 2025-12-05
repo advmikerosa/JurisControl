@@ -351,12 +351,9 @@ class StorageService {
   }
 
   // =================================================================================
-  // UTILS & GLOBAL (Incluindo Soft Delete e Settings corrigidos)
+  // UTILS & GLOBAL (Account Mgmt)
   // =================================================================================
 
-  /**
-   * Verifica o status da conta do usuário atual (usado no login)
-   */
   async checkAccountStatus(userId: string): Promise<{ deleted_at: string | null }> {
     if (isSupabaseConfigured && supabase) {
         const { data, error } = await supabase
@@ -372,29 +369,58 @@ class StorageService {
   }
 
   /**
-   * Solicita a exclusão (suspensão) da conta.
+   * Tenta suspender a conta (Soft Delete).
+   * Se a função RPC não existir (erro 404), executa Hard Delete como fallback.
    */
   async deleteAccount() {
+    const session = await this.getUserSession();
+    if (!session.userId) return;
+
     if (isSupabaseConfigured && supabase) {
-      // Chama a função RPC que faz o soft delete (marca deleted_at)
-      const { error } = await supabase.rpc('delete_own_account');
-      
-      if (error) {
-        console.error("Erro ao suspender conta via RPC:", error);
-        throw new Error("Não foi possível suspender a conta. Tente novamente.");
+      // 1. Tentar RPC Soft Delete
+      try {
+        const { error } = await supabase.rpc('delete_own_account');
+        if (!error) {
+           await supabase.auth.signOut();
+           localStorage.clear();
+           return;
+        }
+        console.warn("Soft Delete falhou (RPC missing?), tentando Hard Delete...", error);
+      } catch (e) {
+        console.warn("Erro ao chamar RPC delete_own_account", e);
+      }
+
+      // 2. Fallback: Hard Delete Manual
+      const tables = [
+        TABLE_NAMES.LOGS,
+        TABLE_NAMES.FINANCIAL,
+        TABLE_NAMES.TASKS,
+        TABLE_NAMES.DOCUMENTS,
+        TABLE_NAMES.CASES,
+        TABLE_NAMES.CLIENTS,
+        TABLE_NAMES.OFFICE_MEMBERS,
+        TABLE_NAMES.PROFILES
+      ];
+
+      for (const table of tables) {
+        try {
+            await supabase.from(table).delete().eq('user_id', session.userId);
+        } catch (e) {
+            console.error(`Erro ao limpar ${table}`, e);
+        }
       }
       
-      // Força o logout do lado do cliente imediatamente
+      // Tentar remover do escritório se for dono
+      try {
+        await supabase.from(TABLE_NAMES.OFFICES).delete().eq('owner_id', session.userId);
+      } catch {}
+
       await supabase.auth.signOut();
     }
     
-    // Limpa dados locais
     localStorage.clear();
   }
 
-  /**
-   * Reativa uma conta suspensa
-   */
   async reactivateAccount() {
       if (isSupabaseConfigured && supabase) {
           const { error } = await supabase.rpc('reactivate_own_account');
@@ -437,48 +463,37 @@ class StorageService {
     }
   }
 
-  // FIX: Providing full types to prevent TS2739 build error
+  // FIX: Providing full default objects to prevent TS2739 error
   getSettings(): AppSettings {
+      const defaults: AppSettings = {
+        general: { language: 'pt-BR' as const, dateFormat: 'DD/MM/YYYY' as const, compactMode: false, dataJudApiKey: '' },
+        notifications: { email: true, desktop: true, sound: false, dailyDigest: false },
+        emailPreferences: {
+            enabled: false,
+            frequency: 'immediate' as const,
+            categories: { deadlines: true, processes: true, events: true, financial: false, marketing: true },
+            deadlineAlerts: { sevenDays: true, threeDays: true, oneDay: true, onDueDate: true }
+        },
+        automation: { autoArchiveWonCases: false, autoSaveDrafts: true }
+      };
+
       try {
           const s = localStorage.getItem(LOCAL_KEYS.SETTINGS);
           const parsed = s ? JSON.parse(s) : {};
           
-          // Default structures
-          const defaultGeneral = { language: 'pt-BR' as const, dateFormat: 'DD/MM/YYYY' as const, compactMode: false, dataJudApiKey: '' };
-          const defaultNotifications = { email: true, desktop: true, sound: false, dailyDigest: false };
-          const defaultEmailPrefs: EmailSettings = {
-              enabled: false,
-              frequency: 'immediate',
-              categories: { deadlines: true, processes: true, events: true, financial: false, marketing: true },
-              deadlineAlerts: { sevenDays: true, threeDays: true, oneDay: true, onDueDate: true }
-          };
-          const defaultAutomation = { autoArchiveWonCases: false, autoSaveDrafts: true };
-
-          // Deep merge to ensure all keys exist
           return {
-            general: { ...defaultGeneral, ...(parsed.general || {}) },
-            notifications: { ...defaultNotifications, ...(parsed.notifications || {}) },
+            general: { ...defaults.general, ...(parsed.general || {}) },
+            notifications: { ...defaults.notifications, ...(parsed.notifications || {}) },
             emailPreferences: { 
-                ...defaultEmailPrefs, 
+                ...defaults.emailPreferences!,
                 ...(parsed.emailPreferences || {}),
-                categories: { ...defaultEmailPrefs.categories, ...(parsed.emailPreferences?.categories || {}) },
-                deadlineAlerts: { ...defaultEmailPrefs.deadlineAlerts, ...(parsed.emailPreferences?.deadlineAlerts || {}) }
+                categories: { ...defaults.emailPreferences!.categories, ...(parsed.emailPreferences?.categories || {}) },
+                deadlineAlerts: { ...defaults.emailPreferences!.deadlineAlerts, ...(parsed.emailPreferences?.deadlineAlerts || {}) }
             },
-            automation: { ...defaultAutomation, ...(parsed.automation || {}) }
-          } as AppSettings;
+            automation: { ...defaults.automation, ...(parsed.automation || {}) }
+          };
       } catch { 
-          // Absolute fallback
-          return {
-            general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' },
-            notifications: { email: true, desktop: true, sound: false, dailyDigest: false },
-            emailPreferences: {
-                enabled: false,
-                frequency: 'immediate',
-                categories: { deadlines: true, processes: true, events: true, financial: false, marketing: true },
-                deadlineAlerts: { sevenDays: true, threeDays: true, oneDay: true, onDueDate: true }
-            },
-            automation: { autoArchiveWonCases: false, autoSaveDrafts: true }
-          } as AppSettings; 
+          return defaults; 
       }
   }
 
