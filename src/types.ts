@@ -47,7 +47,7 @@ export interface ExtractedDeadline {
 
 export interface ExtractedMovementData {
   type: 'Andamento' | 'Despacho' | 'Petição' | 'Audiência' | 'Nota' | 'Sentença' | 'Decisão';
-  date: string; // YYYY-MM-DD or DD/MM/YYYY
+  date: string; 
   title: string;
   summary: string;
   deadlines: ExtractedDeadline[];
@@ -81,7 +81,7 @@ export interface ClientDocument {
 
 export interface SystemDocument {
   id: string;
-  officeId: string; // Tenancy enforcement
+  officeId: string; 
   name: string;
   size: string;
   type: string;
@@ -112,16 +112,16 @@ export interface ClientAlert {
 
 export interface Client {
   id: string;
-  officeId: string; // Tenancy enforcement
+  officeId: string; 
   name: string;
-  email: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   type: ClientType;
   status: ClientStatus;
-  avatarUrl: string;
-  address: string;
-  city: string;
-  state: string;
+  avatarUrl?: string;
+  address?: string;
+  city?: string;
+  state?: string;
   notes?: string;
   tags?: string[];
   createdAt: string;
@@ -141,7 +141,7 @@ export interface Client {
   documents: ClientDocument[];
   history: ClientInteraction[];
   alerts: ClientAlert[];
-  userId?: string; // Creator
+  userId?: string; 
 }
 
 export interface CaseMovement {
@@ -164,7 +164,7 @@ export interface ChangeLogEntry {
 
 export interface LegalCase {
   id: string;
-  officeId: string; // Tenancy enforcement
+  officeId: string; 
   cnj: string;
   title: string;
   client: Client;
@@ -191,7 +191,7 @@ export interface LegalCase {
 
 export interface Task {
   id: string;
-  officeId: string; // Tenancy enforcement
+  officeId: string; 
   title: string;
   dueDate: string;
   priority: Priority;
@@ -209,7 +209,7 @@ export type FinancialStatus = 'Pago' | 'Pendente' | 'Atrasado';
 
 export interface FinancialRecord {
   id: string;
-  officeId: string; // Tenancy enforcement
+  officeId: string; 
   title: string;
   amount: number;
   type: 'Receita' | 'Despesa';
@@ -227,7 +227,6 @@ export interface FinancialRecord {
   userId?: string;
 }
 
-// Atualizado: OfficeMember agora reflete a tabela de junção
 export interface OfficeMember {
   id?: string; 
   userId: string;
@@ -239,7 +238,6 @@ export interface OfficeMember {
   joinedAt?: string;
 }
 
-// Atualizado: Office sem membros embutidos (são carregados separadamente ou via join)
 export interface Office {
   id: string;
   name: string;
@@ -272,7 +270,7 @@ export interface User {
   email: string;
   avatar: string;
   provider: AuthProvider;
-  offices: string[]; // Array de IDs de escritórios
+  offices: string[]; 
   currentOfficeId?: string;
   twoFactorEnabled: boolean;
   emailVerified: boolean;

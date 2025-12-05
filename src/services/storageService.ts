@@ -36,7 +36,6 @@ class StorageService {
     this.seedDatabase();
   }
 
-  // Helper para sessão com verificação robusta
   private async getUserSession(): Promise<{ userId: string | null, officeId: string | null }> {
     if (isSupabaseConfigured && supabase) {
       try {
@@ -48,7 +47,7 @@ class StorageService {
         }
       } catch {}
     }
-    // Fallback Local (Demo Mode Only)
+    // Fallback Local
     const stored = localStorage.getItem('@JurisControl:user');
     if (stored) {
         const u = JSON.parse(stored);
@@ -159,7 +158,6 @@ class StorageService {
     }
   }
 
-  // ... (getOfficeById, createOffice, joinOffice, saveOffice mantidos iguais, omitidos para brevidade se não alterados, mas neste caso vamos manter a integridade)
   async getOfficeById(id: string): Promise<Office | undefined> {
     if (isSupabaseConfigured && supabase) {
        try {
@@ -181,7 +179,7 @@ class StorageService {
            const members: OfficeMember[] = (membersData || []).map((m: any) => ({
                id: m.id,
                userId: m.user_id,
-               name: 'Membro', // Em produção, faria join com profiles
+               name: 'Membro',
                role: m.role,
                permissions: m.permissions,
                joinedAt: m.joined_at
@@ -206,7 +204,6 @@ class StorageService {
   }
 
   async createOffice(officeData: Partial<Office>, explicitUserId?: string, userDetails?: { name: string, email: string }): Promise<Office> {
-      // Implementação idêntica à original
       const session = await this.getUserSession();
       const userId = explicitUserId || session.userId || 'local';
       
@@ -266,13 +263,13 @@ class StorageService {
   }
 
   async joinOffice(handle: string): Promise<Office> {
-      // Implementação idêntica à original
       if (isSupabaseConfigured && supabase) {
           const session = await this.getUserSession();
           if (!session.userId) throw new Error("Login necessário.");
           await this.ensureProfileExists();
           const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('id, name, owner_id').eq('handle', handle).single();
           if (error || !office) throw new Error("Escritório não encontrado.");
+          
           await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert({ office_id: office.id, user_id: session.userId, role: 'Advogado' });
           return { id: office.id, name: office.name, handle: handle, ownerId: office.owner_id, location: '', members: [] };
       } else {
@@ -304,7 +301,6 @@ class StorageService {
         const session = await this.getUserSession();
         if (!session.officeId) return [];
 
-        // PERFORMANCE: Selecionando apenas colunas necessárias, incluindo address
         const { data, error } = await supabase
           .from(TABLE_NAMES.CLIENTS)
           .select('id, name, type, status, email, phone, address, city, state, avatar_url, cpf, cnpj, corporate_name, created_at, tags')
@@ -319,20 +315,20 @@ class StorageService {
             name: c.name,
             type: c.type,
             status: c.status,
-            email: c.email,
-            phone: c.phone,
-            address: c.address || '', // Added required address field
-            city: c.city,
-            state: c.state,
-            avatarUrl: c.avatar_url,
-            cpf: c.cpf,
-            cnpj: c.cnpj,
-            corporateName: c.corporate_name,
+            email: c.email || '',
+            phone: c.phone || '',
+            address: c.address || '', 
+            city: c.city || '',
+            state: c.state || '',
+            avatarUrl: c.avatar_url || '',
+            cpf: c.cpf || '',
+            cnpj: c.cnpj || '',
+            corporateName: c.corporate_name || '',
             createdAt: c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '',
             tags: c.tags || [],
-            alerts: [], // Loaded on detail view only for performance
-            documents: [], // Loaded on detail
-            history: [] // Loaded on detail
+            alerts: [],
+            documents: [],
+            history: [] 
         })) as Client[];
       } catch (error) { 
         return []; 
@@ -351,7 +347,6 @@ class StorageService {
         const session = await this.getUserSession();
         if (!session.officeId) return [];
 
-        // PERFORMANCE: Selecionando apenas colunas para listagem e dashboard
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
           .select(`
@@ -387,7 +382,7 @@ class StorageService {
             nextHearing: item.next_hearing,
             distributionDate: item.created_at,
             description: item.description,
-            movements: item.movements, // Necessário para dashboard recent movements
+            movements: item.movements, 
             lastUpdate: item.last_update,
             client: mappedClient
           };
@@ -457,7 +452,6 @@ class StorageService {
     }
   }
 
-  // Métodos genéricos auxiliares para completar a classe e manter compatibilidade
   async getCasesPaginated(page: number, limit: number, searchTerm: string, statusFilter: any, categoryFilter: any, dateRange: any) {
       const allCases = await this.getCases();
       let filtered = allCases;
@@ -474,7 +468,7 @@ class StorageService {
       return { data: filtered.slice(start, start + limit), total: filtered.length };
   }
 
-  // --- CRUD Genérico Implementado ---
+  // --- CRUD Genérico ---
   async saveClient(client: Client) { return this.genericSave(TABLE_NAMES.CLIENTS, LOCAL_KEYS.CLIENTS, client); }
   async deleteClient(id: string) { return this.genericDelete(TABLE_NAMES.CLIENTS, LOCAL_KEYS.CLIENTS, id); }
   async saveCase(c: LegalCase) { return this.genericSave(TABLE_NAMES.CASES, LOCAL_KEYS.CASES, c); }
@@ -580,7 +574,7 @@ class StorageService {
   getSettings(): AppSettings {
       try {
           const s = localStorage.getItem(LOCAL_KEYS.SETTINGS);
-          return s ? JSON.parse(s) : { general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false }, notifications: { email: true, desktop: true, sound: false, dailyDigest: false }, automation: { autoArchiveWonCases: false, autoSaveDrafts: true } };
+          return s ? JSON.parse(s) : { general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' }, notifications: { email: true, desktop: true, sound: false, dailyDigest: false }, automation: { autoArchiveWonCases: false, autoSaveDrafts: true } };
       } catch { return {} as any; }
   }
   saveSettings(settings: AppSettings) { localStorage.setItem(LOCAL_KEYS.SETTINGS, JSON.stringify(settings)); }
