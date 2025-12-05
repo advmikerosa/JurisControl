@@ -304,10 +304,10 @@ class StorageService {
         const session = await this.getUserSession();
         if (!session.officeId) return [];
 
-        // PERFORMANCE: Selecionando apenas colunas necessárias
+        // PERFORMANCE: Selecionando apenas colunas necessárias, incluindo address
         const { data, error } = await supabase
           .from(TABLE_NAMES.CLIENTS)
-          .select('id, name, type, status, email, phone, city, state, avatar_url, cpf, cnpj, corporate_name, created_at, tags')
+          .select('id, name, type, status, email, phone, address, city, state, avatar_url, cpf, cnpj, corporate_name, created_at, tags')
           .eq('office_id', session.officeId)
           .order('name');
         
@@ -321,6 +321,7 @@ class StorageService {
             status: c.status,
             email: c.email,
             phone: c.phone,
+            address: c.address || '', // Added required address field
             city: c.city,
             state: c.state,
             avatarUrl: c.avatar_url,
@@ -579,7 +580,7 @@ class StorageService {
   getSettings(): AppSettings {
       try {
           const s = localStorage.getItem(LOCAL_KEYS.SETTINGS);
-          return s ? JSON.parse(s) : { general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false }, notifications: { email: true, desktop: true, sound: false }, automation: { autoArchiveWonCases: false, autoSaveDrafts: true } };
+          return s ? JSON.parse(s) : { general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false }, notifications: { email: true, desktop: true, sound: false, dailyDigest: false }, automation: { autoArchiveWonCases: false, autoSaveDrafts: true } };
       } catch { return {} as any; }
   }
   saveSettings(settings: AppSettings) { localStorage.setItem(LOCAL_KEYS.SETTINGS, JSON.stringify(settings)); }
