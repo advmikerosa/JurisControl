@@ -60,9 +60,24 @@ export const Settings: React.FC = () => {
   }, [user, location]);
 
   const loadOfficeData = async () => {
-    if (user && user.currentOfficeId) {
+    // 1. Try to use current preference
+    let targetId = user?.currentOfficeId;
+
+    // 2. Fallback: If no preference, fetch list and use first one
+    if (!targetId) {
+        try {
+            const offices = await storageService.getOffices();
+            if (offices.length > 0) {
+                targetId = offices[0].id;
+            }
+        } catch (e) {
+            console.error("Error fetching office list fallback:", e);
+        }
+    }
+
+    if (targetId) {
       try {
-        const office = await storageService.getOfficeById(user.currentOfficeId);
+        const office = await storageService.getOfficeById(targetId);
         if (office) setMyOffice(office);
         else setMyOffice(null);
       } catch {
