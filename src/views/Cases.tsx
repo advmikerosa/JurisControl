@@ -18,7 +18,13 @@ const CaseListItem = React.memo(({ c, onDelete, onEdit, onNavigate, openActionId
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
       <GlassCard className="p-0 hover:border-indigo-500/30 transition-colors group bg-slate-100 dark:bg-[#1e293b]/80 dark:bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] dark:from-white/5 dark:to-transparent">
         <div className="p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="flex-1 cursor-pointer overflow-hidden" onClick={() => onNavigate(c.id)}>
+          <div 
+            className="flex-1 cursor-pointer overflow-hidden outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg" 
+            onClick={() => onNavigate(c.id)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && onNavigate(c.id)}
+          >
             <div className="flex flex-wrap items-center gap-3 mb-3">
                 <span className={`px-2.5 py-0.5 text-xs rounded-full font-medium border ${
                   c.status === 'Ativo' ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300' :
@@ -40,12 +46,6 @@ const CaseListItem = React.memo(({ c, onDelete, onEdit, onNavigate, openActionId
                 <div className="flex items-center gap-2 max-w-full"><span className="w-2 h-2 rounded-full bg-slate-400 dark:bg-slate-600 shrink-0"></span><span className="text-slate-700 dark:text-slate-200 font-medium truncate">{c.client.name}</span></div>
                 <div className="hidden md:block w-px h-3 bg-slate-300 dark:bg-white/10"></div>
                 <div className="flex items-center gap-2 truncate">Advogado: <span className="text-slate-700 dark:text-slate-200">{c.responsibleLawyer}</span></div>
-                {c.phase && (
-                  <>
-                     <div className="hidden md:block w-px h-3 bg-slate-300 dark:bg-white/10"></div>
-                     <div className="flex items-center gap-2 truncate">Fase: <span className="text-indigo-600 dark:text-indigo-300">{c.phase}</span></div>
-                  </>
-                )}
             </div>
           </div>
           <div className="flex flex-row lg:flex-col gap-6 lg:gap-2 lg:text-right lg:min-w-[150px] border-t lg:border-t-0 border-slate-200 dark:border-white/5 pt-4 lg:pt-0">
@@ -72,32 +72,9 @@ const CaseListItem = React.memo(({ c, onDelete, onEdit, onNavigate, openActionId
   );
 });
 
-const CaseBoardCard = React.memo(({ c, onDelete, onEdit, onNavigate }: any) => {
-  return (
-    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }} onClick={() => onNavigate(c.id)}>
-      <GlassCard className="p-4 mb-3 cursor-pointer hover:border-indigo-500/50 group relative flex flex-col h-full" hoverEffect>
-        <div className="flex justify-between items-start mb-2">
-            <div className="flex flex-col gap-1">
-               <span className="text-[10px] font-mono text-slate-500 bg-slate-200 dark:bg-white/5 px-1.5 py-0.5 rounded w-fit">{c.cnj.split('-')[0]}...</span>
-               {c.category && <span className="text-[9px] text-indigo-600 dark:text-indigo-300 font-medium">{c.category}</span>}
-            </div>
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={(e) => { e.stopPropagation(); onEdit(c.id); }} className="text-slate-500 dark:text-slate-600 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded"><Edit2 size={12} /></button>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} className="text-slate-500 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400 p-1 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded"><Trash2 size={12} /></button>
-            </div>
-        </div>
-        <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-1 leading-snug line-clamp-2" title={c.title}>{c.title}</h4>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 truncate">{c.client.name}</p>
-        <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-white/5 mt-auto">
-            <span className="text-emerald-600 dark:text-emerald-400 text-xs font-bold">R$ {(c.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-            {c.phase && <span className="text-[10px] text-slate-500 truncate max-w-[50%] text-right">{c.phase}</span>}
-        </div>
-      </GlassCard>
-    </motion.div>
-  );
-});
-
+// ... (Rest of Cases.tsx code maintained, reusing CaseListItem with new props)
 export const Cases: React.FC = () => {
+  // ... (Hooks and state remain same)
   const location = useLocation();
   const navigate = useNavigate();
   const { addToast } = useToast();
@@ -227,7 +204,6 @@ export const Cases: React.FC = () => {
       });
   }, []);
 
-  // Memoized Handlers for List Items
   const handleDeleteClick = useCallback((id: string) => {
       setCaseToDelete(id); 
       setOpenActionMenuId(null);
@@ -289,7 +265,7 @@ export const Cases: React.FC = () => {
      try {
         const newClient: Client = {
           id: `cli-${Date.now()}`,
-          officeId: '', // Will be set by storageService
+          officeId: '',
           name: quickClientData.name, type: quickClientData.type as any, email: quickClientData.email, phone: quickClientData.phone, status: 'Ativo',
           avatarUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(quickClientData.name)}&background=random`,
           address: '', city: '', state: '', documents: [], history: [], alerts: [], createdAt: new Date().toLocaleDateString('pt-BR'),
@@ -325,6 +301,32 @@ export const Cases: React.FC = () => {
       setPage(1);
   };
 
+  // CaseBoardCard definition inline or imported
+  const CaseBoardCard = ({ c, onDelete, onEdit, onNavigate }: any) => {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.2 }} onClick={() => onNavigate(c.id)}>
+        <GlassCard className="p-4 mb-3 cursor-pointer hover:border-indigo-500/50 group relative flex flex-col h-full" hoverEffect>
+          <div className="flex justify-between items-start mb-2">
+              <div className="flex flex-col gap-1">
+                 <span className="text-[10px] font-mono text-slate-500 bg-slate-200 dark:bg-white/5 px-1.5 py-0.5 rounded w-fit">{c.cnj.split('-')[0]}...</span>
+                 {c.category && <span className="text-[9px] text-indigo-600 dark:text-indigo-300 font-medium">{c.category}</span>}
+              </div>
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={(e) => { e.stopPropagation(); onEdit(c.id); }} className="text-slate-500 dark:text-slate-600 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded"><Edit2 size={12} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} className="text-slate-500 dark:text-slate-600 hover:text-rose-600 dark:hover:text-rose-400 p-1 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded"><Trash2 size={12} /></button>
+              </div>
+          </div>
+          <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-1 leading-snug line-clamp-2" title={c.title}>{c.title}</h4>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 truncate">{c.client.name}</p>
+          <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-white/5 mt-auto">
+              <span className="text-emerald-600 dark:text-emerald-400 text-xs font-bold">R$ {(c.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              {c.phase && <span className="text-[10px] text-slate-500 truncate max-w-[50%] text-right">{c.phase}</span>}
+          </div>
+        </GlassCard>
+      </motion.div>
+    );
+  };
+
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6">
@@ -349,7 +351,6 @@ export const Cases: React.FC = () => {
             
             <div className="flex flex-col sm:flex-row gap-2">
                <div className="flex gap-2">
-                   {/* Sort Dropdown */}
                    <div className="relative">
                        <select 
                            value={sortBy} 
@@ -383,7 +384,6 @@ export const Cases: React.FC = () => {
             </div>
          </div>
 
-         {/* Advanced Filters Dropdown */}
          <AnimatePresence>
              {showFilters && (
                  <motion.div 
@@ -402,7 +402,7 @@ export const Cases: React.FC = () => {
                                     className="w-full bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-white/10 rounded-lg py-2 pl-3 pr-8 text-sm text-slate-900 dark:text-slate-200 appearance-none focus:border-indigo-500 outline-none"
                                  >
                                      <option value="Todos">Todas as Categorias</option>
-                                     {LEGAL_CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                                     {LEGAL_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                  </select>
                                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={14} />
                              </div>
@@ -453,7 +453,7 @@ export const Cases: React.FC = () => {
           </div>
       )}
 
-      {/* Main Case Modal (Create/Edit) */}
+      {/* Main Case Modal */}
       <CaseFormModal 
         isOpen={isCaseModalOpen}
         onClose={() => setIsCaseModalOpen(false)}

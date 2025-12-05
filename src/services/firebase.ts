@@ -1,2 +1,2 @@
-// This file is deprecated.
+// Arquivo descontinuado. Não utilize.
 export {};
