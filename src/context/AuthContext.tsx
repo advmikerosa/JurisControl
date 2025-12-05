@@ -20,7 +20,7 @@ interface AuthContextData {
   recoverPassword: (email: string) => Promise<boolean>;
   socialLogin: (provider: AuthProviderType) => Promise<void>;
   updateProfile: (data: Partial<User>) => void;
-  reactivate: () => Promise<void>;
+  requestReactivationOtp: (email: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -100,7 +100,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const { data, error } = await supabase.auth.getSession();
           
           if (error) {
-            console.error("Session Check Error:", error.message);
             if (mounted) {
               logout(false);
               setIsLoading(false);
@@ -110,23 +109,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (mounted) {
               if (data.session?.user) {
-                // Checar se está suspenso
-                const status = await storageService.checkAccountStatus(data.session.user.id);
-                if (status.deleted_at) {
-                    await logout(false); // Força logout se estiver deletado para evitar acesso direto
-                } else {
-                    mapSupabaseUserToContext(data.session.user);
-                }
+                await handleUserSessionValidation(data.session);
               } else {
                 setUser(null);
                 setIsAuthenticated(false);
               }
           }
           
-          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!mounted) return;
             if (session?.user) {
-               mapSupabaseUserToContext(session.user);
+               // Em mudanças de estado (ex: magic link click), revalidar
+               if (event === 'SIGNED_IN') {
+                   await handleUserSessionValidation(session);
+               } else {
+                   mapSupabaseUserToContext(session.user);
+               }
             } else {
                setUser(null);
                setIsAuthenticated(false);
@@ -161,6 +159,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => { mounted = false; };
   }, []);
 
+  /**
+   * Lógica Central de Validação de Usuário (Soft Delete / Reactivation)
+   */
+  const handleUserSessionValidation = async (session: any) => {
+      const sbUser = session.user;
+      
+      // 1. Checar status da conta (Soft Delete)
+      const status = await storageService.checkAccountStatus(sbUser.id);
+      
+      if (status.deleted_at) {
+          // A conta está marcada como deletada.
+          // Verificar se o login foi feito via OTP/MagicLink (indicando confirmação de e-mail para reativação)
+          const amr = session.user?.amr || []; // Authentication Method Reference
+          const isOtpLogin = amr.some((m: any) => m.method === 'otp' || m.method === 'magic_link');
+
+          if (isOtpLogin) {
+              // Usuário clicou no link de reativação -> Reativar automaticamente
+              try {
+                  await storageService.reactivateAccount();
+                  addToast('Sua conta foi reativada com sucesso!', 'success');
+                  mapSupabaseUserToContext(sbUser); // Permitir acesso
+              } catch (e) {
+                  console.error("Erro na reativação automática", e);
+                  await logout(false);
+              }
+          } else {
+              // Login por senha ou sessão antiga -> Bloquear
+              await logout(false);
+              // Não podemos lançar erro aqui pois é um useEffect, mas o logout impede o acesso.
+          }
+      } else {
+          // Conta ativa normal
+          mapSupabaseUserToContext(sbUser);
+      }
+  };
+
   const mapSupabaseUserToContext = (sbUser: any) => {
     const meta = sbUser.user_metadata || {};
     const mappedUser: User = {
@@ -193,9 +227,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const status = await storageService.checkAccountStatus(data.user.id);
           
           if (status.deleted_at) {
-              // Account is marked as deleted/suspended
-              // Keep session momentarily to allow reactivation flow, but DO NOT set isAuthenticated=true
-              const err = new Error('Esta conta foi excluída e está em período de retenção.');
+              // IMPORTANTE: Forçar logout imediato para não manter sessão válida
+              await supabase.auth.signOut();
+              
+              const err = new Error('Esta conta foi excluída. Reative via e-mail.');
               (err as any).code = 'ACCOUNT_SUSPENDED'; 
               throw err;
           }
@@ -209,20 +244,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const reactivate = useCallback(async () => {
-      // Assuming a session exists from the recent login attempt (even if blocked by UI)
-      try {
-          await storageService.reactivateAccount();
-          // Force refresh session/user data
-          if (isSupabaseConfigured && supabase) {
-              const { data } = await supabase.auth.getUser();
-              if (data.user) {
-                  mapSupabaseUserToContext(data.user);
-                  setIsAuthenticated(true);
+  const requestReactivationOtp = useCallback(async (email: string) => {
+      if (isSupabaseConfigured && supabase) {
+          const { error } = await supabase.auth.signInWithOtp({
+              email,
+              options: {
+                  shouldCreateUser: false,
+                  // Opcional: Redirecionar para uma rota que lida com o callback
+                  // emailRedirectTo: window.location.origin 
               }
-          }
-      } catch (e: any) {
-          throw new Error("Falha na reativação: " + e.message);
+          });
+          if (error) throw new Error("Erro ao enviar e-mail: " + error.message);
+      } else {
+          // Mock mode: Just re-enable
+          await storageService.reactivateAccount();
       }
   }, []);
 
@@ -338,10 +373,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     recoverPassword,
     socialLogin,
     updateProfile,
-    reactivate,
+    requestReactivationOtp,
     logout: () => logout(false),
     isLoading
-  }), [isAuthenticated, user, login, register, recoverPassword, socialLogin, updateProfile, reactivate, logout, isLoading]);
+  }), [isAuthenticated, user, login, register, recoverPassword, socialLogin, updateProfile, requestReactivationOtp, logout, isLoading]);
 
   return (
     <AuthContext.Provider value={contextValue}>

@@ -10,7 +10,7 @@ import { Modal } from '../components/ui/Modal';
 import { masks } from '../utils/formatters';
 
 export const Login: React.FC = () => {
-  const { login, register, recoverPassword, reactivate, logout } = useAuth();
+  const { login, register, recoverPassword, requestReactivationOtp, logout } = useAuth();
   const navigate = useNavigate();
   const { addToast } = useToast();
   
@@ -112,14 +112,12 @@ export const Login: React.FC = () => {
       }
       setIsReactivating(true);
       try {
-          await reactivate();
-          addToast('Conta reativada com sucesso! Bem-vindo de volta.', 'success');
+          await requestReactivationOtp(email);
+          addToast('Enviamos um link de reativação para seu e-mail. Verifique sua caixa de entrada.', 'success', 6000);
           setShowReactivateModal(false);
-          navigate('/');
+          setReactivateConfirmEmail('');
       } catch (error: any) {
           addToast(error.message, 'error');
-          // If fail, ensure cleanup
-          logout(); 
       } finally {
           setIsReactivating(false);
       }
@@ -127,7 +125,6 @@ export const Login: React.FC = () => {
 
   const handleCancelReactivate = () => {
       setShowReactivateModal(false);
-      logout();
       setReactivateConfirmEmail('');
   };
 
@@ -244,12 +241,12 @@ export const Login: React.FC = () => {
          <div className="space-y-6">
             <div className="flex justify-center"><div className="p-4 bg-amber-500/10 rounded-full border border-amber-500/30 text-amber-500"><AlertTriangle size={32} /></div></div>
             <div className="text-center">
-                <h3 className="text-white font-bold text-lg">Esta conta foi excluída recentemente.</h3>
-                <p className="text-slate-400 text-sm mt-2">Você está dentro do período de retenção de 30 dias. Deseja reativar sua conta e recuperar todos os seus dados?</p>
+                <h3 className="text-white font-bold text-lg">Esta conta foi excluída.</h3>
+                <p className="text-slate-400 text-sm mt-2">Para reativar sua conta e recuperar todos os dados, precisamos verificar que você ainda tem acesso ao e-mail.</p>
             </div>
             
             <div className="bg-black/20 p-4 rounded-xl border border-white/10">
-                <label className="text-xs text-slate-400 font-bold uppercase mb-2 block">Confirme seu E-mail para Reativar</label>
+                <label className="text-xs text-slate-400 font-bold uppercase mb-2 block">Confirme seu E-mail</label>
                 <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
                     <input 
@@ -263,14 +260,14 @@ export const Login: React.FC = () => {
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
-                <button onClick={handleCancelReactivate} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar e Sair</button>
+                <button onClick={handleCancelReactivate} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancelar</button>
                 <button 
                     onClick={handleReactivate} 
                     disabled={isReactivating || !reactivateConfirmEmail}
                     className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20"
                 >
                     {isReactivating ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                    Reativar Conta
+                    Enviar E-mail de Ativação
                 </button>
             </div>
          </div>
