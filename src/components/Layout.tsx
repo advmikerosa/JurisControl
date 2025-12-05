@@ -79,25 +79,32 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       if (!user) return;
 
       try {
-        const allOffices = await storageService.getOffices();
+        // storageService.getOffices() already filters by RLS/User ID in SQL.
+        // We do NOT need to filter again against user.offices metadata (which might be stale after registration).
+        const myOffices = await storageService.getOffices();
         
         if (!isMounted) return;
-
-        // In Supabase mode with corrected getOffices, allOffices should contain only relevant offices
-        // Filter locally just in case for demo/mock mode
-        const myOffices: Office[] = allOffices; 
             
         setUserOffices(myOffices);
 
         if (myOffices.length > 0) {
-            const selected = user?.currentOfficeId 
+            // Priority:
+            // 1. User's preferred office (if it exists in the list)
+            // 2. The first office in the list (fallback)
+            const preferred = user?.currentOfficeId 
                 ? myOffices.find((o: Office) => o.id === user.currentOfficeId) 
-                : myOffices[0];
-            setCurrentOffice(selected || myOffices[0]);
+                : null;
+            
+            const selected = preferred || myOffices[0];
+            setCurrentOffice(selected);
+            
+            // If user has no currentOfficeId preference set, or it's invalid, update it silently
+            if (!user.currentOfficeId || (user.currentOfficeId !== selected.id)) {
+                // Optional: We could trigger an updateProfile here, but let's keep it purely local state for UI responsiveness
+            }
         } else {
-            // Fallback: If no office found (e.g. error 500 prevented load or user has none)
-            // Show a placeholder to not break the UI
-            console.log("No offices loaded or user has none.");
+            // Fallback: If absolutely no office found (e.g. error 500 prevented load or user has none)
+            console.log("No offices found for this user.");
             setCurrentOffice({
                 id: 'default',
                 name: 'Sem Escritório',
@@ -516,7 +523,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                               <Briefcase size={20} />
                            </div>
                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-                             Você ainda não faz parte de nenhum escritório ou os dados estão carregando.
+                             Nenhum escritório encontrado.
                            </p>
                            <button 
                              onClick={() => { setIsOfficeMenuOpen(false); navigate('/settings?tab=office'); }}
@@ -580,7 +587,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                           >
                              <div className="flex justify-between items-start mb-1 gap-2">
                                <p className={`text-sm leading-tight ${!n.read ? 'text-slate-900 dark:text-white font-semibold' : 'text-slate-600 dark:text-slate-300'}`}>{n.title}</p>
-                               {!n.read && <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-glow shrink-0 mt-1"></span>}
+                               {!n.read && <span className="w-2 h-2 rounded-full bg-indigo-50 shadow-glow shrink-0 mt-1"></span>}
                              </div>
                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{n.body}</p>
                              <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-2">{timeAgo(n.timestamp)}</p>

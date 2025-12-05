@@ -169,8 +169,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (status.deleted_at) {
           // A conta está marcada como deletada.
-          // Verificar se o login foi feito via OTP/MagicLink (indicando confirmação de e-mail para reativação)
-          // 'amr' (Authentication Method Reference) contém o método usado.
           const amr = session.user?.amr || []; 
           const isOtpLogin = amr.some((m: any) => m.method === 'otp' || m.method === 'magic_link' || m.method === 'link');
 
@@ -249,9 +247,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const { error } = await supabase.auth.signInWithOtp({
               email,
               options: {
-                  shouldCreateUser: false,
-                  // Opcional: Redirecionar para uma rota limpa ou dashboard
-                  // emailRedirectTo: window.location.origin 
+                  shouldCreateUser: false
               }
           });
           if (error) throw new Error("Erro ao enviar e-mail: " + error.message);
@@ -284,23 +280,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.user && officeData) {
           try {
               if (officeData.mode === 'create' && officeData.name) {
+                  // Wait for creation to ensure consistency before returning
                   const newOffice = await storageService.createOffice({
                       name: officeData.name,
                       handle: officeData.handle,
                       location: 'Brasil'
                   }, data.user.id, { name, email });
                   
-                  await supabase.auth.updateUser({
-                      data: { offices: [newOffice.id], currentOfficeId: newOffice.id }
-                  });
+                  // Try to update metadata, but don't crash if it fails (e.g. unconfirmed email)
+                  // The real relationship is in the DB tables
+                  try {
+                      await supabase.auth.updateUser({
+                          data: { offices: [newOffice.id], currentOfficeId: newOffice.id }
+                      });
+                  } catch (metaError) {
+                      console.warn("Metadata update failed (likely unconfirmed email), but office created in DB.", metaError);
+                  }
+
               } else if (officeData.mode === 'join') {
                   const joinedOffice = await storageService.joinOffice(officeData.handle);
-                  await supabase.auth.updateUser({
-                      data: { offices: [joinedOffice.id], currentOfficeId: joinedOffice.id }
-                  });
+                  try {
+                      await supabase.auth.updateUser({
+                          data: { offices: [joinedOffice.id], currentOfficeId: joinedOffice.id }
+                      });
+                  } catch (metaError) {
+                      console.warn("Metadata update failed, but joined office in DB.", metaError);
+                  }
               }
           } catch (officeError: any) {
               console.error("Falha ao configurar escritório:", officeError);
+              // Don't throw here to allow user creation to succeed, but user might be office-less
           }
       }
       return !data.session; 

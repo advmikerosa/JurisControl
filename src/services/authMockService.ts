@@ -97,6 +97,7 @@ export const authMockService = {
            office = await storageService.joinOffice(officeData.handle);
         }
         
+        // Update the user object with the new office data immediately
         user.offices = [office.id];
         user.currentOfficeId = office.id;
         
