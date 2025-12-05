@@ -953,21 +953,16 @@ class StorageService {
   // =================================================================================
 
   async deleteAccount() {
-    const session = await this.getUserSession();
-    
     if (isSupabaseConfigured && supabase) {
-      if (!session.userId) return;
-      
-      // Cascading deletes handled by RLS/DB usually, but explicit cleaning is good practice if policies allow
-      // In a real app, you would call an RPC to soft-delete the user
-      // For this demo structure, we assume we want to clear related data
-      
-      // NOT IMPLEMENTED: Hard delete of user in Supabase Auth requires Admin API
-      console.warn("Account deletion in Supabase requires Admin privileges.");
-      
-    } else {
-      localStorage.clear();
+      const { error } = await supabase.rpc('delete_own_account');
+      if (error) {
+        console.error("Erro ao excluir conta via RPC:", error);
+        throw new Error("Não foi possível excluir a conta. Tente novamente.");
+      }
+      await supabase.auth.signOut(); // Ensure session is killed client-side
     }
+    // Always clear local storage
+    localStorage.clear();
   }
 
   getLogs(): ActivityLog[] { 
