@@ -35,7 +35,7 @@ BEGIN
 END;
 $$;
 
--- 4. (Opcional) Política de segurança para impedir leitura de dados de usuários excluídos por outros
--- Isso garante que o usuário "suma" das listas de membros enquanto estiver suspenso, se desejado.
--- (Não incluído neste script básico para manter a integridade referencial visual, mas recomendado em produção)
+-- NOTA: Para implementar a exclusão definitiva após 30 dias, você precisaria configurar um Cron Job (pg_cron)
+-- ou uma Edge Function agendada para rodar:
+-- DELETE FROM auth.users WHERE id IN (SELECT id FROM public.profiles WHERE deleted_at < NOW() - INTERVAL '30 days');
 ```

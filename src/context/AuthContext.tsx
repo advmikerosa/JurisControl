@@ -20,7 +20,7 @@ interface AuthContextData {
   recoverPassword: (email: string) => Promise<boolean>;
   socialLogin: (provider: AuthProviderType) => Promise<void>;
   updateProfile: (data: Partial<User>) => void;
-  reactivate: () => Promise<void>; // Nova função
+  reactivate: () => Promise<void>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -113,7 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // Checar se está suspenso
                 const status = await storageService.checkAccountStatus(data.session.user.id);
                 if (status.deleted_at) {
-                    await logout(false); // Força logout se estiver deletado
+                    await logout(false); // Força logout se estiver deletado para evitar acesso direto
                 } else {
                     mapSupabaseUserToContext(data.session.user);
                 }
