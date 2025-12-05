@@ -49,6 +49,17 @@ CREATE TABLE public.profiles (
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- CORREÇÃO DE ERRO (Foreign Key Violation):
+-- Preenche a tabela profiles com usuários que já existem no Auth mas perderam o perfil no reset.
+INSERT INTO public.profiles (id, email, full_name, username)
+SELECT 
+  id, 
+  email, 
+  raw_user_meta_data->>'full_name',
+  COALESCE(raw_user_meta_data->>'username', '@user_' || substr(id::text, 1, 8))
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
+
 -- Escritórios
 CREATE TABLE public.offices (
   id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -245,7 +256,7 @@ ALTER TABLE public.cases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.financial ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY; -- Agora incluída!
+ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 
 -- FUNÇÃO CRÍTICA: check_is_member
 -- Usamos SECURITY DEFINER para que esta função possa ler a tabela office_members
@@ -303,5 +314,4 @@ CREATE POLICY "Access Documents" ON public.documents FOR ALL USING (public.check
 CREATE POLICY "Insert own logs" ON public.activity_logs FOR INSERT WITH CHECK (auth.uid() = user_id);
 -- Usuários podem ver seus próprios logs
 CREATE POLICY "View own logs" ON public.activity_logs FOR SELECT USING (auth.uid() = user_id);
-
 ```
