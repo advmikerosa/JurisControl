@@ -1,5 +1,5 @@
 
-import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember } from '../types';
+import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember, EmailSettings } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { notificationService } from './notificationService';
 import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS, MOCK_OFFICES as MOCK_OFFICES_DATA } from './mockData';
@@ -444,9 +444,9 @@ class StorageService {
           const parsed = s ? JSON.parse(s) : {};
           
           // Default structures
-          const defaultGeneral = { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' };
+          const defaultGeneral = { language: 'pt-BR' as const, dateFormat: 'DD/MM/YYYY' as const, compactMode: false, dataJudApiKey: '' };
           const defaultNotifications = { email: true, desktop: true, sound: false, dailyDigest: false };
-          const defaultEmailPrefs = {
+          const defaultEmailPrefs: EmailSettings = {
               enabled: false,
               frequency: 'immediate',
               categories: { deadlines: true, processes: true, events: true, financial: false, marketing: true },
@@ -454,7 +454,7 @@ class StorageService {
           };
           const defaultAutomation = { autoArchiveWonCases: false, autoSaveDrafts: true };
 
-          // Merge parsed with defaults to ensure all properties exist
+          // Deep merge to ensure all keys exist
           return {
             general: { ...defaultGeneral, ...(parsed.general || {}) },
             notifications: { ...defaultNotifications, ...(parsed.notifications || {}) },
