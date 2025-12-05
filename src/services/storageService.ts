@@ -356,14 +356,22 @@ class StorageService {
 
   async checkAccountStatus(userId: string): Promise<{ deleted_at: string | null }> {
     if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase
-            .from(TABLE_NAMES.PROFILES)
-            .select('deleted_at')
-            .eq('id', userId)
-            .single();
-        
-        if (error) return { deleted_at: null };
-        return data;
+        try {
+            const { data, error } = await supabase
+                .from(TABLE_NAMES.PROFILES)
+                .select('deleted_at')
+                .eq('id', userId)
+                .maybeSingle();
+            
+            // Supressão de erro 400 (Coluna inexistente) ou 406
+            if (error) {
+                // Silently return null to prevent console spam
+                return { deleted_at: null };
+            }
+            return data || { deleted_at: null };
+        } catch (e) {
+            return { deleted_at: null };
+        }
     }
     return { deleted_at: null };
   }
@@ -444,7 +452,10 @@ class StorageService {
                     ip: 'IP_PLACEHOLDER',
                     date: new Date().toISOString()
                 }]).then(({ error }) => {
-                    if(error) console.warn("Failed to log to Supabase", error);
+                    // Suppress FK violations caused by dirty DB state (User exists in Auth but not in Profiles)
+                    if(error && error.code !== '23503') {
+                        console.warn("Failed to log to Supabase", error);
+                    }
                 });
             }
         });
@@ -502,7 +513,13 @@ class StorageService {
       if (isSupabaseConfigured && supabase) {
           this.getUserSession().then(s => {
               if (s.userId) {
-                  supabase!.from(TABLE_NAMES.PROFILES).update({ settings }).eq('id', s.userId);
+                  supabase!.from(TABLE_NAMES.PROFILES).update({ settings }).eq('id', s.userId)
+                  .then(({ error }) => {
+                      if (error && error.code === '23503') {
+                          // Profile missing, try create simple profile or ignore
+                          console.warn("Cannot save settings: Profile missing for user.");
+                      }
+                  });
               }
           });
       }
