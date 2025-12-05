@@ -97,9 +97,15 @@ export const Login: React.FC = () => {
           setShowReactivateModal(true);
       } else {
           let errorMessage = err.message || 'Ocorreu um erro.';
-          if (errorMessage === 'Invalid login credentials') {
-            errorMessage = 'E-mail ou senha incorretos.';
+          
+          // Tratamento específico para login inválido
+          if (errorMessage.includes('Invalid login credentials')) {
+            errorMessage = 'E-mail ou senha incorretos. Se não possui conta, crie uma.';
+          } else if (errorMessage === 'Usuário não encontrado. Verifique o e-mail ou crie uma conta.') {
+            // Mensagem vinda do Mock Service
+            errorMessage = 'Usuário não encontrado. Verifique o e-mail ou crie uma conta.';
           }
+          
           addToast(errorMessage, 'error');
       }
     } finally {

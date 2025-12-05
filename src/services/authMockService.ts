@@ -5,26 +5,45 @@ import { storageService } from './storageService';
 // Simula atraso de rede
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Chave para armazenar usuários registrados no LocalStorage (apenas para simulação)
+const MOCK_USERS_KEY = '@JurisControl:mock_users';
+
 export const authMockService = {
   async login(email: string, password: string): Promise<User> {
     await delay(1200);
     
-    // Simulação básica: qualquer email com senha válida entra
+    // Recupera usuários registrados localmente + Usuários hardcoded para teste
+    const storedUsers = JSON.parse(localStorage.getItem(MOCK_USERS_KEY) || '[]');
+    const defaultUsers = ['advmikerosa@outlook.com', 'demo@juriscontrol.com', 'admin@admin.com'];
+    
+    // Verifica se o usuário existe (Hardcoded ou Registrado)
+    const userExists = defaultUsers.includes(email) || storedUsers.some((u: any) => u.email === email);
+
+    if (!userExists) {
+      throw new Error('Usuário não encontrado. Verifique o e-mail ou crie uma conta.');
+    }
+
+    // Simulação básica de senha
     if (password.length < 6) {
       throw new Error('Senha incorreta.');
     }
 
+    // Retorna o usuário (busca do storage se existir, senão cria o mock padrão)
+    const storedUser = storedUsers.find((u: any) => u.email === email);
+    
+    if (storedUser) return storedUser;
+
     return {
       id: 'u1',
-      name: 'Dr. Usuário', // Simulando retorno do banco
+      name: 'Dr. Usuário Demo', 
       username: '@drusuario',
       email: email,
       avatar: `https://ui-avatars.com/api/?name=Dr+Usuario&background=6366f1&color=fff`,
       provider: 'email',
-      offices: ['office-1'], // IDs dos escritórios que participa (Matches mockData.ts)
+      offices: ['office-1'], 
       currentOfficeId: 'office-1',
       twoFactorEnabled: false,
-      emailVerified: false, // Inicia como falso para demonstrar a funcionalidade
+      emailVerified: true, 
       phone: '(11) 99999-8888',
       oab: 'SP/123.456',
       role: 'Sócio Fundador'
@@ -34,8 +53,10 @@ export const authMockService = {
   async register(name: string, email: string, password: string, oab?: string, officeData?: { mode: 'create' | 'join', name?: string, handle: string }): Promise<User> {
     await delay(1500);
 
+    const storedUsers = JSON.parse(localStorage.getItem(MOCK_USERS_KEY) || '[]');
+
     // Simula validação de email existente
-    if (email === 'erro@lexglass.com') {
+    if (storedUsers.some((u: any) => u.email === email) || email === 'erro@lexglass.com') {
       throw new Error('Este e-mail já está em uso.');
     }
 
@@ -54,14 +75,13 @@ export const authMockService = {
       offices: [], 
       currentOfficeId: undefined,
       twoFactorEnabled: false,
-      emailVerified: false,
+      emailVerified: true, // No mock já nasce verificado
       phone: '',
       oab: oab || '',
       role: 'Advogado'
     };
 
     // CRITICAL: Store user temporarily to simulate authenticated state for storage service calls
-    // This prevents "Cannot read properties of undefined (reading 'name')" in storageService.createOffice
     localStorage.setItem('@JurisControl:user', JSON.stringify(user));
 
     try {
@@ -80,15 +100,17 @@ export const authMockService = {
         user.offices = [office.id];
         user.currentOfficeId = office.id;
         
-        // Update user in storage with new office linkage so dashboard can load
+        // Update user in session
         localStorage.setItem('@JurisControl:user', JSON.stringify(user));
       }
     } catch (e) {
       console.error("Mock register office error", e);
-      // Clean up if critical failure, though in mock we usually just throw
-      // localStorage.removeItem('@JurisControl:user');
       throw e;
     }
+
+    // Salva no "banco de dados" fake para persistir login futuro
+    storedUsers.push(user);
+    localStorage.setItem(MOCK_USERS_KEY, JSON.stringify(storedUsers));
 
     return user;
   },
@@ -109,10 +131,10 @@ export const authMockService = {
       email: `user.${provider}@email.com`,
       avatar: `https://ui-avatars.com/api/?name=User+Social&background=random`,
       provider: provider,
-      offices: [], // Novo usuário social também entra sem escritório
+      offices: [],
       currentOfficeId: undefined,
-      twoFactorEnabled: true, // Social logins often count as MFA
-      emailVerified: true, // Login social geralmente implica verificação
+      twoFactorEnabled: true, 
+      emailVerified: true, 
       phone: '',
       oab: '',
       role: 'Advogado'
