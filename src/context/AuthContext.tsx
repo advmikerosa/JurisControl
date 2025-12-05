@@ -118,16 +118,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!mounted) return;
-            if (session?.user) {
-               // Em mudanças de estado (ex: magic link click), revalidar
-               if (event === 'SIGNED_IN') {
-                   await handleUserSessionValidation(session);
-               } else {
-                   mapSupabaseUserToContext(session.user);
-               }
-            } else {
+            
+            if (event === 'SIGNED_IN' && session?.user) {
+               await handleUserSessionValidation(session);
+            } else if (event === 'SIGNED_OUT') {
                setUser(null);
                setIsAuthenticated(false);
+            } else if (session?.user) {
+               // Apenas atualização de token ou initial session
+               mapSupabaseUserToContext(session.user);
             }
           });
 
@@ -165,14 +164,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleUserSessionValidation = async (session: any) => {
       const sbUser = session.user;
       
-      // 1. Checar status da conta (Soft Delete)
+      // 1. Checar status da conta (Soft Delete) no banco
       const status = await storageService.checkAccountStatus(sbUser.id);
       
       if (status.deleted_at) {
           // A conta está marcada como deletada.
           // Verificar se o login foi feito via OTP/MagicLink (indicando confirmação de e-mail para reativação)
-          const amr = session.user?.amr || []; // Authentication Method Reference
-          const isOtpLogin = amr.some((m: any) => m.method === 'otp' || m.method === 'magic_link');
+          // 'amr' (Authentication Method Reference) contém o método usado.
+          const amr = session.user?.amr || []; 
+          const isOtpLogin = amr.some((m: any) => m.method === 'otp' || m.method === 'magic_link' || m.method === 'link');
 
           if (isOtpLogin) {
               // Usuário clicou no link de reativação -> Reativar automaticamente
@@ -186,8 +186,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
           } else {
               // Login por senha ou sessão antiga -> Bloquear
+              console.warn("Bloqueando acesso: Conta suspensa e login não foi via OTP.");
               await logout(false);
-              // Não podemos lançar erro aqui pois é um useEffect, mas o logout impede o acesso.
           }
       } else {
           // Conta ativa normal
@@ -222,7 +222,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message);
 
-      // 2. Check "Soft Delete" status immediately
+      // 2. Check "Soft Delete" status immediately AFTER login
       if (data.user) {
           const status = await storageService.checkAccountStatus(data.user.id);
           
@@ -250,13 +250,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               email,
               options: {
                   shouldCreateUser: false,
-                  // Opcional: Redirecionar para uma rota que lida com o callback
+                  // Opcional: Redirecionar para uma rota limpa ou dashboard
                   // emailRedirectTo: window.location.origin 
               }
           });
           if (error) throw new Error("Erro ao enviar e-mail: " + error.message);
       } else {
-          // Mock mode: Just re-enable
+          // Mock mode: Just re-enable immediately
           await storageService.reactivateAccount();
       }
   }, []);

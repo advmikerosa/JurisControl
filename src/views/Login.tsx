@@ -92,6 +92,8 @@ export const Login: React.FC = () => {
     } catch (err: any) {
       // Handle Account Suspended Check
       if (err.code === 'ACCOUNT_SUSPENDED') {
+          // Pre-fill email for confirmation
+          setReactivateConfirmEmail(email); 
           setShowReactivateModal(true);
       } else {
           let errorMessage = err.message || 'Ocorreu um erro.';
@@ -112,6 +114,7 @@ export const Login: React.FC = () => {
       }
       setIsReactivating(true);
       try {
+          // Instead of direct reactivation, we request OTP
           await requestReactivationOtp(email);
           addToast('Enviamos um link de reativação para seu e-mail. Verifique sua caixa de entrada.', 'success', 6000);
           setShowReactivateModal(false);
