@@ -97,11 +97,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             
             const selected = preferred || myOffices[0];
             setCurrentOffice(selected);
-            
-            // If user has no currentOfficeId preference set, or it's invalid, update it silently
-            if (!user.currentOfficeId || (user.currentOfficeId !== selected.id)) {
-                // Optional: We could trigger an updateProfile here, but let's keep it purely local state for UI responsiveness
-            }
         } else {
             // Fallback: If absolutely no office found (e.g. error 500 prevented load or user has none)
             console.log("No offices found for this user.");
@@ -229,15 +224,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           }}
           transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 2 }}
           className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-violet-300/30 dark:bg-violet-900/20 rounded-full blur-[120px]" 
-        />
-        <motion.div 
-          animate={{ 
-            x: [0, 30, 0], 
-            y: [0, -50, 0],
-            opacity: [0.1, 0.3, 0.1]
-          }}
-          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 5 }}
-          className="absolute top-[40%] left-[30%] w-[30%] h-[30%] bg-emerald-300/10 dark:bg-emerald-900/10 rounded-full blur-[100px]" 
         />
       </div>
 

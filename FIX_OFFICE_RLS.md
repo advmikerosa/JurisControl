@@ -25,7 +25,10 @@ USING (
 );
 
 -- Permitir inserção na tabela de membros (necessário para "Entrar" e Trigger de criação)
+-- Removemos versões anteriores da política para evitar erro de duplicidade
 DROP POLICY IF EXISTS "Manage members" ON public.office_members;
+DROP POLICY IF EXISTS "Join or Manage members" ON public.office_members;
+
 CREATE POLICY "Join or Manage members" ON public.office_members
 FOR ALL
 USING (
