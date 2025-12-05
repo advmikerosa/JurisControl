@@ -202,10 +202,42 @@ class StorageService {
     const offices = await this.getOffices();
     return offices.find(o => o.id === id);
   }
+  
+  async saveOffice(office: Office): Promise<void> {
+    if (isSupabaseConfigured && supabase) {
+        const payload = {
+            id: office.id,
+            name: office.name,
+            handle: office.handle,
+            location: office.location,
+            owner_id: office.ownerId,
+            logo_url: office.logoUrl,
+            created_at: office.createdAt,
+            area_of_activity: office.areaOfActivity,
+            social: office.social
+        };
+        
+        await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
+        this.logActivity(`Atualizou escritório: ${office.name}`);
+    } else {
+        const offices = await this.getOffices();
+        const index = offices.findIndex(o => o.id === office.id);
+        if (index >= 0) {
+          offices[index] = office;
+          localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
+          this.logActivity(`Atualizou dados do escritório: ${office.name}`);
+        }
+    }
+  }
 
-  async createOffice(officeData: Partial<Office>, explicitUserId?: string, userDetails?: { name: string, email: string }): Promise<Office> {
+  /**
+   * createOffice
+   * @param officeData Partial office data
+   * @param explicitOwnerId (Optional) Use this ID instead of fetching from session. Useful during registration.
+   */
+  async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, userDetails?: { name: string, email: string }): Promise<Office> {
       const session = await this.getUserSession();
-      const userId = explicitUserId || session.userId || 'local';
+      const userId = explicitOwnerId || session.userId || 'local';
       
       let userName = userDetails?.name || 'User';
       let userEmail = userDetails?.email || '';
@@ -225,6 +257,8 @@ class StorageService {
 
       if (isSupabaseConfigured && supabase) {
           await this.ensureProfileExists();
+          
+          // FIX: Remover 'members' do payload. O trigger 'on_office_created' no banco adiciona o dono automaticamente.
           const payload = {
               name: officeData.name || 'Novo Escritório',
               handle: handle,
@@ -232,20 +266,41 @@ class StorageService {
               owner_id: userId,
               social: {}
           };
+
           const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(payload).select().single();
-          if (error) throw error;
           
+          if (error) {
+              if (error.code === '23505') throw new Error("Este identificador (@handle) já está em uso.");
+              throw new Error(error.message);
+          }
+          
+          this.logActivity(`Criou novo escritório (Supabase): ${payload.name}`);
+          
+          // Retornar objeto Office estruturado para o frontend
           return {
               id: data.id,
               name: data.name,
               handle: data.handle,
-              ownerId: data.owner_id,
               location: data.location,
-              members: [{ userId: userId, name: userName, email: userEmail, role: 'Admin', permissions: { financial: true, cases: true, documents: true, settings: true } } as OfficeMember],
-              createdAt: data.created_at
-          };
+              ownerId: data.owner_id,
+              createdAt: data.created_at,
+              members: [{ 
+                  userId: userId, 
+                  name: userName, 
+                  email: userEmail, 
+                  role: 'Admin', 
+                  permissions: { financial: true, cases: true, documents: true, settings: true } 
+              } as OfficeMember],
+              social: data.social
+          } as Office;
+
       } else {
+          // MOCK MODE
           const offices = this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
+          if (offices.some(o => o.handle.toLowerCase() === handle.toLowerCase())) {
+            throw new Error("Este identificador de escritório (@handle) já está em uso.");
+          }
+
           const newOffice: Office = {
               id: `office-${Date.now()}`,
               name: officeData.name || 'Novo Escritório',
@@ -267,12 +322,49 @@ class StorageService {
           const session = await this.getUserSession();
           if (!session.userId) throw new Error("Login necessário.");
           await this.ensureProfileExists();
-          const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('id, name, owner_id').eq('handle', handle).single();
-          if (error || !office) throw new Error("Escritório não encontrado.");
           
-          await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert({ office_id: office.id, user_id: session.userId, role: 'Advogado' });
-          return { id: office.id, name: office.name, handle: handle, ownerId: office.owner_id, location: '', members: [] };
+          // 1. Busca o ID do escritório pelo handle (Permitido pelo RLS 'View offices')
+          const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('id, name, owner_id, handle').eq('handle', handle).single();
+          
+          if (error || !office) {
+              console.error("Join Office Find Error:", error);
+              throw new Error("Escritório não encontrado com este identificador.");
+          }
+          
+          // 2. Tenta inserir na tabela de membros (Permitido pelo RLS 'Join or Manage members')
+          // Primeiro verifica se já existe para evitar erro 409
+          const { data: existing } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS)
+                .select('id')
+                .eq('office_id', office.id)
+                .eq('user_id', session.userId)
+                .maybeSingle();
+
+          if (!existing) {
+              const { error: joinError } = await supabase.from(TABLE_NAMES.OFFICE_MEMBERS).insert({ 
+                  office_id: office.id, 
+                  user_id: session.userId, 
+                  role: 'Advogado',
+                  permissions: { financial: false, cases: true, documents: true, settings: false }
+              });
+              
+              if (joinError) {
+                  console.error("Join Office Insert Error:", joinError);
+                  throw new Error("Não foi possível entrar no escritório. Tente novamente.");
+              }
+          }
+
+          this.logActivity(`Entrou no escritório: ${office.name}`);
+          
+          return { 
+              id: office.id, 
+              name: office.name, 
+              handle: handle, 
+              ownerId: office.owner_id, 
+              location: '', 
+              members: [] 
+          };
       } else {
+          // MOCK MODE
           const offices = this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
           const office = offices.find(o => o.handle === handle);
           if (!office) throw new Error("Escritório não encontrado.");
@@ -280,14 +372,9 @@ class StorageService {
       }
   }
 
-  async saveOffice(office: Office) {
-      if (isSupabaseConfigured && supabase) {
-          await supabase.from(TABLE_NAMES.OFFICES).update({ name: office.name, location: office.location, area_of_activity: office.areaOfActivity, logo_url: office.logoUrl, social: office.social }).eq('id', office.id);
-      } else {
-          const offices = this.getLocal<Office[]>(LOCAL_KEYS.OFFICES, []);
-          const index = offices.findIndex(o => o.id === office.id);
-          if (index >= 0) { offices[index] = office; this.setLocal(LOCAL_KEYS.OFFICES, offices); }
-      }
+  async saveOfficeUpdate(office: Office) {
+      // Wrapper para compatibilidade com interface antiga se necessário
+      return this.saveOffice(office);
   }
 
   async inviteUserToOffice(officeId: string, userHandle: string): Promise<boolean> {
