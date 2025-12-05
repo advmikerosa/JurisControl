@@ -1,30 +1,39 @@
 
 # Correção de Permissões (RLS) e Triggers
 
-Copie e cole o código abaixo no **SQL Editor** do Supabase para corrigir os erros de "permissão negada" ao tentar criar ou entrar em escritórios.
+Copie e cole o código abaixo no **SQL Editor** do Supabase. Este script corrige as políticas de segurança para garantir que o usuário consiga ver o escritório que acabou de criar ou entrar.
 
 ```sql
 -- ============================================================
 -- 1. CORREÇÃO DE PERMISSÕES (RLS)
 -- ============================================================
 
--- Permitir que qualquer usuário autenticado busque escritórios
--- (Necessário para validar se o @handle existe e para encontrar o ID ao entrar)
+-- Permitir que qualquer usuário autenticado busque escritórios (necessário para o "Entrar no Escritório")
 DROP POLICY IF EXISTS "View offices" ON public.offices;
 CREATE POLICY "View offices" ON public.offices
 FOR SELECT
 USING ( true );
 
--- Permitir que o usuário adicione a si mesmo como membro (Join)
--- A política anterior só permitia se o usuário JÁ FOSSE membro.
+-- Permitir que o usuário veja associações onde ELE é o usuário ou o escritório pertence a ele
+DROP POLICY IF EXISTS "View members" ON public.office_members;
+CREATE POLICY "View members" ON public.office_members
+FOR SELECT
+USING (
+  user_id = auth.uid() OR 
+  EXISTS (SELECT 1 FROM public.offices WHERE id = office_id AND owner_id = auth.uid())
+);
+
+-- Permitir inserção na tabela de membros (necessário para "Entrar" e Trigger de criação)
 DROP POLICY IF EXISTS "Manage members" ON public.office_members;
 CREATE POLICY "Join or Manage members" ON public.office_members
 FOR ALL
 USING (
-  public.check_is_member(office_id) OR user_id = auth.uid()
+  user_id = auth.uid() OR 
+  EXISTS (SELECT 1 FROM public.offices WHERE id = office_id AND owner_id = auth.uid())
 )
 WITH CHECK (
-  public.check_is_member(office_id) OR user_id = auth.uid()
+  user_id = auth.uid() OR 
+  EXISTS (SELECT 1 FROM public.offices WHERE id = office_id AND owner_id = auth.uid())
 );
 
 -- ============================================================
@@ -45,7 +54,8 @@ BEGIN
     new.owner_id,
     'Admin',
     '{"cases": true, "financial": true, "documents": true, "settings": true}'::jsonb
-  );
+  )
+  ON CONFLICT (office_id, user_id) DO NOTHING;
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
