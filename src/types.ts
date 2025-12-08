@@ -407,17 +407,3 @@ export interface SystemNotification {
   read: boolean;
   timestamp: Date;
 }
-
-export interface ExtractedMovementData {
-  type: string;
-  date: string;
-  title: string;
-  summary: string;
-  confidence: number;
-  deadlines: {
-    title: string;
-    date: string;
-    priority: Priority;
-    description: string;
-  }[];
-}

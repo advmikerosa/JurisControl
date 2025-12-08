@@ -92,7 +92,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
             `}
           >
             {title && (
-              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/30 flex justify-between items-center sticky top-0 backdrop-blur-md z-10">
+              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/30 flex justify-between items-center">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">{title}</span>
                 <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                   <X size={14} />

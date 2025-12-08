@@ -1,131 +1,17 @@
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { ExtractedMovementData, Priority } from '../types';
 
-// Interface para chunks de resposta do chat
-interface AiResponseChunk {
-  text: string;
-}
-
-class AiService {
-  private ai: GoogleGenAI | null = null;
-  private modelText: string = "gemini-2.5-flash";
-  private modelVision: string = "gemini-2.5-flash-image";
-
-  constructor() {
-    const apiKey = process.env.API_KEY || (import.meta.env && import.meta.env.VITE_API_KEY);
-    
-    if (apiKey) {
-      this.ai = new GoogleGenAI({ apiKey });
-    } else {
-      console.warn("JurisAI: API_KEY não encontrada. O assistente funcionará em modo DEMO.");
-    }
-  }
-
-  /**
-   * Envia uma mensagem para o modelo em modo chat com histórico.
-   */
-  async *sendMessageStream(history: { role: string; parts: { text: string }[] }[], message: string): AsyncGenerator<AiResponseChunk> {
-    if (this.ai) {
-      try {
-        const chat = this.ai.chats.create({
-          model: this.modelText,
-          history: history,
-          config: {
-            systemInstruction: "Você é o JurisAI, um assistente jurídico sênior do sistema JurisControl. Responda de forma concisa, profissional e em PT-BR. Use Markdown.",
-          },
-        });
-
-        const result = await chat.sendMessageStream({ message });
-        
-        for await (const chunk of result) {
-          const c = chunk as GenerateContentResponse;
-          if (c.text) {
-            yield { text: c.text };
-          }
-        }
-      } catch (error) {
-        console.error("JurisAI Error:", error);
-        yield { text: "⚠️ Erro ao conectar com a IA. Verifique sua chave de API ou conexão." };
+// Serviço de IA desativado para versão de produção/demo sem dependências externas pesadas.
+export const aiService = {
+  // Métodos mantidos como placeholder para evitar quebra de referências antigas não refatoradas,
+  // mas agora retornam null ou vazio.
+  async sendMessageStream() {
+    return {
+      async *[Symbol.asyncIterator]() {
+        yield { text: "O assistente de IA está desativado nesta versão." };
       }
-    } else {
-      // MOCK MODE
-      const mockResponse = `[MODO DEMO] Olá! A chave da API do Gemini não foi configurada. \n\nSua mensagem: "${message}" foi processada localmente.`;
-      const chunks = mockResponse.split(/(.{5})/g).filter(Boolean);
-      for (const chunk of chunks) {
-        await new Promise(r => setTimeout(r, 20));
-        yield { text: chunk };
-      }
-    }
+    };
+  },
+
+  async analyzeLegalDocument() {
+    return null;
   }
-
-  /**
-   * Analisa um documento (Imagem) para extrair dados.
-   */
-  async analyzeLegalDocument(base64Data: string, mimeType: string): Promise<ExtractedMovementData> {
-    if (this.ai) {
-        try {
-            const prompt = `Analise este documento jurídico. Extraia:
-            1. Tipo do documento (Decisão, Sentença, Petição, etc).
-            2. Data do documento.
-            3. Título curto.
-            4. Resumo de 1 parágrafo.
-            5. Prazos identificados (título, data no formato YYYY-MM-DD, prioridade).
-            
-            Retorne APENAS um JSON válido com esta estrutura:
-            {
-              "type": "string",
-              "date": "YYYY-MM-DD",
-              "title": "string",
-              "summary": "string",
-              "confidence": number (0-100),
-              "deadlines": [{"title": "string", "date": "YYYY-MM-DD", "priority": "Alta"|"Média"|"Baixa", "description": "string"}]
-            }`;
-
-            const response = await this.ai.models.generateContent({
-                model: this.modelVision,
-                contents: {
-                    parts: [
-                        { inlineData: { mimeType, data: base64Data } },
-                        { text: prompt }
-                    ]
-                },
-                config: {
-                    responseMimeType: "application/json"
-                }
-            });
-
-            const text = response.text;
-            if (!text) throw new Error("Sem resposta da IA");
-            
-            return JSON.parse(text) as ExtractedMovementData;
-
-        } catch (error) {
-            console.error("Erro na análise de documento com IA:", error);
-            throw error;
-        }
-    }
-
-    // MOCK DATA
-    return new Promise(resolve => {
-        setTimeout(() => {
-            resolve({
-                type: 'Decisão',
-                date: new Date().toISOString().split('T')[0],
-                title: 'Decisão Interlocutória (Simulada)',
-                summary: 'Deferimento parcial da tutela de urgência (Demo). Configure a API Key para análise real.',
-                confidence: 95,
-                deadlines: [
-                    {
-                        title: 'Prazo para Recurso',
-                        date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                        priority: Priority.HIGH,
-                        description: 'Prazo de 15 dias úteis.'
-                    }
-                ]
-            });
-        }, 2000);
-    });
-  }
-}
-
-export const aiService = new AiService();
+};
