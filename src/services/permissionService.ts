@@ -56,7 +56,8 @@ class PermissionService {
     if (office.ownerId === user.id) return true;
 
     // 2. Encontrar o membro dentro do escritório
-    const member = office.members.find(m => m.userId === user.id);
+    // FIX: Adicionado operador de navegação segura (?.members) para evitar crash se members for undefined
+    const member = office.members?.find(m => m.userId === user.id);
     
     // Se não for membro, acesso negado
     if (!member) return false;
@@ -71,10 +72,12 @@ class PermissionService {
     }
 
     // 4. (Opcional) Verificar permissões granulares/customizadas
-    if (resource === 'financial' && member.permissions.financial && action === 'view') return true;
-    if (resource === 'cases' && member.permissions.cases && action === 'view') return true;
-    if (resource === 'documents' && member.permissions.documents && action === 'view') return true;
-    if (resource === 'settings' && member.permissions.settings && action === 'view') return true;
+    if (member.permissions) {
+        if (resource === 'financial' && member.permissions.financial && action === 'view') return true;
+        if (resource === 'cases' && member.permissions.cases && action === 'view') return true;
+        if (resource === 'documents' && member.permissions.documents && action === 'view') return true;
+        if (resource === 'settings' && member.permissions.settings && action === 'view') return true;
+    }
     
     return false;
   }
@@ -93,7 +96,7 @@ class PermissionService {
     
     if (office.ownerId === user.id) return 'Acesso permitido (Proprietário).';
 
-    const member = office.members.find(m => m.userId === user.id);
+    const member = office.members?.find(m => m.userId === user.id);
     if (!member) return 'Usuário não pertence a este escritório.';
 
     const roleCaps = ROLE_CAPABILITIES[member.role];

@@ -48,10 +48,11 @@ class StorageService {
       try {
         const { data } = await supabase.auth.getSession();
         if (data.session) {
-            // Fetch currentOfficeId from local storage cache or user metadata
             const storedUser = localStorage.getItem('@JurisControl:user');
             const localUser = storedUser ? JSON.parse(storedUser) : null;
-            return { userId: data.session.user.id, officeId: localUser?.currentOfficeId || data.session.user.user_metadata?.currentOfficeId || null };
+            // Prioritize local cache for officeId to reduce latency, fallback to metadata
+            const officeId = localUser?.currentOfficeId || data.session.user.user_metadata?.currentOfficeId || null;
+            return { userId: data.session.user.id, officeId };
         }
       } catch {}
     }
@@ -60,7 +61,7 @@ class StorageService {
         const u = JSON.parse(stored);
         return { userId: u.id, officeId: u.currentOfficeId || null };
     }
-    return { userId: 'local-user', officeId: 'office-1' }; // Default mock office
+    return { userId: 'local-user', officeId: 'office-1' }; 
   }
 
   private getLocal<T>(key: string, defaultValue: T): T {
@@ -81,8 +82,8 @@ class StorageService {
   }
 
   private filterByOffice<T extends { officeId?: string }>(items: T[], officeId: string): T[] {
-    if (!officeId) return items; // Return all if no office context (demo)
-    return items.filter(item => item.officeId === officeId || !item.officeId); // !item.officeId for backward compatibility
+    if (!officeId) return items;
+    return items.filter(item => item.officeId === officeId || !item.officeId);
   }
 
   public async ensureProfileExists(): Promise<void> {
@@ -193,6 +194,7 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
       const { id, ...rest } = clientToSave;
+      // If ID is generated locally (starts with cli-), let DB generate UUID or use it if format allows
       const payload = { ...rest, id: id && !id.startsWith('cli-') ? id : undefined }; 
       await supabase.from(TABLE_NAMES.CLIENTS).upsert(payload);
     } else {
@@ -202,7 +204,7 @@ class StorageService {
           list[idx] = clientToSave;
       } else {
           if (!clientToSave.id || clientToSave.id.startsWith('cli-')) {
-             // Keep generated ID
+             // Keep generated ID if local
           }
           list.unshift(clientToSave);
       }
@@ -386,7 +388,13 @@ class StorageService {
 
   async saveDocument(docData: SystemDocument) {
     const s = await this.getUserSession();
-    const docToSave = { ...docData, officeId: s.officeId || 'office-1', userId: s.userId || undefined };
+    
+    // Explicitly handle userId potentially being null from session, defaulting to undefined for type safety
+    const docToSave: SystemDocument = { 
+        ...docData, 
+        officeId: s.officeId || 'office-1', 
+        userId: s.userId || undefined 
+    };
 
     if (isSupabaseConfigured && supabase) {
       await supabase.from(TABLE_NAMES.DOCUMENTS).insert(docToSave);
@@ -740,6 +748,7 @@ class StorageService {
         this.setLocal(LOCAL_KEYS.CASES, MOCK_CASES);
         this.setLocal(LOCAL_KEYS.TASKS, MOCK_TASKS);
         this.setLocal(LOCAL_KEYS.FINANCIAL, MOCK_FINANCIALS);
+        this.setLocal(LOCAL_KEYS.OFFICES, MOCK_OFFICES_DATA);
     }
   }
 
