@@ -9,7 +9,17 @@ export const MOCK_OFFICES: Office[] = [
     handle: '@silva_adv',
     ownerId: 'u1',
     location: 'São Paulo - SP',
-    members: [],
+    // FIX: Adicionado membro u1 como Admin para garantir acesso ao menu
+    members: [
+      {
+        userId: 'u1',
+        name: 'Dr. Usuário Demo',
+        email: 'advmikerosa@outlook.com', // E-mail usado no login
+        role: 'Admin',
+        permissions: { financial: true, cases: true, documents: true, settings: true },
+        avatarUrl: 'https://ui-avatars.com/api/?name=Dr+Usuario&background=6366f1&color=fff'
+      }
+    ],
     createdAt: new Date().toISOString(),
     areaOfActivity: 'Full Service'
   }

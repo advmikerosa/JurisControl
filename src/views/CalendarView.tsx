@@ -1,8 +1,9 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { storageService } from '../services/storageService';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Gavel, CheckSquare, Clock, Plus, Users, StickyNote, Bell, Briefcase, Loader2, Save, X, Search, GripVertical, MoreVertical } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Gavel, CheckSquare, Plus, Users, StickyNote, Bell, Search, GripVertical, MoreVertical, Loader2, Save } from 'lucide-react';
 import { LegalCase, Task, Priority, Client } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';

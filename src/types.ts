@@ -1,4 +1,5 @@
 
+
 export enum CaseStatus {
   ACTIVE = 'Ativo',
   PENDING = 'Pendente',
@@ -36,24 +37,6 @@ export type CasePhase =
 
 export type ClientType = 'PF' | 'PJ';
 export type ClientStatus = 'Ativo' | 'Inativo' | 'Sob Análise' | 'Em Litígio' | 'Lead';
-
-// --- AI Extraction Types ---
-export interface ExtractedDeadline {
-  title: string;
-  date: string; // YYYY-MM-DD
-  priority: Priority;
-  description?: string;
-}
-
-export interface ExtractedMovementData {
-  type: 'Andamento' | 'Despacho' | 'Petição' | 'Audiência' | 'Nota' | 'Sentença' | 'Decisão';
-  date: string; 
-  title: string;
-  summary: string;
-  deadlines: ExtractedDeadline[];
-  value?: number;
-  confidence: number;
-}
 
 // --- Security & Permissions Types ---
 export type PermissionResource = 'financial' | 'cases' | 'clients' | 'documents' | 'settings' | 'team';
@@ -423,4 +406,18 @@ export interface SystemNotification {
   type: NotificationType;
   read: boolean;
   timestamp: Date;
+}
+
+export interface ExtractedMovementData {
+  type: string;
+  date: string;
+  title: string;
+  summary: string;
+  confidence: number;
+  deadlines: {
+    title: string;
+    date: string;
+    priority: Priority;
+    description: string;
+  }[];
 }

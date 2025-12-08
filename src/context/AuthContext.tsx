@@ -125,8 +125,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                setUser(null);
                setIsAuthenticated(false);
             } else if (session?.user) {
-               // Apenas atualização de token ou initial session
-               // Para evitar loop, chamamos map diretamente se não for SIGNED_IN
                mapSupabaseUserToContext(session.user);
             }
           });
@@ -159,10 +157,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => { mounted = false; };
   }, []);
 
-  /**
-   * Process Pending Office Setup
-   * Checks if user has a pending office creation request from sign up and executes it.
-   */
   const processPendingSetup = async (session: any) => {
     if (!isSupabaseConfigured || !supabase) return;
 
@@ -170,7 +164,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const metadata = sbUser.user_metadata || {};
     
     if (metadata.pending_office_setup) {
-        console.log("Found pending office setup, processing...", metadata.pending_office_setup);
         const { mode, name, handle } = metadata.pending_office_setup;
         
         try {
@@ -181,10 +174,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     name,
                     handle,
                     location: 'Brasil'
-                }); // uses session implicitly via storageService internals
+                }); 
 
-                // Update metadata: clear pending, set current office (cache)
-                // Use non-null assertion (!) because we guarded isSupabaseConfigured && supabase at top
                 await supabase!.auth.updateUser({
                     data: { 
                         pending_office_setup: null,
@@ -192,7 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         currentOfficeId: newOffice.id
                     }
                 });
-                return true; // Indicates an update happened
+                return true; 
             } else if (mode === 'join' && handle) {
                 const joinedOffice = await storageService.joinOffice(handle);
                 
@@ -207,53 +198,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         } catch (e) {
             console.error("Error processing pending office setup:", e);
-            // We don't clear the pending setup on error so it might retry later or user can manually fix
         }
     }
     return false;
   };
 
-  /**
-   * Lógica Central de Validação de Usuário (Soft Delete / Reactivation / Pending Setup)
-   */
   const handleUserSessionValidation = async (session: any) => {
       const sbUser = session.user;
       
-      // 1. Checar status da conta (Soft Delete) no banco
       const status = await storageService.checkAccountStatus(sbUser.id);
       
       if (status.deleted_at) {
-          // A conta está marcada como deletada.
           const amr = session.user?.amr || []; 
           const isOtpLogin = amr.some((m: any) => m.method === 'otp' || m.method === 'magic_link' || m.method === 'link');
 
           if (isOtpLogin) {
-              // Usuário clicou no link de reativação -> Reativar automaticamente
               try {
                   await storageService.reactivateAccount();
                   addToast('Sua conta foi reativada com sucesso!', 'success');
-                  // Process pending setup after reactivation if needed
                   await processPendingSetup(session);
-                  // Refresh user data
                   if (supabase) {
                     const { data: { user: refreshedUser } } = await supabase.auth.getUser();
                     mapSupabaseUserToContext(refreshedUser || sbUser);
                   }
               } catch (e) {
-                  console.error("Erro na reativação automática", e);
                   await logout(false);
               }
           } else {
-              // Login por senha ou sessão antiga -> Bloquear
-              console.warn("Bloqueando acesso: Conta suspensa e login não foi via OTP.");
               await logout(false);
           }
       } else {
-          // Conta ativa normal
           const updated = await processPendingSetup(session);
           
           if (updated && supabase) {
-             // If we updated metadata (processed office), fetch fresh user object
              const { data: { user: refreshedUser } } = await supabase.auth.getUser();
              mapSupabaseUserToContext(refreshedUser || sbUser);
           } else {
@@ -285,18 +262,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback(async (email: string, password: string) => {
     if (isSupabaseConfigured && supabase) {
-      // 1. Authenticate with Supabase
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message);
 
-      // 2. Check "Soft Delete" status immediately AFTER login
       if (data.user) {
           const status = await storageService.checkAccountStatus(data.user.id);
           
           if (status.deleted_at) {
-              // IMPORTANTE: Forçar logout imediato para não manter sessão válida
               await supabase.auth.signOut();
-              
               const err = new Error('Esta conta foi excluída. Reative via e-mail.');
               (err as any).code = 'ACCOUNT_SUSPENDED'; 
               throw err;
@@ -321,7 +294,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           if (error) throw new Error("Erro ao enviar e-mail: " + error.message);
       } else {
-          // Mock mode: Just re-enable immediately
           await storageService.reactivateAccount();
       }
   }, []);
@@ -337,7 +309,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: 'Advogado',
             oab: oab || '',
             username: '@' + name.toLowerCase().replace(/\s+/g, ''),
-            // CRITICAL: Save office intent in metadata for execution after email confirmation/login
             pending_office_setup: officeData 
           }
         }
@@ -348,8 +319,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
          throw new Error('Este email já está cadastrado.');
       }
 
-      // If we have a session immediately (auto-confirm enabled), we can try to process immediately to avoid delay
-      // Otherwise, the handleUserSessionValidation logic will pick it up on first login
       if (data.session && data.user && officeData) {
           try {
               if (officeData.mode === 'create' && officeData.name) {
@@ -359,7 +328,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       location: 'Brasil'
                   }, data.user.id, { name, email });
                   
-                  // Clear pending setup since we did it
                   await supabase.auth.updateUser({
                       data: { 
                           pending_office_setup: null,
@@ -379,8 +347,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   });
               }
           } catch (officeError: any) {
-              console.warn("Immediate office creation failed (likely expected if session weak), will retry on login:", officeError);
-              // Do not throw here, user is created. We rely on the pending_office_setup metadata fallback.
+              console.warn("Immediate office creation failed, will retry on login:", officeError);
           }
       }
       return !data.session; 

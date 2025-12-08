@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storageService } from '../services/storageService';
 import { GlassCard } from '../components/ui/GlassCard';
-import { ArrowLeft, Calendar, User, DollarSign, Plus, Paperclip, Clock, CheckCircle, AlertTriangle, Send, Loader2, FileText, Edit2, Check, History, Sparkles } from 'lucide-react';
-import { LegalCase, Task, FinancialRecord, SystemDocument, CaseMovement, ExtractedMovementData } from '../types';
+import { ArrowLeft, Calendar, User, DollarSign, Plus, Paperclip, Clock, CheckCircle, AlertTriangle, Send, Loader2, FileText, Edit2, Check, History } from 'lucide-react';
+import { LegalCase, Task, FinancialRecord, SystemDocument, CaseMovement } from '../types';
 import { useToast } from '../context/ToastContext';
 import { CaseFormModal } from '../components/CaseFormModal';
 import { DocumentUpload } from '../components/DocumentUpload';
@@ -28,7 +29,7 @@ export const CaseDetails: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isSmartUploadOpen, setIsSmartUploadOpen] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
 
   const loadData = async () => {
     if (!id) return;
@@ -83,33 +84,9 @@ export const CaseDetails: React.FC = () => {
     addToast('Movimentação registrada.', 'success');
   };
 
-  const handleSmartUploadSave = async (data: ExtractedMovementData, file: File) => {
+  const handleDocumentSave = async (file: File, meta: { title: string, category: string }) => {
     if (!caseData) return;
     try {
-        const movement: CaseMovement = {
-            id: `mov-${Date.now()}`,
-            date: new Date(data.date).toLocaleDateString('pt-BR'),
-            title: data.title,
-            description: data.summary,
-            type: data.type,
-            author: 'JurisAI'
-        };
-
-        const newTasks: Task[] = data.deadlines.map(dl => ({
-            id: `task-${Date.now()}-${Math.random().toString(36).substr(2,5)}`,
-            officeId: caseData.officeId,
-            title: dl.title,
-            dueDate: new Date(dl.date).toLocaleDateString('pt-BR'),
-            priority: dl.priority,
-            status: 'A Fazer',
-            assignedTo: caseData.responsibleLawyer,
-            description: dl.description,
-            caseId: caseData.id,
-            caseTitle: caseData.title,
-            clientId: caseData.client.id,
-            clientName: caseData.client.name
-        }));
-
         const newDoc: SystemDocument = {
             id: `doc-${Date.now()}`,
             officeId: caseData.officeId,
@@ -117,18 +94,34 @@ export const CaseDetails: React.FC = () => {
             size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
             type: file.name.split('.').pop()?.toUpperCase() || 'FILE',
             date: new Date().toLocaleDateString('pt-BR'),
-            category: 'Processual',
+            category: meta.category,
             caseId: caseData.id
         };
 
-        await storageService.saveSmartMovement(caseData.id, movement, newTasks, newDoc);
+        // Salvar apenas o documento, sem criar movimentação automática complexa
+        await storageService.saveDocument(newDoc);
         
-        setIsSmartUploadOpen(false);
-        addToast('Upload Inteligente processado com sucesso!', 'success');
+        // Opcional: Adicionar uma movimentação simples de registro de upload
+        const movement: CaseMovement = {
+            id: `mov-${Date.now()}`,
+            date: new Date().toLocaleDateString('pt-BR'),
+            title: 'Novo Documento Anexado',
+            description: `Documento "${meta.title}" (${meta.category}) adicionado ao processo.`,
+            type: 'Andamento',
+            author: 'Sistema'
+        };
+        const updatedCase = { 
+            ...caseData, 
+            movements: [movement, ...(caseData.movements || [])] 
+        };
+        await storageService.saveCase(updatedCase);
+
+        setIsUploadOpen(false);
+        addToast('Documento anexado com sucesso!', 'success');
         loadData();
     } catch (e) {
         console.error(e);
-        addToast('Erro ao salvar dados.', 'error');
+        addToast('Erro ao salvar documento.', 'error');
     }
   };
 
@@ -229,8 +222,8 @@ export const CaseDetails: React.FC = () => {
                     <GlassCard className="p-4">
                         <div className="flex justify-between items-center mb-4">
                             <h4 className="text-sm font-bold text-white">Nova Movimentação</h4>
-                            <button onClick={() => setIsSmartUploadOpen(true)} className="text-xs bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all shadow-glow hover:scale-105">
-                                <Sparkles size={12} /> Upload Inteligente (IA)
+                            <button onClick={() => setIsUploadOpen(true)} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all">
+                                <FileText size={12} /> Adicionar Documento
                             </button>
                         </div>
                         <div className="flex gap-3">
@@ -257,7 +250,7 @@ export const CaseDetails: React.FC = () => {
                                         </div>
                                         <h5 className="text-sm font-bold text-white mb-1">{mov.title}</h5>
                                         <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{mov.description}</p>
-                                        <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">{mov.author === 'JurisAI' && <Sparkles size={10} className="text-indigo-400" />} Registrado por: {mov.author}</p>
+                                        <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">Registrado por: {mov.author}</p>
                                     </div>
                                 </div>
                             ))
@@ -274,7 +267,6 @@ export const CaseDetails: React.FC = () => {
                 </div>
             )}
             
-            {/* Other tabs implementation omitted for brevity as they are mainly display logic matching the original */}
             {activeTab === 'tasks' && <div className="text-center py-10 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10"><CheckCircle className="mx-auto mb-2 opacity-50" />{tasks.length > 0 ? `${tasks.length} tarefas vinculadas` : 'Nenhuma tarefa vinculada.'}</div>}
             {activeTab === 'financial' && <div className="text-center py-10 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10"><DollarSign className="mx-auto mb-2 opacity-50" />{financials.length > 0 ? `${financials.length} registros financeiros` : 'Nenhum lançamento financeiro.'}</div>}
             {activeTab === 'docs' && <div className="text-center py-10 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10"><Paperclip className="mx-auto mb-2 opacity-50" />{documents.length > 0 ? `${documents.length} documentos` : 'Nenhum documento anexado.'}</div>}
@@ -297,8 +289,8 @@ export const CaseDetails: React.FC = () => {
         <CaseFormModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} onSave={() => { setIsEditModalOpen(false); loadData(); }} initialData={caseData} />
       )}
 
-      <Modal isOpen={isSmartUploadOpen} onClose={() => setIsSmartUploadOpen(false)} title="Upload Inteligente de Documento" maxWidth="max-w-4xl" footer={null}>
-         <DocumentUpload onSave={handleSmartUploadSave} onCancel={() => setIsSmartUploadOpen(false)} />
+      <Modal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} title="Upload de Documento" maxWidth="max-w-4xl" footer={null}>
+         <DocumentUpload onSave={handleDocumentSave} onCancel={() => setIsUploadOpen(false)} />
       </Modal>
     </div>
   );

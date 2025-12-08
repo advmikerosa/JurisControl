@@ -1,9 +1,9 @@
 
-import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember } from '../types';
+import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, CaseMovement, SearchResult, OfficeMember } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
+import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS, MOCK_OFFICES as MOCK_OFFICES_DATA } from './mockData';
 import { notificationService } from './notificationService';
 import { emailService } from './emailService';
-import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS, MOCK_OFFICES as MOCK_OFFICES_DATA } from './mockData';
 
 const TABLE_NAMES = {
   CLIENTS: 'clients',
@@ -50,11 +50,12 @@ class StorageService {
         if (data.session) {
             const storedUser = localStorage.getItem('@JurisControl:user');
             const localUser = storedUser ? JSON.parse(storedUser) : null;
-            // Prioritize local cache for officeId to reduce latency, fallback to metadata
             const officeId = localUser?.currentOfficeId || data.session.user.user_metadata?.currentOfficeId || null;
             return { userId: data.session.user.id, officeId };
         }
-      } catch {}
+      } catch (error) {
+        console.error("Session retrieval error:", error);
+      }
     }
     const stored = localStorage.getItem('@JurisControl:user');
     if (stored) {
@@ -194,7 +195,6 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
       const { id, ...rest } = clientToSave;
-      // If ID is generated locally (starts with cli-), let DB generate UUID or use it if format allows
       const payload = { ...rest, id: id && !id.startsWith('cli-') ? id : undefined }; 
       await supabase.from(TABLE_NAMES.CLIENTS).upsert(payload);
     } else {
@@ -242,7 +242,7 @@ class StorageService {
     page: number = 1, 
     limit: number = 20, 
     searchTerm: string = '', 
-    statusFilter: string | null = null,
+    statusFilter: string | null = null, 
     categoryFilter: string | null = null, 
     dateRange: { start: string, end: string } | null = null
   ): Promise<{ data: LegalCase[], total: number }> {
@@ -388,13 +388,7 @@ class StorageService {
 
   async saveDocument(docData: SystemDocument) {
     const s = await this.getUserSession();
-    
-    // Explicitly handle userId potentially being null from session, defaulting to undefined for type safety
-    const docToSave: SystemDocument = { 
-        ...docData, 
-        officeId: s.officeId || 'office-1', 
-        userId: s.userId || undefined 
-    };
+    const docToSave = { ...docData, officeId: s.officeId || 'office-1', userId: s.userId || undefined };
 
     if (isSupabaseConfigured && supabase) {
       await supabase.from(TABLE_NAMES.DOCUMENTS).insert(docToSave);
@@ -413,28 +407,6 @@ class StorageService {
       const list = this.getLocal<SystemDocument[]>(LOCAL_KEYS.DOCUMENTS, []);
       this.setLocal(LOCAL_KEYS.DOCUMENTS, list.filter(i => i.id !== id));
     }
-  }
-
-  // --- Smart Upload ---
-
-  async saveSmartMovement(caseId: string, movement: CaseMovement, tasks: Task[], document: SystemDocument) {
-    // 1. Save movement to case
-    const legalCase = await this.getCaseById(caseId);
-    if (legalCase) {
-        legalCase.movements = [movement, ...(legalCase.movements || [])];
-        legalCase.lastUpdate = new Date().toISOString();
-        await this.saveCase(legalCase);
-    }
-    
-    // 2. Save tasks
-    for (const task of tasks) {
-        await this.saveTask(task);
-    }
-
-    // 3. Save document
-    await this.saveDocument(document);
-    
-    this.logActivity(`Upload Inteligente no caso ${caseId}`);
   }
 
   // --- Offices ---
@@ -503,7 +475,6 @@ class StorageService {
     };
 
     if (isSupabaseConfigured && supabase) {
-       // Supabase implementation omitted for brevity, assuming standard upsert logic
        await supabase.from(TABLE_NAMES.OFFICES).insert(newOffice);
     } else {
        const updatedOffices = [...offices, newOffice];

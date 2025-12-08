@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles } from 'lucide-react';
+import { X } from 'lucide-react';
 
 export interface ContextMenuItem {
   label: string;
@@ -18,11 +18,10 @@ interface ContextMenuProps {
   title?: string;
   items: ContextMenuItem[];
   onClose: () => void;
-  aiSuggestion?: { title: string; action: () => void };
 }
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({ 
-  isOpen, x, y, title, items, onClose, aiSuggestion 
+  isOpen, x, y, title, items, onClose 
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuState, setMenuState] = useState({ left: 0, top: undefined as number | undefined, bottom: undefined as number | undefined, origin: 'top' });
@@ -97,23 +96,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">{title}</span>
                 <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                   <X size={14} />
-                </button>
-              </div>
-            )}
-
-            {/* AI Suggestion - High Contrast */}
-            {aiSuggestion && (
-              <div className="p-2 bg-indigo-50/60 dark:bg-indigo-950/30 border-b border-indigo-100 dark:border-indigo-500/20">
-                <button 
-                  onClick={() => { aiSuggestion.action(); onClose(); }}
-                  className="w-full text-left p-2 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors group"
-                >
-                  <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-bold text-xs mb-1">
-                    <Sparkles size={12} className="animate-pulse" /> IA Sugere:
-                  </div>
-                  <p className="text-xs text-indigo-900 dark:text-indigo-100 font-medium line-clamp-2 leading-tight">
-                    {aiSuggestion.title}
-                  </p>
                 </button>
               </div>
             )}

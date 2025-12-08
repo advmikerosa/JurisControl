@@ -23,8 +23,7 @@ import {
   Loader2,
   Sun,
   Moon,
-  Calendar as CalendarIcon,
-  Sparkles
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storageService } from '../services/storageService';
@@ -36,14 +35,12 @@ import { useTheme } from '../context/ThemeContext';
 import { Logo } from './Logo';
 import { SearchResult, Office } from '../types';
 import { Breadcrumbs } from './Breadcrumbs';
-import { AiAssistant } from './AiAssistant';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const location = useLocation();
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { logout, user } = useAuth();
@@ -59,7 +56,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isFabOpen, setIsFabOpen] = useState(false);
-  const [isAiOpen, setIsAiOpen] = useState(false);
 
   // Search States
   const [globalSearch, setGlobalSearch] = useState('');
@@ -75,12 +71,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   useEffect(() => {
     let isMounted = true;
     const fetchOffices = async () => {
-      // Only attempt fetch if user exists
       if (!user) return;
 
       try {
-        // storageService.getOffices() already filters by RLS/User ID in SQL.
-        // We do NOT need to filter again against user.offices metadata (which might be stale after registration).
         const myOffices = await storageService.getOffices();
         
         if (!isMounted) return;
@@ -88,9 +81,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         setUserOffices(myOffices);
 
         if (myOffices.length > 0) {
-            // Priority:
-            // 1. User's preferred office (if it exists in the list)
-            // 2. The first office in the list (fallback)
             const preferred = user?.currentOfficeId 
                 ? myOffices.find((o: Office) => o.id === user.currentOfficeId) 
                 : null;
@@ -98,8 +88,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             const selected = preferred || myOffices[0];
             setCurrentOffice(selected);
         } else {
-            // Fallback: If absolutely no office found (e.g. error 500 prevented load or user has none)
-            console.log("No offices found for this user.");
+            // Fallback for new users without office
             setCurrentOffice({
                 id: 'default',
                 name: 'Sem Escritório',
@@ -109,12 +98,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 members: [{
                   userId: user.id,
                   name: user.name,
-                  email: user.email,
                   role: 'Admin',
                   permissions: { financial: true, cases: true, documents: true, settings: true }
                 }],
                 createdAt: new Date().toISOString()
-            });
+            } as Office);
         }
       } catch (e) {
         console.error("Failed to load offices", e);
@@ -192,43 +180,29 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     return `${Math.floor(hours / 24)}d atrás`;
   };
 
-  // Calculate visible items based on current office permissions
+  // Memoize visible items for performance
   const visibleNavItems = useMemo(() => {
-    if (!currentOffice || !user) return navItems; // Fail-safe: show all if loading to prevent flicker or show empty
-    return navItems.filter(item => 
-      permissionService.can(user, currentOffice, item.resource as any, item.action as any)
+    if (!currentOffice || !user) return navItems;
+    
+    // Permission check fallback
+    const filtered = navItems.filter(item => 
+      item.path === '/' || permissionService.can(user, currentOffice, item.resource as any, item.action as any)
     );
+
+    return filtered.length > 0 ? filtered : [navItems[0]];
   }, [currentOffice, user]);
 
   return (
     <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative selection:bg-indigo-500/30 selection:text-indigo-900 dark:selection:text-indigo-100 bg-slate-50 dark:bg-[#0f172a] transition-colors duration-500">
       
-      {/* Ambient Animated Background */}
+      {/* Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden opacity-30 dark:opacity-40 transition-opacity">
-        <motion.div 
-          animate={{ 
-            x: [0, 50, 0], 
-            y: [0, 30, 0], 
-            scale: [1, 1.1, 1],
-            opacity: [0.3, 0.5, 0.3]
-          }}
-          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-300/30 dark:bg-indigo-900/20 rounded-full blur-[120px]" 
-        />
-        <motion.div 
-          animate={{ 
-            x: [0, -50, 0], 
-            y: [0, -30, 0], 
-            scale: [1, 1.2, 1],
-            opacity: [0.3, 0.5, 0.3]
-          }}
-          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-          className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-violet-300/30 dark:bg-violet-900/20 rounded-full blur-[120px]" 
-        />
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-300/30 dark:bg-indigo-900/20 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-violet-300/30 dark:bg-violet-900/20 rounded-full blur-[120px]" />
       </div>
 
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex flex-col w-72 h-screen fixed left-0 top-0 z-[100] border-r border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-xl shadow-lg transition-colors duration-300">
+      <aside className="hidden md:flex flex-col w-72 h-screen fixed left-0 top-0 z-[100] border-r border-slate-200 dark:border-white/10 bg-white/90 dark:bg-[#0f172a]/90 backdrop-blur-xl shadow-lg transition-colors duration-300">
         <div className="p-8 flex items-center gap-3">
           <Logo size={32} className="drop-shadow-md" />
           <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">JurisControl</span>
@@ -268,15 +242,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </nav>
 
         <div className="p-4 border-t border-slate-200 dark:border-white/10 space-y-1">
-          {permissionService.can(user, currentOffice, 'settings', 'view') && (
-            <NavLink 
-              to="/settings"
-              className={({ isActive }) => `flex items-center gap-3 px-4 py-3 w-full rounded-xl transition-colors text-sm font-medium ${isActive ? 'text-slate-900 dark:text-white bg-slate-100 dark:bg-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'}`}
-            >
-              <Settings size={20} />
-              <span>Configurações</span>
-            </NavLink>
-          )}
+          <NavLink 
+            to="/settings"
+            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 w-full rounded-xl transition-colors text-sm font-medium ${isActive ? 'text-slate-900 dark:text-white bg-slate-100 dark:bg-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'}`}
+          >
+            <Settings size={20} />
+            <span>Configurações</span>
+          </NavLink>
+          
           <button 
             onClick={() => { logout(); navigate('/login'); }}
             className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-700 dark:hover:text-rose-300 transition-colors text-sm font-medium"
@@ -328,15 +301,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                    ))}
                  </nav>
                  <div className="border-t border-slate-200 dark:border-white/10 pt-4 space-y-2">
-                    {permissionService.can(user, currentOffice, 'settings', 'view') && (
-                      <NavLink 
-                        to="/settings"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-white/5"
-                      >
-                        <Settings size={20} /> Configurações
-                      </NavLink>
-                    )}
+                    <NavLink 
+                      to="/settings"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-white/5"
+                    >
+                      <Settings size={20} /> Configurações
+                    </NavLink>
                     <button 
                       onClick={() => { setIsMobileMenuOpen(false); logout(); }}
                       className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-rose-600 dark:text-rose-400 font-medium hover:bg-rose-50 dark:hover:bg-rose-500/10"
@@ -354,14 +325,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         
         {/* Header */}
         <header className="h-20 px-4 md:px-10 flex items-center justify-between sticky top-0 z-40 transition-all bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
-          {/* Mobile Toggle */}
           <div className="flex items-center gap-4 md:hidden">
              <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 rounded-lg">
                <Menu size={24} />
              </button>
           </div>
 
-          {/* Smart Global Search Bar */}
           <div className="hidden md:block flex-1 max-w-lg mr-8 relative" ref={searchRef}>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -389,7 +358,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               )}
             </div>
 
-            {/* Search Results Dropdown */}
             <AnimatePresence>
               {showResults && (
                 <motion.div 
@@ -448,23 +416,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </AnimatePresence>
           </div>
 
-          {/* Right Side Actions */}
           <div className="flex items-center gap-3 md:gap-6 ml-auto">
             
-            {/* AI Assistant Toggle */}
-            <button
-              onClick={() => setIsAiOpen(!isAiOpen)}
-              className={`p-2 rounded-lg transition-colors relative flex items-center gap-2 ${isAiOpen ? 'bg-indigo-600/10 text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'}`}
-              title="Assistente JurisAI"
-            >
-              <div className="relative">
-                <Sparkles size={20} />
-                {!isAiOpen && <span className="absolute -top-1 -right-1 w-2 h-2 bg-indigo-500 rounded-full animate-ping" />}
-              </div>
-              <span className="hidden md:inline text-xs font-bold">JurisAI</span>
-            </button>
-
-            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
@@ -682,9 +635,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Plus size={28} strokeWidth={2.5} />
         </button>
       </div>
-
-      {/* AI Assistant Component */}
-      <AiAssistant isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
     </div>
   );
 };
