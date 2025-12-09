@@ -23,7 +23,8 @@ import {
   Loader2,
   Sun,
   Moon,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storageService } from '../services/storageService';
@@ -35,6 +36,7 @@ import { useTheme } from '../context/ThemeContext';
 import { Logo } from './Logo';
 import { SearchResult, Office } from '../types';
 import { Breadcrumbs } from './Breadcrumbs';
+import { AiAssistant } from './AiAssistant';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -56,6 +58,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isFabOpen, setIsFabOpen] = useState(false);
+  const [isAiOpen, setIsAiOpen] = useState(false);
 
   // Search States
   const [globalSearch, setGlobalSearch] = useState('');
@@ -408,6 +411,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           <div className="flex items-center gap-3 md:gap-6 ml-auto">
             
+            {/* AI Assistant Toggle */}
+            <button
+              onClick={() => setIsAiOpen(!isAiOpen)}
+              className={`p-2 rounded-lg transition-colors relative ${isAiOpen ? 'bg-indigo-500/10 text-indigo-500 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'}`}
+              title="Assistente JurisAI"
+            >
+              <Sparkles size={20} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-500 rounded-full animate-pulse shadow-glow" />
+            </button>
+
+            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
@@ -416,6 +430,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
+            {/* Office Switcher */}
             <div className="relative hidden sm:block">
               <button 
                 onClick={() => setIsOfficeMenuOpen(!isOfficeMenuOpen)}
@@ -467,6 +482,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </AnimatePresence>
             </div>
 
+            {/* Notification Bell */}
             <div className="relative" ref={notificationRef}>
               <button 
                 onClick={() => setIsNotificationOpen(!isNotificationOpen)}
@@ -540,6 +556,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </AnimatePresence>
             </div>
 
+            {/* User Avatar */}
             <div 
               onClick={() => navigate('/profile')}
               className="flex items-center gap-3 pl-4 md:pl-6 md:border-l border-slate-200 dark:border-white/10 cursor-pointer group"
@@ -561,12 +578,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </header>
 
+        {/* Page Content Wrapper */}
         <div className="flex-1 p-4 md:p-10 overflow-y-auto custom-scrollbar flex flex-col max-w-[1600px] mx-auto w-full">
           <Breadcrumbs />
           <div className="flex-1 relative z-10">
              {children}
           </div>
           
+          {/* Footer */}
           <footer className="mt-12 border-t border-slate-300 dark:border-white/5 pt-8 pb-4 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500 dark:text-slate-600">
             <div>
               © {new Date().getFullYear()} JurisControl. Sistema Jurídico Inteligente.
@@ -580,6 +599,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </main>
 
+      {/* Global FAB */}
       <div className="fixed bottom-8 right-8 z-[45] flex flex-col items-end gap-3 pointer-events-none">
         <AnimatePresence>
           {isFabOpen && (
@@ -619,6 +639,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Plus size={28} strokeWidth={2.5} />
         </button>
       </div>
+
+      {/* AI Assistant Component */}
+      <AiAssistant isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
     </div>
   );
 };
