@@ -97,15 +97,11 @@ export const Login: React.FC = () => {
           setShowReactivateModal(true);
       } else {
           let errorMessage = err.message || 'Ocorreu um erro.';
-          
-          // Tratamento específico para login inválido
           if (errorMessage.includes('Invalid login credentials')) {
             errorMessage = 'E-mail ou senha incorretos. Se não possui conta, crie uma.';
           } else if (errorMessage === 'Usuário não encontrado. Verifique o e-mail ou crie uma conta.') {
-            // Mensagem vinda do Mock Service
             errorMessage = 'Usuário não encontrado. Verifique o e-mail ou crie uma conta.';
           }
-          
           addToast(errorMessage, 'error');
       }
     } finally {
@@ -120,7 +116,6 @@ export const Login: React.FC = () => {
       }
       setIsReactivating(true);
       try {
-          // Instead of direct reactivation, we request OTP
           await requestReactivationOtp(email);
           addToast('Enviamos um link de reativação para seu e-mail. Verifique sua caixa de entrada.', 'success', 6000);
           setShowReactivateModal(false);
@@ -158,17 +153,17 @@ export const Login: React.FC = () => {
 
   return (
     <div className="min-h-[100dvh] w-full flex items-center justify-center bg-[#0f172a] relative overflow-hidden px-4">
-      {/* Animated Background Gradients */}
+      {/* Animated Background Gradients - Adjusted Opacity */}
       <div className="fixed inset-0 pointer-events-none">
         <motion.div 
-          animate={{ x: [0, 50, 0], y: [0, 50, 0], opacity: [0.4, 0.6, 0.4] }}
+          animate={{ x: [0, 50, 0], y: [0, 50, 0], opacity: [0.3, 0.5, 0.3] }}
           transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/20 rounded-full blur-[120px]" 
+          className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-indigo-600/15 rounded-full blur-[130px]" 
         />
         <motion.div 
-          animate={{ x: [0, -50, 0], y: [0, -50, 0], opacity: [0.4, 0.6, 0.4] }}
+          animate={{ x: [0, -50, 0], y: [0, -50, 0], opacity: [0.3, 0.5, 0.3] }}
           transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-          className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-600/20 rounded-full blur-[120px]" 
+          className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-violet-600/15 rounded-full blur-[130px]" 
         />
       </div>
 
@@ -176,9 +171,10 @@ export const Login: React.FC = () => {
         initial={{ opacity: 0, y: 20, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
-        className="w-full max-w-md bg-white/5 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl p-8 relative z-10 overflow-hidden"
+        className="w-full max-w-md bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-2xl p-8 relative z-10 overflow-hidden"
       >
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-50" />
+        {/* Top Accent Line */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 opacity-70" />
 
         <div className="flex flex-col items-center mb-8">
           <motion.div 

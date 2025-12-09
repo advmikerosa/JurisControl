@@ -16,16 +16,16 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, className = '', 
       animate={{ opacity: 1, y: 0 }}
       whileHover={hoverEffect ? { 
         y: -4, 
-        boxShadow: '0 20px 40px -10px rgba(0,0,0,0.15)',
-        borderColor: 'rgba(255, 255, 255, 0.2)' 
+        boxShadow: '0 20px 40px -10px rgba(0,0,0,0.2)',
+        borderColor: 'rgba(99, 102, 241, 0.4)' // Indigo accent on hover
       } : {}}
       onClick={onClick}
       className={`
         relative overflow-hidden
-        bg-white/80 dark:bg-[#1e293b]/70 
-        backdrop-blur-md 
-        border border-slate-200/50 dark:border-white/10 
-        shadow-sm dark:shadow-glass-light
+        bg-white/70 dark:bg-[#1e293b]/60 
+        backdrop-blur-xl 
+        border border-white/40 dark:border-white/10 
+        shadow-lg shadow-slate-200/50 dark:shadow-black/20
         rounded-2xl 
         p-6 
         text-slate-800 dark:text-slate-100
@@ -34,8 +34,11 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, className = '', 
         ${className}
       `}
     >
+      {/* Noise Texture Overlay (Optional for more realism) */}
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+      
       {/* Subtle Inner Glow Gradient Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/60 via-transparent to-transparent dark:from-white/5 dark:to-transparent pointer-events-none opacity-50" />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-transparent dark:from-white/5 dark:to-transparent pointer-events-none opacity-100" />
       
       {/* Content */}
       <div className="relative z-10">

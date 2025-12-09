@@ -197,30 +197,32 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, [currentOffice, user]);
 
   return (
-    <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative selection:bg-indigo-500/30 selection:text-indigo-900 dark:selection:text-indigo-100 bg-slate-50 dark:bg-[#0f172a] transition-colors duration-500">
+    <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative bg-slate-50 dark:bg-[#0f172a] transition-colors duration-500">
       
+      {/* Dynamic Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden opacity-30 dark:opacity-40 transition-opacity">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-300/30 dark:bg-indigo-900/20 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-violet-300/30 dark:bg-violet-900/20 rounded-full blur-[120px]" />
       </div>
 
-      <aside className="hidden md:flex flex-col w-72 h-screen fixed left-0 top-0 z-[100] border-r border-slate-200 dark:border-white/10 bg-white/90 dark:bg-[#0f172a]/90 backdrop-blur-xl shadow-lg transition-colors duration-300">
+      {/* Sidebar Desktop */}
+      <aside className="hidden md:flex flex-col w-72 h-screen fixed left-0 top-0 z-[100] border-r border-slate-200/60 dark:border-white/10 bg-white/80 dark:bg-[#0f172a]/90 backdrop-blur-2xl shadow-xl transition-colors duration-300">
         <div className="p-8 flex items-center gap-3">
-          <Logo size={32} className="drop-shadow-md" />
+          <Logo size={32} className="drop-shadow-lg" />
           <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">JurisControl</span>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 py-4">
+        <nav className="flex-1 px-4 space-y-2 py-4 overflow-y-auto custom-scrollbar">
           {visibleNavItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               end={item.path === '/'}
               className={({ isActive }) => `
-                flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden
+                flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden
                 ${isActive 
-                  ? 'text-indigo-700 dark:text-white bg-indigo-50 dark:bg-white/10 shadow-sm dark:shadow-[0_0_15px_rgba(255,255,255,0.1)] border border-indigo-100 dark:border-white/5' 
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5'
+                  ? 'text-white shadow-md shadow-indigo-500/25' 
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
                 }
               `}
             >
@@ -229,24 +231,23 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   {isActive && (
                     <motion.div
                       layoutId="activeNav"
-                      className="absolute inset-0 bg-gradient-to-r from-indigo-600/5 to-transparent opacity-50 dark:bg-gradient-to-r dark:from-indigo-600/20 dark:to-transparent"
+                      className="absolute inset-0 bg-indigo-600 rounded-xl"
                       initial={false}
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
                     />
                   )}
-                  <item.icon size={22} strokeWidth={2} className={`relative z-10 transition-colors ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300'}`} />
-                  <span className={`relative z-10 tracking-wide text-sm font-medium`}>{item.label}</span>
-                  {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-indigo-600 dark:bg-indigo-500 rounded-r-full shadow-[0_0_10px_#6366f1]" />}
+                  <item.icon size={20} strokeWidth={2} className={`relative z-10 transition-colors ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300'}`} />
+                  <span className={`relative z-10 text-sm font-medium ${isActive ? 'font-semibold' : ''}`}>{item.label}</span>
                 </>
               )}
             </NavLink>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-slate-200 dark:border-white/10 space-y-1">
+        <div className="p-4 border-t border-slate-200/60 dark:border-white/10 space-y-1 bg-white/50 dark:bg-transparent backdrop-blur-md">
           <NavLink 
             to="/settings"
-            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 w-full rounded-xl transition-colors text-sm font-medium ${isActive ? 'text-slate-900 dark:text-white bg-slate-100 dark:bg-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'}`}
+            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 w-full rounded-xl transition-colors text-sm font-medium ${isActive ? 'text-indigo-600 dark:text-white bg-indigo-50 dark:bg-white/10' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'}`}
           >
             <Settings size={20} />
             <span>Configurações</span>
@@ -262,6 +263,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </aside>
 
+      {/* Mobile Menu */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -294,7 +296,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                        to={item.path}
                        end={item.path === '/'}
                        onClick={() => setIsMobileMenuOpen(false)}
-                       className={({ isActive }) => `flex items-center gap-3 px-4 py-3.5 rounded-xl font-medium transition-colors ${isActive ? 'bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-500/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}
+                       className={({ isActive }) => `flex items-center gap-3 px-4 py-3.5 rounded-xl font-medium transition-colors ${isActive ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}
                      >
                        <item.icon size={20} />
                        {item.label}
@@ -322,13 +324,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </AnimatePresence>
 
       <main className="flex-1 md:ml-72 relative z-10 flex flex-col min-h-screen bg-transparent">
-        <header className="h-20 px-4 md:px-10 flex items-center justify-between sticky top-0 z-40 transition-all bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+        <header className="h-20 px-4 md:px-10 flex items-center justify-between sticky top-0 z-40 transition-all bg-white/70 dark:bg-[#0f172a]/70 backdrop-blur-xl border-b border-slate-200/60 dark:border-white/5 shadow-sm">
           <div className="flex items-center gap-4 md:hidden">
              <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 rounded-lg">
                <Menu size={24} />
              </button>
           </div>
 
+          {/* Search Bar */}
           <div className="hidden md:block flex-1 max-w-lg mr-8 relative" ref={searchRef}>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -340,11 +343,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
               <input 
                 type="text" 
-                placeholder="Buscar clientes, processos..." 
+                placeholder="Buscar clientes, processos (Ctrl+K)..." 
                 value={globalSearch}
                 onChange={(e) => setGlobalSearch(e.target.value)}
                 onFocus={() => globalSearch.length >= 2 && setShowResults(true)}
-                className="block w-full pl-10 pr-10 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl leading-5 text-slate-800 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all sm:text-sm shadow-sm"
+                className="block w-full pl-10 pr-10 py-2.5 bg-slate-100/50 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 rounded-xl leading-5 text-slate-800 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all sm:text-sm shadow-inner"
               />
               {globalSearch && (
                 <button 
@@ -414,10 +417,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </AnimatePresence>
           </div>
 
-          <div className="flex items-center gap-3 md:gap-6 ml-auto">
+          {/* Right Actions */}
+          <div className="flex items-center gap-3 md:gap-5 ml-auto">
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+              className="p-2.5 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-white dark:hover:bg-white/5 transition-all shadow-sm hover:shadow border border-transparent hover:border-slate-200 dark:hover:border-white/10"
               title={theme === 'dark' ? 'Mudar para Tema Claro' : 'Mudar para Tema Escuro'}
             >
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
@@ -426,7 +430,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="relative hidden sm:block">
               <button 
                 onClick={() => setIsOfficeMenuOpen(!isOfficeMenuOpen)}
-                className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white transition-colors py-1.5 px-3 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 border border-transparent hover:border-slate-200 dark:hover:border-white/10"
+                className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white transition-colors py-2 px-3 rounded-xl hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-slate-200 dark:hover:border-white/10"
               >
                 <span>{currentOffice?.name || 'Meu Escritório'}</span>
                 <ChevronDown size={14} className={`transition-transform ${isOfficeMenuOpen ? 'rotate-180' : ''}`} />
@@ -474,14 +478,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </AnimatePresence>
             </div>
 
+            {/* Notification Bell */}
             <div className="relative" ref={notificationRef}>
               <button 
                 onClick={() => setIsNotificationOpen(!isNotificationOpen)}
-                className={`relative p-2 transition-colors rounded-lg ${isNotificationOpen ? 'bg-slate-100 dark:bg-white/10 text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                className={`relative p-2.5 transition-all rounded-xl ${isNotificationOpen ? 'bg-indigo-50 dark:bg-white/10 text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-white/5 hover:text-slate-800 dark:hover:text-slate-200 border border-transparent hover:border-slate-200 dark:hover:border-white/10'}`}
               >
                 <Bell size={20} />
                 {unreadCount > 0 && (
-                   <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full shadow-[0_0_8px_#f43f5e]" />
+                   <span className="absolute top-2 right-2.5 w-2 h-2 bg-rose-500 rounded-full shadow-[0_0_8px_#f43f5e]" />
                 )}
               </button>
               
@@ -493,7 +498,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     className="absolute right-0 md:-right-4 top-full mt-3 w-80 sm:w-96 bg-white/95 dark:bg-[#1e293b]/95 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col"
                   >
-                    <div className="p-4 border-b border-slate-200 dark:border-white/5 flex justify-between items-center bg-slate-50 dark:bg-white/5">
+                    <div className="p-4 border-b border-slate-200 dark:border-white/5 flex justify-between items-center bg-slate-50/50 dark:bg-white/5">
                        <div className="flex items-center gap-2">
                           <h4 className="font-bold text-slate-800 dark:text-white text-sm">Notificações</h4>
                           <span className="bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 text-[10px] px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-500/30">{unreadCount}</span>
@@ -517,7 +522,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                           <div 
                             key={n.id} 
                             onClick={() => markAsRead(n.id)}
-                            className={`p-4 border-b border-slate-100 dark:border-white/5 cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-white/5 ${!n.read ? 'bg-indigo-50 dark:bg-indigo-500/5' : ''}`}
+                            className={`p-4 border-b border-slate-100 dark:border-white/5 cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-white/5 ${!n.read ? 'bg-indigo-50/50 dark:bg-indigo-500/10 border-l-4 border-l-indigo-500' : 'border-l-4 border-l-transparent'}`}
                           >
                              <div className="flex justify-between items-start mb-1 gap-2">
                                <p className={`text-sm leading-tight ${!n.read ? 'text-slate-900 dark:text-white font-semibold' : 'text-slate-600 dark:text-slate-300'}`}>{n.title}</p>
@@ -574,7 +579,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
              {children}
           </div>
           
-          <footer className="mt-12 border-t border-slate-300 dark:border-white/5 pt-8 pb-4 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500 dark:text-slate-600">
+          <footer className="mt-12 border-t border-slate-200 dark:border-white/5 pt-8 pb-4 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500 dark:text-slate-600">
             <div>
               © {new Date().getFullYear()} JurisControl. Sistema Jurídico Inteligente.
             </div>
