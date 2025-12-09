@@ -7,7 +7,7 @@ export interface ContextMenuItem {
   label: string;
   icon: React.ElementType;
   action: () => void;
-  variant?: 'default' | 'danger' | 'success' | 'ai';
+  variant?: 'default' | 'danger' | 'success';
   description?: string;
 }
 

@@ -16,15 +16,14 @@ import {
   UserCheck,
   LogOut,
   Plus,
-  CheckSquare,
   Check,
-  Trash2,
   User,
   Loader2,
   Sun,
   Moon,
   Calendar as CalendarIcon,
-  Sparkles
+  CheckSquare,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { storageService } from '../services/storageService';
@@ -58,7 +57,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isFabOpen, setIsFabOpen] = useState(false);
-  const [isAiOpen, setIsAiOpen] = useState(false);
 
   // Search States
   const [globalSearch, setGlobalSearch] = useState('');
@@ -80,7 +78,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         const allOffices = await storageService.getOffices();
         
         // Filter offices for the current user
-        // Logic: Office ID is in user.offices OR user is a member in the office members list
         const myOffices = user 
             ? allOffices.filter(o => 
                 (user.offices && user.offices.includes(o.id)) || 
@@ -100,7 +97,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             const selected = preferred || myOffices[0];
             setCurrentOffice(selected);
         } else {
-            // Fallback for new users without office context
             setCurrentOffice({
                 id: 'default',
                 name: 'Sem Escritório',
@@ -192,28 +188,22 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     return `${Math.floor(hours / 24)}d atrás`;
   };
 
-  // Memoize visible items for performance and permission check
   const visibleNavItems = useMemo(() => {
     if (!currentOffice || !user) return navItems;
-    
     const filtered = navItems.filter(item => 
       item.path === '/' || permissionService.can(user, currentOffice, item.resource as any, item.action as any)
     );
-
-    // If permission check fails for everything (unlikely), show at least Dashboard
     return filtered.length > 0 ? filtered : [navItems[0]];
   }, [currentOffice, user]);
 
   return (
     <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative selection:bg-indigo-500/30 selection:text-indigo-900 dark:selection:text-indigo-100 bg-slate-50 dark:bg-[#0f172a] transition-colors duration-500">
       
-      {/* Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden opacity-30 dark:opacity-40 transition-opacity">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-300/30 dark:bg-indigo-900/20 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-violet-300/30 dark:bg-violet-900/20 rounded-full blur-[120px]" />
       </div>
 
-      {/* Sidebar - Desktop */}
       <aside className="hidden md:flex flex-col w-72 h-screen fixed left-0 top-0 z-[100] border-r border-slate-200 dark:border-white/10 bg-white/90 dark:bg-[#0f172a]/90 backdrop-blur-xl shadow-lg transition-colors duration-300">
         <div className="p-8 flex items-center gap-3">
           <Logo size={32} className="drop-shadow-md" />
@@ -272,7 +262,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </aside>
 
-      {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -332,10 +321,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         )}
       </AnimatePresence>
 
-      {/* Main Content Area */}
       <main className="flex-1 md:ml-72 relative z-10 flex flex-col min-h-screen bg-transparent">
-        
-        {/* Header */}
         <header className="h-20 px-4 md:px-10 flex items-center justify-between sticky top-0 z-40 transition-all bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
           <div className="flex items-center gap-4 md:hidden">
              <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 rounded-lg">
@@ -429,18 +415,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
 
           <div className="flex items-center gap-3 md:gap-6 ml-auto">
-            
-            {/* AI Assistant Toggle */}
-            <button
-              onClick={() => setIsAiOpen(!isAiOpen)}
-              className={`p-2 rounded-lg transition-colors relative ${isAiOpen ? 'bg-indigo-500/10 text-indigo-500 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'}`}
-              title="Assistente JurisAI"
-            >
-              <Sparkles size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-500 rounded-full animate-pulse shadow-glow" />
-            </button>
-
-            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
@@ -449,7 +423,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
 
-            {/* Office Switcher */}
             <div className="relative hidden sm:block">
               <button 
                 onClick={() => setIsOfficeMenuOpen(!isOfficeMenuOpen)}
@@ -501,7 +474,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </AnimatePresence>
             </div>
 
-            {/* Notification Bell */}
             <div className="relative" ref={notificationRef}>
               <button 
                 onClick={() => setIsNotificationOpen(!isNotificationOpen)}
@@ -549,7 +521,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                           >
                              <div className="flex justify-between items-start mb-1 gap-2">
                                <p className={`text-sm leading-tight ${!n.read ? 'text-slate-900 dark:text-white font-semibold' : 'text-slate-600 dark:text-slate-300'}`}>{n.title}</p>
-                               {!n.read && <span className="w-2 h-2 rounded-full bg-indigo-50 shadow-glow shrink-0 mt-1"></span>}
+                               {!n.read && <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-glow shrink-0 mt-1"></span>}
                              </div>
                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">{n.body}</p>
                              <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-2">{timeAgo(n.timestamp)}</p>
@@ -566,7 +538,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                       )}
                     </div>
                     <div className="p-2 bg-slate-50 dark:bg-white/5 text-center border-t border-slate-200 dark:border-white/5">
-                      <button onClick={() => { setIsNotificationOpen(false); navigate('/settings'); }} className="text-[10px] text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                      <button onClick={() => { setIsNotificationOpen(false); navigate('/settings?tab=emails'); }} className="text-[10px] text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                          Gerenciar Preferências
                       </button>
                     </div>
@@ -575,7 +547,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </AnimatePresence>
             </div>
 
-            {/* User Avatar */}
             <div 
               onClick={() => navigate('/profile')}
               className="flex items-center gap-3 pl-4 md:pl-6 md:border-l border-slate-200 dark:border-white/10 cursor-pointer group"
@@ -597,14 +568,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </header>
 
-        {/* Page Content Wrapper */}
         <div className="flex-1 p-4 md:p-10 overflow-y-auto custom-scrollbar flex flex-col max-w-[1600px] mx-auto w-full">
           <Breadcrumbs />
           <div className="flex-1 relative z-10">
              {children}
           </div>
           
-          {/* Footer */}
           <footer className="mt-12 border-t border-slate-300 dark:border-white/5 pt-8 pb-4 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500 dark:text-slate-600">
             <div>
               © {new Date().getFullYear()} JurisControl. Sistema Jurídico Inteligente.
@@ -618,7 +587,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </main>
 
-      {/* Global FAB */}
       <div className="fixed bottom-8 right-8 z-[45] flex flex-col items-end gap-3 pointer-events-none">
         <AnimatePresence>
           {isFabOpen && (
@@ -659,8 +627,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </button>
       </div>
 
-      {/* AI Assistant Component */}
-      <AiAssistant isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
+      <AiAssistant isOpen={false} onClose={() => {}} />
     </div>
   );
 };
