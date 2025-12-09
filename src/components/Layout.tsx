@@ -77,10 +77,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       if (!user) return;
 
       try {
-        const myOffices = await storageService.getOffices();
+        const allOffices = await storageService.getOffices();
         
-        if (!isMounted) return;
+        // Filter offices for the current user
+        // Logic: Office ID is in user.offices OR user is a member in the office members list
+        const myOffices = user 
+            ? allOffices.filter(o => 
+                (user.offices && user.offices.includes(o.id)) || 
+                (o.members && o.members.some(m => m.userId === user.id))
+              )
+            : [];
             
+        if (!isMounted) return;
+
         setUserOffices(myOffices);
 
         if (myOffices.length > 0) {
@@ -91,6 +100,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             const selected = preferred || myOffices[0];
             setCurrentOffice(selected);
         } else {
+            // Fallback for new users without office context
             setCurrentOffice({
                 id: 'default',
                 name: 'Sem Escritório',
@@ -127,6 +137,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Debounced Search Effect
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (globalSearch.length >= 2) {
@@ -181,6 +192,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     return `${Math.floor(hours / 24)}d atrás`;
   };
 
+  // Memoize visible items for performance and permission check
   const visibleNavItems = useMemo(() => {
     if (!currentOffice || !user) return navItems;
     
@@ -188,17 +200,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       item.path === '/' || permissionService.can(user, currentOffice, item.resource as any, item.action as any)
     );
 
+    // If permission check fails for everything (unlikely), show at least Dashboard
     return filtered.length > 0 ? filtered : [navItems[0]];
   }, [currentOffice, user]);
 
   return (
     <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative selection:bg-indigo-500/30 selection:text-indigo-900 dark:selection:text-indigo-100 bg-slate-50 dark:bg-[#0f172a] transition-colors duration-500">
       
+      {/* Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden opacity-30 dark:opacity-40 transition-opacity">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-300/30 dark:bg-indigo-900/20 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-violet-300/30 dark:bg-violet-900/20 rounded-full blur-[120px]" />
       </div>
 
+      {/* Sidebar - Desktop */}
       <aside className="hidden md:flex flex-col w-72 h-screen fixed left-0 top-0 z-[100] border-r border-slate-200 dark:border-white/10 bg-white/90 dark:bg-[#0f172a]/90 backdrop-blur-xl shadow-lg transition-colors duration-300">
         <div className="p-8 flex items-center gap-3">
           <Logo size={32} className="drop-shadow-md" />
@@ -257,6 +272,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </aside>
 
+      {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -316,7 +332,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         )}
       </AnimatePresence>
 
+      {/* Main Content Area */}
       <main className="flex-1 md:ml-72 relative z-10 flex flex-col min-h-screen bg-transparent">
+        
+        {/* Header */}
         <header className="h-20 px-4 md:px-10 flex items-center justify-between sticky top-0 z-40 transition-all bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
           <div className="flex items-center gap-4 md:hidden">
              <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 rounded-lg">
