@@ -97,9 +97,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             const selected = preferred || myOffices[0];
             setCurrentOffice(selected);
         } else {
+            // FALLBACK OFFICE: Critical Fix
+            // Ensure the fallback office has the current user as an Admin member
+            // This prevents permissionService from returning false and hiding the menu
             setCurrentOffice({
                 id: 'default',
-                name: 'Sem Escritório',
+                name: 'Meu Escritório',
                 handle: '@novo',
                 ownerId: user.id,
                 location: 'Brasil',
@@ -190,6 +193,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const visibleNavItems = useMemo(() => {
     if (!currentOffice || !user) return navItems;
+    
+    // Safety check: if currentOffice has no members (data corruption), allow all to prevent lock-out
+    if (!currentOffice.members || currentOffice.members.length === 0) return navItems;
+
     const filtered = navItems.filter(item => 
       item.path === '/' || permissionService.can(user, currentOffice, item.resource as any, item.action as any)
     );
@@ -197,16 +204,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, [currentOffice, user]);
 
   return (
-    <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative bg-slate-50 dark:bg-[#0f172a] transition-colors duration-500">
+    <div className="flex min-h-screen overflow-hidden text-slate-800 dark:text-slate-200 font-sans relative selection:bg-indigo-500/30 selection:text-indigo-900 dark:selection:text-indigo-100 bg-slate-50 dark:bg-[#0f172a] transition-colors duration-500">
       
-      {/* Dynamic Background */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden opacity-30 dark:opacity-40 transition-opacity">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-300/30 dark:bg-indigo-900/20 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-violet-300/30 dark:bg-violet-900/20 rounded-full blur-[120px]" />
       </div>
 
-      {/* Sidebar Desktop */}
-      <aside className="hidden md:flex flex-col w-72 h-screen fixed left-0 top-0 z-[100] border-r border-slate-200/60 dark:border-white/10 bg-white/80 dark:bg-[#0f172a]/90 backdrop-blur-2xl shadow-xl transition-colors duration-300">
+      <aside className="hidden md:flex flex-col w-72 h-screen fixed left-0 top-0 z-[100] border-r border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0f172a]/90 backdrop-blur-2xl shadow-xl transition-colors duration-300">
         <div className="p-8 flex items-center gap-3">
           <Logo size={32} className="drop-shadow-lg" />
           <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">JurisControl</span>
@@ -263,7 +268,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </aside>
 
-      {/* Mobile Menu */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
@@ -331,7 +335,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
              </button>
           </div>
 
-          {/* Search Bar */}
           <div className="hidden md:block flex-1 max-w-lg mr-8 relative" ref={searchRef}>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -417,7 +420,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </AnimatePresence>
           </div>
 
-          {/* Right Actions */}
           <div className="flex items-center gap-3 md:gap-5 ml-auto">
             <button
               onClick={toggleTheme}
@@ -478,7 +480,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               </AnimatePresence>
             </div>
 
-            {/* Notification Bell */}
             <div className="relative" ref={notificationRef}>
               <button 
                 onClick={() => setIsNotificationOpen(!isNotificationOpen)}
