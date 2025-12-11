@@ -35,7 +35,6 @@ import { useTheme } from '../context/ThemeContext';
 import { Logo } from './Logo';
 import { SearchResult, Office } from '../types';
 import { Breadcrumbs } from './Breadcrumbs';
-import { AiAssistant } from './AiAssistant';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -97,9 +96,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             const selected = preferred || myOffices[0];
             setCurrentOffice(selected);
         } else {
-            // FALLBACK OFFICE: Critical Fix
-            // Ensure the fallback office has the current user as an Admin member
-            // This prevents permissionService from returning false and hiding the menu
+            // FALLBACK OFFICE
             setCurrentOffice({
                 id: 'default',
                 name: 'Meu Escritório',
@@ -193,8 +190,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const visibleNavItems = useMemo(() => {
     if (!currentOffice || !user) return navItems;
-    
-    // Safety check: if currentOffice has no members (data corruption), allow all to prevent lock-out
     if (!currentOffice.members || currentOffice.members.length === 0) return navItems;
 
     const filtered = navItems.filter(item => 
@@ -632,8 +627,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Plus size={28} strokeWidth={2.5} />
         </button>
       </div>
-
-      <AiAssistant isOpen={false} onClose={() => {}} />
     </div>
   );
 };

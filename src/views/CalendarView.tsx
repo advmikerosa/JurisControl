@@ -93,7 +93,6 @@ export const CalendarView: React.FC = () => {
     tasks.forEach(t => {
       if (t.dueDate && t.status !== 'Concluído') {
          const parts = t.dueDate.split('/');
-         // Handle potential YYYY-MM-DD or DD/MM/YYYY
          let dateStr = '';
          if (parts.length === 3) {
              if (parts[0].length === 4) dateStr = t.dueDate; // Already ISO
@@ -101,7 +100,6 @@ export const CalendarView: React.FC = () => {
          }
 
          if(dateStr) {
-           // Detect type based on title/tags (Simulation of polymorphic types)
            let type: CalendarEvent['type'] = 'task';
            if (t.title.startsWith('Reunião')) type = 'meeting';
            if (t.title.startsWith('Nota:')) type = 'note';
@@ -139,17 +137,13 @@ export const CalendarView: React.FC = () => {
     return days;
   };
 
-  // Calendar Navigation
   const handlePrevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const handleNextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   const handleToday = () => setCurrentDate(new Date());
 
-  // Interaction Handlers
   const handleDayClick = (e: React.MouseEvent, date: Date) => {
     e.preventDefault();
     e.stopPropagation();
-    // We pass clientX/Y to allow the ContextMenu to use fixed positioning relative to the viewport
-    // This ensures centering works regardless of scroll position
     setMenuPos({ x: e.clientX, y: e.clientY });
     setSelectedDate(date);
     setMenuOpen(true);
@@ -177,9 +171,8 @@ export const CalendarView: React.FC = () => {
     setIsSaving(true);
 
     try {
-        const dateStr = selectedDate.toLocaleDateString('pt-BR'); // DD/MM/YYYY
+        const dateStr = selectedDate.toLocaleDateString('pt-BR');
         
-        // Logic branching based on type
         if (actionType === 'hearing') {
             if (!formData.caseId) throw new Error('Selecione um processo para agendar audiência.');
             const kase = availableCases.find(c => c.id === formData.caseId);
@@ -191,7 +184,6 @@ export const CalendarView: React.FC = () => {
                 addToast('Audiência agendada no processo.', 'success');
             }
         } else {
-            // Tasks, Meetings, Notes are saved as Tasks with prefixes or specific logic
             let finalTitle = formData.title;
             if (actionType === 'meeting') finalTitle = `Reunião: ${formData.title}`;
             if (actionType === 'note') finalTitle = `Nota: ${formData.title}`;
@@ -199,6 +191,7 @@ export const CalendarView: React.FC = () => {
 
             const newTask: Task = {
                 id: `task-${Date.now()}`,
+                officeId: '', // Will be handled
                 title: finalTitle,
                 dueDate: dateStr,
                 priority: formData.priority,
@@ -208,8 +201,7 @@ export const CalendarView: React.FC = () => {
                 caseId: formData.caseId || undefined,
                 caseTitle: availableCases.find(c => c.id === formData.caseId)?.title,
                 clientId: formData.clientId || undefined,
-                clientName: availableClients.find(c => c.id === formData.clientId)?.name,
-                officeId: '' // Will be handled by service
+                clientName: availableClients.find(c => c.id === formData.clientId)?.name
             };
             
             await storageService.saveTask(newTask);
@@ -225,7 +217,6 @@ export const CalendarView: React.FC = () => {
     }
   };
 
-  // Context Menu Configuration
   const menuItems: ContextMenuItem[] = [
     { 
       label: 'Adicionar Tarefa', 
@@ -264,7 +255,6 @@ export const CalendarView: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-10 h-[calc(100vh-140px)] flex flex-col" ref={containerRef}>
-      {/* Top Bar */}
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
@@ -323,7 +313,6 @@ export const CalendarView: React.FC = () => {
                         <div className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 dark:text-slate-400'}`}>
                             {date.getDate()}
                         </div>
-                        {/* Hover Add Icon */}
                         <div className="opacity-0 group-hover:opacity-100 text-indigo-400 transition-opacity p-1 bg-white/10 rounded">
                             <Plus size={12} />
                         </div>
@@ -365,7 +354,6 @@ export const CalendarView: React.FC = () => {
          </div>
       </GlassCard>
 
-      {/* Context Menu */}
       <ContextMenu 
         isOpen={menuOpen} 
         x={menuPos.x} 
@@ -375,7 +363,6 @@ export const CalendarView: React.FC = () => {
         title={selectedDate?.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
       />
 
-      {/* Dynamic Action Modal */}
       <Modal 
         isOpen={isActionModalOpen} 
         onClose={() => setIsActionModalOpen(false)} 
@@ -397,13 +384,11 @@ export const CalendarView: React.FC = () => {
         }
       >
          <div className="space-y-4">
-            {/* Data Fixa (Visual) */}
             <div className="flex items-center gap-2 text-sm text-indigo-400 bg-indigo-500/10 p-2 rounded-lg border border-indigo-500/20">
                 <CalendarIcon size={16} />
                 <span className="font-bold">{selectedDate?.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
             </div>
 
-            {/* Hearing Specific: Case Selection */}
             {actionType === 'hearing' && (
                 <div className="space-y-1">
                     <label className="text-xs text-slate-400 uppercase font-bold">Vincular Processo <span className="text-rose-400">*</span></label>
@@ -421,7 +406,6 @@ export const CalendarView: React.FC = () => {
                 </div>
             )}
 
-            {/* Title */}
             <div className="space-y-1">
                 <label className="text-xs text-slate-400 uppercase font-bold">Título / Assunto <span className="text-rose-400">*</span></label>
                 <input 
@@ -434,7 +418,6 @@ export const CalendarView: React.FC = () => {
                 />
             </div>
 
-            {/* Meeting/Task Specifics */}
             {['meeting', 'task'].includes(actionType) && (
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
@@ -460,7 +443,6 @@ export const CalendarView: React.FC = () => {
                 </div>
             )}
 
-            {/* Task Priority */}
             {actionType === 'task' && (
                 <div className="space-y-1">
                     <label className="text-xs text-slate-400 uppercase font-bold">Prioridade</label>
@@ -478,7 +460,6 @@ export const CalendarView: React.FC = () => {
                 </div>
             )}
 
-            {/* Description */}
             <div className="space-y-1">
                 <label className="text-xs text-slate-400 uppercase font-bold">Detalhes Adicionais</label>
                 <textarea 
