@@ -1,11 +1,14 @@
 
-// AI Service Removed due to dependency issues
+// Serviço de IA desativado.
+// Este arquivo é mantido apenas como placeholder para evitar erros de importação legada, 
+// caso existam referências residuais em branches antigos.
+
 class AiService {
   async sendMessageStream(history: any[], message: string) {
     console.warn("AI Service is disabled.");
     return {
-      async *[Symbol.asyncIterator]() {
-        yield { text: "O assistente de IA foi desativado temporariamente." };
+      [Symbol.asyncIterator]: async function* () {
+        yield { text: "O serviço de IA está desativado." };
       }
     };
   }
