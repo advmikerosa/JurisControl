@@ -16,6 +16,7 @@ const TABLE_NAMES = {
   OFFICES: 'offices',
   PROFILES: 'profiles',
   LOGS: 'activity_logs',
+  DATAJUD_LOGS: 'datajud_api_access_log'
 };
 
 const STORAGE_BUCKET = 'documents';
@@ -42,7 +43,7 @@ class StorageService {
 
   // --- Helper Methods ---
 
-  private async getUserId(): Promise<string | null> {
+  public async getUserId(): Promise<string | null> {
     const session = await this.getUserSession();
     return session.userId;
   }
@@ -985,6 +986,103 @@ class StorageService {
   factoryReset() {
     localStorage.clear();
     window.location.reload();
+  }
+
+  // --- DataJud Security & Sync ---
+
+  private decryptDataJudKey(encrypted: string): string {
+      // TODO: Implementar lógica real de decriptação (ex: AES-GCM via Web Crypto API)
+      // Por enquanto, retornamos o valor como está (assumindo que o chamador lida com isso ou é apenas base64)
+      return encrypted;
+  }
+
+  /**
+   * Salva a API Key do DataJud de forma segura (encriptada) no perfil do usuário.
+   * Substitui o armazenamento em texto plano no JSON de settings.
+   */
+  async saveDataJudApiKey(encryptedKey: string, keyHash: string): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) {
+        // Fallback: Em modo offline/demo, mantemos no settings local (simulação)
+        const currentSettings = this.getSettings();
+        currentSettings.general.dataJudApiKey = encryptedKey; 
+        this.saveSettings(currentSettings);
+        return;
+    }
+
+    const userId = await this.getUserId();
+    if (!userId) throw new Error("Usuário não autenticado");
+
+    // Atualizar chave encriptada no profile
+    const { error } = await supabase
+      .from(TABLE_NAMES.PROFILES)
+      .update({
+        datajud_api_key_encrypted: encryptedKey,
+        datajud_api_key_hash: keyHash,
+        datajud_key_created_at: new Date().toISOString()
+      } as any)
+      .eq('id', userId);
+
+    if (error) throw error;
+
+    // Log de operação
+    this.logActivity('Atualizou chave DataJud');
+  }
+
+  async getDataJudApiKey(): Promise<string | null> {
+    if (!isSupabaseConfigured || !supabase) {
+      // Fallback: localStorage
+      const settings = this.getSettings();
+      return settings.general.dataJudApiKey || null;
+    }
+
+    const userId = await this.getUserId();
+    if (!userId) return null;
+
+    const { data, error } = await supabase
+      .from(TABLE_NAMES.PROFILES)
+      .select('datajud_api_key_encrypted')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data?.datajud_api_key_encrypted) return null;
+
+    // Descriptografar antes de retornar
+    return this.decryptDataJudKey(data.datajud_api_key_encrypted);
+  }
+
+  // --- DataJud Audit & Logging ---
+
+  /**
+   * Registra todas as interações com a API do DataJud para auditoria de segurança.
+   */
+  async logDataJudAccess(
+    endpoint: string,
+    cnj: string,
+    statusCode: number,
+    errorMessage?: string
+  ): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return; // Modo Demo ignora logs no banco
+
+    try {
+        const userId = await this.getUserId();
+        if (!userId) return;
+
+        const { error } = await supabase
+        .from(TABLE_NAMES.DATAJUD_LOGS)
+        .insert([{
+            user_id: userId,
+            endpoint_used: endpoint,
+            cnj_searched: cnj,
+            status_code: statusCode,
+            error_message: errorMessage || null,
+            ip_address: '0.0.0.0', // Em produção, isso seria preenchido pelo backend ou Edge Function
+            user_agent: navigator.userAgent
+        }]);
+
+        if (error) console.warn("Falha ao registrar log de acesso DataJud:", error.message);
+    } catch (e) {
+        console.error("Erro crítico ao logar acesso DataJud:", e);
+    }
   }
 }
 
