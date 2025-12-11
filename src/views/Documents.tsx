@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { GlassCard } from '../components/ui/GlassCard';
-import { FileText, Upload, Search, Download, Trash2, File, Image as ImageIcon, Loader2, Eye, X, FolderPlus } from 'lucide-react';
+import { FileText, Upload, Search, Download, Trash2, Image as ImageIcon, Loader2, Eye, FolderPlus } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { storageService } from '../services/storageService';
 import { SystemDocument } from '../types';
@@ -84,7 +84,12 @@ export const Documents: React.FC = () => {
   };
 
   const triggerUpload = () => {
-      fileInputRef.current?.click();
+      // Ensure the ref exists before clicking
+      if (fileInputRef.current) {
+          fileInputRef.current.click();
+      } else {
+          console.error("Input de arquivo não encontrado");
+      }
   };
 
   const handleDelete = async () => {
@@ -99,26 +104,27 @@ export const Documents: React.FC = () => {
   const filteredDocs = docs.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-10">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-white">Documentos</h1>
-          <p className="text-slate-400 mt-1">Repositório central de arquivos e modelos.</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Documentos</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">Repositório central de arquivos e modelos.</p>
         </div>
         
+        {/* Hidden Input needs to be technically rendered but visually hidden */}
         <input 
             type="file" 
             ref={fileInputRef} 
             onChange={handleFileSelect} 
-            className="hidden" 
+            style={{ display: 'none' }}
             accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt"
         />
         
         <button 
           onClick={triggerUpload} 
           disabled={isUploading}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors shadow-lg shadow-indigo-500/20 font-medium hover:scale-105 w-full md:w-auto disabled:opacity-70 disabled:hover:scale-100"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors shadow-lg shadow-indigo-500/20 font-medium hover:scale-105 w-full md:w-auto disabled:opacity-70 disabled:hover:scale-100 cursor-pointer"
         >
           {isUploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
           <span>{isUploading ? 'Enviando...' : 'Upload de Arquivo'}</span>
@@ -134,7 +140,7 @@ export const Documents: React.FC = () => {
             placeholder="Buscar documentos..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-transparent border-none outline-none text-white w-full placeholder:text-slate-600 text-sm" 
+            className="bg-transparent border-none outline-none text-slate-900 dark:text-white w-full placeholder:text-slate-400 text-sm" 
           />
         </div>
       </GlassCard>
@@ -144,7 +150,7 @@ export const Documents: React.FC = () => {
         {filteredDocs.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-slate-500 border-b border-white/10 bg-white/5">
+              <thead className="text-slate-500 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5">
                 <tr>
                   <th className="py-4 pl-6 font-medium">Nome</th>
                   <th className="py-4 font-medium">Data</th>
@@ -152,22 +158,22 @@ export const Documents: React.FC = () => {
                   <th className="py-4 pr-6 text-right font-medium">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-slate-200 dark:divide-white/5">
                 {filteredDocs.map(doc => (
-                  <tr key={doc.id} className="group hover:bg-white/5 transition-colors">
-                    <td className="py-4 pl-6 text-white flex items-center gap-3 cursor-pointer" onClick={() => setPreviewDoc(doc)}>
-                       <div className="p-2 rounded bg-indigo-500/20 text-indigo-300">
+                  <tr key={doc.id} className="group hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                    <td className="py-4 pl-6 text-slate-900 dark:text-white flex items-center gap-3 cursor-pointer" onClick={() => setPreviewDoc(doc)}>
+                       <div className="p-2 rounded bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300">
                          {['JPG','PNG','IMG'].includes(doc.type) ? <ImageIcon size={18} /> : <FileText size={18} />}
                        </div>
-                       <span className="font-medium group-hover:text-indigo-300 transition-colors whitespace-nowrap">{doc.name}</span>
+                       <span className="font-medium group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors whitespace-nowrap">{doc.name}</span>
                     </td>
-                    <td className="py-4 text-slate-400 whitespace-nowrap">{doc.date}</td>
-                    <td className="py-4 text-slate-400 whitespace-nowrap">{doc.size}</td>
+                    <td className="py-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{doc.date}</td>
+                    <td className="py-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{doc.size}</td>
                     <td className="py-4 pr-6 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => setPreviewDoc(doc)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-indigo-400 transition-colors" title="Visualizar"><Eye size={18} /></button>
-                        <button className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors" title="Baixar"><Download size={18} /></button>
-                        <button onClick={() => setDocToDelete(doc)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-rose-400 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                        <button onClick={() => setPreviewDoc(doc)} className="p-2 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors" title="Visualizar"><Eye size={18} /></button>
+                        <button className="p-2 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors" title="Baixar"><Download size={18} /></button>
+                        <button onClick={() => setDocToDelete(doc)} className="p-2 hover:bg-slate-200 dark:hover:bg-white/10 rounded-lg text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors" title="Excluir"><Trash2 size={18} /></button>
                       </div>
                     </td>
                   </tr>
@@ -177,16 +183,16 @@ export const Documents: React.FC = () => {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full py-20 text-slate-500 gap-4">
-             <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center">
+             <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800/50 rounded-full flex items-center justify-center">
                 <FolderPlus size={40} className="opacity-40" />
              </div>
              <div className="text-center">
-                <h3 className="text-lg font-medium text-slate-300 mb-1">Nenhum arquivo encontrado</h3>
+                <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-1">Nenhum arquivo encontrado</h3>
                 <p className="text-sm text-slate-500">Nenhum documento foi adicionado ainda. Clique em 'Upload de Arquivo' para começar.</p>
              </div>
              <button 
                 onClick={triggerUpload}
-                className="mt-2 px-6 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-colors text-sm border border-white/10"
+                className="mt-2 px-6 py-2 bg-white border border-slate-200 dark:bg-white/5 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-700 dark:text-white rounded-lg transition-colors text-sm"
              >
                 Fazer Upload Agora
              </button>
@@ -196,7 +202,7 @@ export const Documents: React.FC = () => {
 
       {/* Preview Modal */}
       <Modal isOpen={!!previewDoc} onClose={() => setPreviewDoc(null)} title={previewDoc?.name || 'Visualizar'} maxWidth="max-w-4xl">
-          <div className="h-[60vh] bg-slate-900 rounded-lg border border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="h-[60vh] bg-slate-100 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
               {previewDoc && ['JPG', 'PNG', 'IMG'].includes(previewDoc.type) ? (
                   <div className="flex flex-col items-center text-slate-500">
                       <ImageIcon size={64} className="mb-4 opacity-50" />
@@ -205,7 +211,7 @@ export const Documents: React.FC = () => {
               ) : (
                   <div className="flex flex-col items-center text-slate-500 p-12 text-center">
                       <FileText size={64} className="mb-4 opacity-50" />
-                      <h3 className="text-lg font-medium text-slate-300 mb-2">{previewDoc?.name}</h3>
+                      <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">{previewDoc?.name}</h3>
                       <p className="text-sm max-w-md">
                           Este é um ambiente de demonstração. Em produção, o PDF ou arquivo DOCX seria renderizado aqui usando um visualizador apropriado ou via iframe.
                       </p>
@@ -224,12 +230,12 @@ export const Documents: React.FC = () => {
           title="Confirmar Exclusão"
           footer={
               <div className="flex justify-end gap-3 w-full">
-                  <button onClick={() => setDocToDelete(null)} className="px-4 py-2 text-slate-400 hover:text-white transition-colors">Cancelar</button>
+                  <button onClick={() => setDocToDelete(null)} className="px-4 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Cancelar</button>
                   <button onClick={handleDelete} className="px-6 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-medium shadow-lg shadow-rose-500/20">Excluir</button>
               </div>
           }
       >
-          <p className="text-slate-300">
+          <p className="text-slate-700 dark:text-slate-300">
               Tem certeza que deseja excluir o documento <strong>{docToDelete?.name}</strong>? Esta ação não pode ser desfeita.
           </p>
       </Modal>

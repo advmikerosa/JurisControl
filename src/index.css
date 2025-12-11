@@ -16,7 +16,8 @@
 
 body {
   background-color: #F8FAFC; 
-  color: #1e293b;
+  /* Corrigido para text-slate-800 para maior contraste no tema claro */
+  color: #1e293b; 
   min-height: 100vh;
   transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   overflow-x: hidden;

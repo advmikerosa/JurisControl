@@ -42,9 +42,9 @@ const ListSkeleton = () => (
 
 const StatWidget = React.memo(({ title, value, subtext, icon: Icon, colorClass, onClick, delay, highlight }: any) => (
   <motion.div 
-    initial={{ opacity: 0, y: 20 }} 
+    initial={{ opacity: 0, y: 10 }} 
     animate={{ opacity: 1, y: 0 }} 
-    transition={{ duration: 0.6, delay: delay }}
+    transition={{ duration: 0.4, delay: delay }}
   >
     <GlassCard 
         hoverEffect={!!onClick}
@@ -159,7 +159,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {!isLoading && data && data.counts.activeCases === 0 && data.counts.wonCases === 0 && (
-           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="mb-2">
+           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-2">
               <GlassCard className="bg-gradient-to-r from-indigo-600 to-violet-600 border-none text-white relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-32 bg-white/10 blur-3xl rounded-full -mr-10 -mt-10"></div>
                   <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6 p-2">
@@ -172,14 +172,9 @@ export const Dashboard: React.FC = () => {
            </motion.div>
         )}
 
-        <AnimatePresence>
-          {config.agenda && !isLoading && data?.lists.todaysAgenda && data.lists.todaysAgenda.length > 0 && (
-             <motion.div 
-               initial={{ opacity: 0, height: 0 }} 
-               animate={{ opacity: 1, height: 'auto' }} 
-               exit={{ opacity: 0, height: 0 }}
-               className="bg-gradient-to-r from-indigo-50 to-slate-100 dark:from-indigo-900/30 dark:to-slate-900/50 border border-indigo-200 dark:border-indigo-500/30 rounded-2xl p-5 backdrop-blur-md shadow-lg overflow-hidden"
-             >
+        {/* Removed AnimatePresence for initial load to prevent 'invisible content' bug */}
+        {config.agenda && !isLoading && data?.lists.todaysAgenda && data.lists.todaysAgenda.length > 0 && (
+             <div className="bg-gradient-to-r from-indigo-50 to-slate-100 dark:from-indigo-900/30 dark:to-slate-900/50 border border-indigo-200 dark:border-indigo-500/30 rounded-2xl p-5 backdrop-blur-md shadow-lg overflow-hidden animate-fade-in">
                 <div className="flex items-center justify-between mb-3">
                    <h3 className="text-sm font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider flex items-center gap-2">
                       <Calendar size={16} /> Agenda de Hoje ({todayStr})
@@ -207,12 +202,11 @@ export const Dashboard: React.FC = () => {
                       </div>
                    ))}
                 </div>
-             </motion.div>
-          )}
-        </AnimatePresence>
+             </div>
+        )}
 
         {config.kpi && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in">
             {isLoading || !data ? (
               <><StatSkeleton /><StatSkeleton /><StatSkeleton /><StatSkeleton /></>
             ) : (
@@ -223,14 +217,14 @@ export const Dashboard: React.FC = () => {
                 <StatWidget title="Processos Ganhos" value={data.counts.wonCases} subtext="Total acumulado" icon={CheckCircle} colorClass="text-emerald-600 dark:text-emerald-400" delay={0.4} onClick={() => navigate('/cases?status=Ganho')} />
               </>
             )}
-          </motion.div>
+          </div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
              {config.movements && (
                (isLoading || !data) ? (<ListSkeleton />) : (
-                  <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
                      <GlassCard className="flex flex-col h-full min-h-[400px]">
                         <div className="flex justify-between items-center mb-6">
                           <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -279,20 +273,21 @@ export const Dashboard: React.FC = () => {
 
              {config.chart && (
                (isLoading || !data) ? (<ChartSkeleton />) : (
-                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-                   <GlassCard className="h-[380px] p-6 flex flex-col">
+                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+                   <GlassCard className="h-[420px] p-6 flex flex-col">
                      <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-6 shrink-0">
                          <Scale size={18} className="text-emerald-500 dark:text-emerald-400" /> Distribuição da Carteira
                      </h3>
-                     <div className="flex-1 w-full min-h-0 relative">
+                     {/* FIX: Ensure container has explicit height for Recharts */}
+                     <div className="flex-1 w-full min-h-[300px] relative">
                        <div className="absolute inset-0">
                          <ResponsiveContainer width="100%" height="100%">
-                           <BarChart data={data.charts.caseDistribution} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                           <BarChart data={data.charts.caseDistribution} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.1)" horizontal={false} />
                              <XAxis type="number" stroke="rgba(148, 163, 184, 0.5)" tick={{fill: '#94a3b8', fontSize: 11}} axisLine={false} />
-                             <YAxis dataKey="name" type="category" stroke="rgba(148, 163, 184, 0.5)" tick={{fill: '#64748b', fontSize: 12, fontWeight: 500}} axisLine={false} width={90} />
+                             <YAxis dataKey="name" type="category" stroke="rgba(148, 163, 184, 0.5)" tick={{fill: '#64748b', fontSize: 12, fontWeight: 500}} axisLine={false} width={100} />
                              <Tooltip cursor={{fill: 'rgba(148, 163, 184, 0.1)'}} contentStyle={{ backgroundColor: '#1e293b', borderColor: 'rgba(255,255,255,0.1)', color: '#fff', borderRadius: '12px' }} itemStyle={{ color: '#e2e8f0' }} />
-                             <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
+                             <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32}>
                                {data.charts.caseDistribution.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
                              </Bar>
                            </BarChart>
@@ -308,7 +303,7 @@ export const Dashboard: React.FC = () => {
           <div className="flex flex-col gap-6">
              {config.hearings && (
                (isLoading || !data) ? (<ListSkeleton />) : (
-                  <motion.div className="flex flex-col gap-6" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.6 }}>
+                  <motion.div className="flex flex-col gap-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}>
                       <GlassCard className="flex-1 overflow-hidden flex flex-col p-0 h-fit">
                         <div className="p-5 border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5">
                            <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -349,7 +344,7 @@ export const Dashboard: React.FC = () => {
              )}
 
              {config.tasks && !isLoading && data && data.counts.highPriorityTasks > 0 && (
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
                     <GlassCard className="h-fit p-5 border-l-4 border-l-rose-500 bg-gradient-to-br from-rose-50 dark:from-rose-500/10 to-transparent">
                         <div className="flex justify-between items-center mb-2">
                             <h4 className="font-bold text-rose-600 dark:text-rose-200 flex items-center gap-2 text-sm">

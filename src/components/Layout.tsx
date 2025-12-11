@@ -63,6 +63,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null); // Ref especificamente para o input
 
   // Refs for click outside
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -120,6 +121,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     return () => { isMounted = false; };
   }, [user]);
 
+  // Click Outside & Keyboard Shortcuts (Ctrl+K)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
@@ -129,8 +131,29 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         setShowResults(false);
       }
     };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Atalho Ctrl+K ou Cmd+K
+      if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      
+      // Atalho ESC para fechar busca
+      if (event.key === 'Escape') {
+        setShowResults(false);
+        setGlobalSearch('');
+        searchInputRef.current?.blur();
+      }
+    };
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   // Debounced Search Effect
@@ -176,6 +199,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     setGlobalSearch('');
     setSearchResults([]);
     setShowResults(false);
+    searchInputRef.current?.focus();
   };
 
   const timeAgo = (date: Date) => {
@@ -340,6 +364,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 )}
               </div>
               <input 
+                ref={searchInputRef}
                 type="text" 
                 placeholder="Buscar clientes, processos (Ctrl+K)..." 
                 value={globalSearch}

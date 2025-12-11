@@ -33,7 +33,7 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children, classN
       variants={pageVariants}
       transition={{
         type: 'tween',
-        ease: 'anticipate',
+        ease: 'easeInOut' as const,
         duration: 0.4
       }}
       className={`w-full h-full ${className}`}
