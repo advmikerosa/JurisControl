@@ -6,12 +6,44 @@ export const formatCurrency = (value: number) => {
   }).format(value);
 };
 
+// Parser robusto para datas que funciona em Safari/iOS e Chrome
+export const parseSafeDate = (dateString: string): Date => {
+  if (!dateString) return new Date();
+  
+  // Se já for ISO (YYYY-MM-DD), o Safari aceita
+  if (dateString.includes('-')) {
+      // Evita problemas de timezone tratando como UTC se necessário, 
+      // mas para datas simples new Date() costuma bastar se for YYYY-MM-DD
+      return new Date(dateString); 
+  }
+  
+  // Se for PT-BR (DD/MM/YYYY)
+  if (dateString.includes('/')) {
+    const parts = dateString.split('/');
+    if (parts.length === 3) {
+      // new Date(year, monthIndex, day) é seguro em todos os browsers
+      return new Date(
+        parseInt(parts[2], 10), 
+        parseInt(parts[1], 10) - 1, 
+        parseInt(parts[0], 10)
+      );
+    }
+  }
+  
+  return new Date(dateString);
+};
+
 export const formatDate = (dateString: string) => {
   if(!dateString) return '-';
-  if (dateString.includes('T')) dateString = dateString.split('T')[0];
-  if (dateString.includes('/')) return dateString;
-  const [year, month, day] = dateString.split('-');
-  return `${day}/${month}/${year}`;
+  
+  try {
+    const date = parseSafeDate(dateString);
+    if (isNaN(date.getTime())) return '-';
+    
+    return new Intl.DateTimeFormat('pt-BR').format(date);
+  } catch (e) {
+    return dateString; // Fallback retorna a string original
+  }
 };
 
 export const masks = {

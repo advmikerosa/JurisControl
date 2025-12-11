@@ -241,6 +241,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const mapSupabaseUserToContext = (sbUser: any) => {
     const meta = sbUser.user_metadata || {};
+    
+    // Auto-select office if none selected but available
+    const officeList = meta.offices || [];
+    let currentOffice = meta.currentOfficeId;
+    if (!currentOffice && officeList.length > 0) {
+        currentOffice = officeList[0];
+    }
+
     const mappedUser: User = {
       id: sbUser.id,
       name: meta.full_name || meta.name || 'Usuário',
@@ -248,8 +256,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: sbUser.email || '',
       avatar: meta.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(meta.full_name || 'User')}&background=6366f1&color=fff`,
       provider: sbUser.app_metadata?.provider || 'email',
-      offices: meta.offices || [],
-      currentOfficeId: meta.currentOfficeId,
+      offices: officeList,
+      currentOfficeId: currentOffice,
       twoFactorEnabled: false,
       emailVerified: !!sbUser.email_confirmed_at,
       phone: meta.phone || '',

@@ -399,7 +399,7 @@ export const Financial: React.FC = () => {
            </GlassCard>
 
            <GlassCard className="overflow-hidden p-0">
-             <div className="overflow-x-auto">
+             <div className="overflow-x-auto custom-scrollbar">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-white/5 text-slate-400 border-b border-white/10">
                     <tr>
