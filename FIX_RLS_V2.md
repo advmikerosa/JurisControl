@@ -87,39 +87,46 @@ FOR ALL USING (
 );
 
 -- ============================================================
--- 4. TABELAS INDEPENDENTES OU CRM (Verificar coluna office_id)
--- Nota: Se estas tabelas não tiverem office_id, alteraremos para user_id (dono)
+-- 4. TABELAS INDEPENDENTES OU CRM
+-- Nota: Se estas tabelas tiverem office_id, mantemos. Se não, fallback para user_id.
 -- ============================================================
 
--- Tabela: leads (Tentativa via office_id, fallback para user_id se office_id falhar)
--- Assumindo que leads CRM pertencem ao escritório.
+-- Tabela: leads 
+-- Assumindo que leads CRM pertencem ao escritório (verifique se sua tabela leads tem office_id).
+-- Se der erro aqui, a tabela leads provavelmente precisa de "ALTER TABLE leads ADD COLUMN office_id uuid..."
 DROP POLICY IF EXISTS "Office Members Access" ON public.leads;
 CREATE POLICY "Office Members Access" ON public.leads
 FOR ALL USING (
-  -- Se tiver office_id
-  (current_setting('request.jwt.claims', true)::json->>'role' = 'service_role') OR
   public.check_is_member(office_id)
 );
 
 -- Tabela: proposals
 DROP POLICY IF EXISTS "Office Members Access" ON public.proposals;
 CREATE POLICY "Office Members Access" ON public.proposals
-FOR ALL USING (public.check_is_member(office_id));
+FOR ALL USING (
+  public.check_is_member(office_id)
+);
 
 -- Tabela: sales_tasks
 DROP POLICY IF EXISTS "Office Members Access" ON public.sales_tasks;
 CREATE POLICY "Office Members Access" ON public.sales_tasks
-FOR ALL USING (public.check_is_member(office_id));
+FOR ALL USING (
+  public.check_is_member(office_id)
+);
 
 -- Tabela: financial_records
 DROP POLICY IF EXISTS "Office Members Access" ON public.financial_records;
 CREATE POLICY "Office Members Access" ON public.financial_records
-FOR ALL USING (public.check_is_member(office_id));
+FOR ALL USING (
+  public.check_is_member(office_id)
+);
 
 -- Tabela: system_documents
 DROP POLICY IF EXISTS "Office Members Access" ON public.system_documents;
 CREATE POLICY "Office Members Access" ON public.system_documents
-FOR ALL USING (public.check_is_member(office_id));
+FOR ALL USING (
+  public.check_is_member(office_id)
+);
 
 -- ============================================================
 -- 5. TABELAS DE USUÁRIO (Privadas)
