@@ -191,7 +191,7 @@ export const CalendarView: React.FC = () => {
 
             const newTask: Task = {
                 id: `task-${Date.now()}`,
-                officeId: '', // Will be handled
+                officeId: '', // Placeholder, will be set by storageService
                 title: finalTitle,
                 dueDate: dateStr,
                 priority: formData.priority,

@@ -63,7 +63,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null); // Ref especificamente para o input
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Refs for click outside
   const notificationRef = useRef<HTMLDivElement>(null);
