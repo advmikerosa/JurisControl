@@ -77,6 +77,10 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ onSave, onCancel
         setIsProcessing(true);
         await onSave(file, { title, category });
         setIsProcessing(false);
+        // Reset state after save (though parent usually closes modal)
+        setFile(null);
+        setPreview(null);
+        setTitle('');
     } else {
         addToast('Preencha os campos obrigatórios.', 'warning');
     }
@@ -109,7 +113,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ onSave, onCancel
                     <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} accept=".pdf,.doc,.docx,image/png,image/jpeg" />
                 </div>
             ) : (
-                <div className="flex flex-col lg:flex-row gap-6">
+                <div className="flex flex-col lg:flex-row gap-6 animate-fade-in">
                     {/* Preview / File Info */}
                     <div className="w-full lg:w-1/3 space-y-4">
                         <div className="bg-black/40 rounded-xl overflow-hidden border border-white/10 h-64 flex items-center justify-center relative group">
@@ -163,7 +167,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ onSave, onCancel
                             className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
-                            {isProcessing ? 'Salvando...' : 'Confirmar Upload'}
+                            {isProcessing ? 'Enviando...' : 'Confirmar Upload'}
                         </button>
                     </div>
                 </div>

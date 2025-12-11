@@ -42,6 +42,14 @@ export const CaseDetails: React.FC = () => {
       ]);
       
       if (foundCase) {
+        // Ensure movements are sorted correctly (Newest first)
+        if (foundCase.movements) {
+            foundCase.movements.sort((a, b) => {
+                const dateA = new Date(a.date.split(' ')[0].split('/').reverse().join('-')).getTime();
+                const dateB = new Date(b.date.split(' ')[0].split('/').reverse().join('-')).getTime();
+                return dateB - dateA; // Descending
+            });
+        }
         setCaseData(foundCase);
         setTasks(caseTasks); 
         setFinancials(caseFin);
@@ -81,7 +89,7 @@ export const CaseDetails: React.FC = () => {
     await storageService.saveCase(updatedCase);
     setCaseData(updatedCase);
     setNewMovement('');
-    addToast('Movimentação registrada.', 'success');
+    addToast('Movimentação registrada com sucesso.', 'success');
   };
 
   const handleDocumentSave = async (file: File, meta: { title: string, category: string }) => {
@@ -98,10 +106,10 @@ export const CaseDetails: React.FC = () => {
             caseId: caseData.id
         };
 
-        // Salvar apenas o documento, sem criar movimentação automática complexa
+        // Salvar documento
         await storageService.saveDocument(newDoc);
         
-        // Opcional: Adicionar uma movimentação simples de registro de upload
+        // Registrar movimentação automática
         const movement: CaseMovement = {
             id: `mov-${Date.now()}`,
             date: new Date().toLocaleDateString('pt-BR'),
@@ -218,7 +226,7 @@ export const CaseDetails: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
             {activeTab === 'timeline' && (
-                <div className="space-y-6">
+                <div className="space-y-6 animate-fade-in">
                     <GlassCard className="p-4">
                         <div className="flex justify-between items-center mb-4">
                             <h4 className="text-sm font-bold text-white">Nova Movimentação</h4>
@@ -229,7 +237,12 @@ export const CaseDetails: React.FC = () => {
                         <div className="flex gap-3">
                             <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center shrink-0"><User size={20} className="text-slate-400" /></div>
                             <div className="flex-1">
-                                <textarea value={newMovement} onChange={(e) => setNewMovement(e.target.value)} placeholder="Adicionar nota, andamento ou despacho manualmente..." className="w-full bg-transparent text-white placeholder:text-slate-500 outline-none resize-none h-20 text-sm"></textarea>
+                                <textarea 
+                                    value={newMovement} 
+                                    onChange={(e) => setNewMovement(e.target.value)} 
+                                    placeholder="Adicionar nota, andamento ou despacho manualmente..." 
+                                    className="w-full bg-transparent text-white placeholder:text-slate-500 outline-none resize-none h-20 text-sm"
+                                ></textarea>
                                 <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5">
                                     <span className="text-xs text-slate-500">Pressione ENTER para pular linha</span>
                                     <button onClick={handleAddMovement} disabled={!newMovement.trim()} className="px-4 py-1.5 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-2"><Send size={12} /> Registrar</button>
@@ -241,7 +254,7 @@ export const CaseDetails: React.FC = () => {
                     <div className="space-y-6 relative pl-4 border-l border-white/10 ml-4">
                         {caseData.movements && caseData.movements.length > 0 ? (
                             caseData.movements.map((mov, idx) => (
-                                <div key={idx} className="relative">
+                                <div key={idx} className="relative animate-slide-in">
                                     <div className="absolute -left-[21px] top-0 w-3 h-3 rounded-full bg-indigo-500 border-2 border-[#0f172a]"></div>
                                     <div className="bg-white/5 border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-colors">
                                         <div className="flex justify-between items-start mb-2">
@@ -267,10 +280,10 @@ export const CaseDetails: React.FC = () => {
                 </div>
             )}
             
-            {activeTab === 'tasks' && <div className="text-center py-10 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10"><CheckCircle className="mx-auto mb-2 opacity-50" />{tasks.length > 0 ? `${tasks.length} tarefas vinculadas` : 'Nenhuma tarefa vinculada.'}</div>}
-            {activeTab === 'financial' && <div className="text-center py-10 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10"><DollarSign className="mx-auto mb-2 opacity-50" />{financials.length > 0 ? `${financials.length} registros financeiros` : 'Nenhum lançamento financeiro.'}</div>}
-            {activeTab === 'docs' && <div className="text-center py-10 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10"><Paperclip className="mx-auto mb-2 opacity-50" />{documents.length > 0 ? `${documents.length} documentos` : 'Nenhum documento anexado.'}</div>}
-            {activeTab === 'history' && <div className="text-center py-10 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10"><History className="mx-auto mb-2 opacity-50" />Histórico de alterações (Log)</div>}
+            {activeTab === 'tasks' && <div className="text-center py-10 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10 animate-fade-in"><CheckCircle className="mx-auto mb-2 opacity-50" />{tasks.length > 0 ? `${tasks.length} tarefas vinculadas` : 'Nenhuma tarefa vinculada.'}</div>}
+            {activeTab === 'financial' && <div className="text-center py-10 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10 animate-fade-in"><DollarSign className="mx-auto mb-2 opacity-50" />{financials.length > 0 ? `${financials.length} registros financeiros` : 'Nenhum lançamento financeiro.'}</div>}
+            {activeTab === 'docs' && <div className="text-center py-10 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10 animate-fade-in"><Paperclip className="mx-auto mb-2 opacity-50" />{documents.length > 0 ? `${documents.length} documentos` : 'Nenhum documento anexado.'}</div>}
+            {activeTab === 'history' && <div className="text-center py-10 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10 animate-fade-in"><History className="mx-auto mb-2 opacity-50" />Histórico de alterações (Log)</div>}
         </div>
 
         <div className="space-y-6">

@@ -7,13 +7,14 @@ import { storageService } from '../services/storageService';
 import { useNavigate } from 'react-router-dom';
 import { DashboardData } from '../types';
 import { PageTransition } from '../components/PageTransition';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../context/ToastContext';
+import { parseSafeDate } from '../utils/formatters';
 
 // Skeleton Components
 const StatSkeleton = () => (
-  <div className="bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/5 rounded-2xl p-6 animate-pulse h-[140px]">
+  <div className="bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-6 animate-pulse h-[140px]">
     <div className="h-4 w-24 bg-slate-200 dark:bg-white/10 rounded mb-4"></div>
     <div className="h-8 w-16 bg-slate-200 dark:bg-white/10 rounded mb-4"></div>
     <div className="h-3 w-32 bg-slate-200 dark:bg-white/10 rounded"></div>
@@ -172,7 +173,6 @@ export const Dashboard: React.FC = () => {
            </motion.div>
         )}
 
-        {/* Removed AnimatePresence for initial load to prevent 'invisible content' bug */}
         {config.agenda && !isLoading && data?.lists.todaysAgenda && data.lists.todaysAgenda.length > 0 && (
              <div className="bg-gradient-to-r from-indigo-50 to-slate-100 dark:from-indigo-900/30 dark:to-slate-900/50 border border-indigo-200 dark:border-indigo-500/30 rounded-2xl p-5 backdrop-blur-md shadow-lg overflow-hidden animate-fade-in">
                 <div className="flex items-center justify-between mb-3">
@@ -278,7 +278,6 @@ export const Dashboard: React.FC = () => {
                      <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-6 shrink-0">
                          <Scale size={18} className="text-emerald-500 dark:text-emerald-400" /> Distribuição da Carteira
                      </h3>
-                     {/* FIX: Ensure container has explicit height for Recharts */}
                      <div className="flex-1 w-full min-h-[300px] relative">
                        <div className="absolute inset-0">
                          <ResponsiveContainer width="100%" height="100%">
