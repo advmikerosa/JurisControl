@@ -1,23 +1,29 @@
 
 # Configuração de Storage (Buckets) - JurisControl
 
-Execute o script abaixo no **SQL Editor** do Supabase para configurar o armazenamento de arquivos com segurança robusta.
+Execute o script abaixo no **SQL Editor** do Supabase.
 
-Este script cria um bucket privado e configura políticas RLS para que usuários só acessem arquivos que estão dentro da pasta do seu respectivo escritório.
+### O que este script faz?
+1. Cria um bucket privado chamado `documents`.
+2. Cria uma política de segurança (RLS) que **isola** os arquivos.
+   - O sistema de arquivos funcionará assim: `documents/{OFFICE_ID}/{NOME_DO_ARQUIVO}`.
+   - A política SQL extrai o `{OFFICE_ID}` do caminho do arquivo.
+   - Ela verifica na tabela `public.office_members` se o usuário atual pertence a esse escritório.
+   - Se pertencer, o acesso (Leitura/Escrita) é liberado. Caso contrário, é bloqueado.
 
 ```sql
 -- ============================================================
 -- 1. CRIAÇÃO DO BUCKET 'documents'
 -- ============================================================
 
--- Tenta inserir o bucket se ele não existir
+-- Insere o bucket 'documents' se ele não existir
 INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit, allowed_mime_types)
 VALUES (
   'documents', 
   'documents', 
-  FALSE, -- Importante: FALSE para bucket privado (requer autenticação)
+  FALSE, -- FALSE = Privado (Requer autenticação via RLS ou Token Assinado)
   FALSE,
-  52428800, -- Limite de 50MB (em bytes)
+  52428800, -- Limite de 50MB
   ARRAY[
     'image/png',
     'image/jpeg',
@@ -40,35 +46,49 @@ ON CONFLICT (id) DO UPDATE SET
   ];
 
 -- ============================================================
--- 2. SEGURANÇA (RLS)
+-- 2. FUNÇÃO AUXILIAR (Caso não tenha sido criada no setup)
 -- ============================================================
 
--- Habilita RLS na tabela de objetos do Storage (caso não esteja)
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- Esta função verifica se o usuário atual é membro do escritório informado (UUID)
+CREATE OR REPLACE FUNCTION public.check_is_member(_office_id uuid)
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 
+    FROM public.office_members 
+    WHERE office_id = _office_id 
+    AND user_id = auth.uid()
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Remove políticas antigas para evitar conflitos/duplicidade
+-- ============================================================
+-- 3. POLÍTICAS DE SEGURANÇA (RLS)
+-- ============================================================
+
+-- Removemos políticas antigas para garantir uma configuração limpa
+DROP POLICY IF EXISTS "Office Members Access" ON storage.objects;
 DROP POLICY IF EXISTS "Acesso restrito por escritório" ON storage.objects;
 DROP POLICY IF EXISTS "Upload restrito por escritório" ON storage.objects;
 DROP POLICY IF EXISTS "Delete restrito por escritório" ON storage.objects;
-DROP POLICY IF EXISTS "Office Members Access" ON storage.objects;
+DROP POLICY IF EXISTS "Give users access to own folder 1oj01k_0" ON storage.objects;
+DROP POLICY IF EXISTS "Give users access to own folder 1oj01k_1" ON storage.objects;
+DROP POLICY IF EXISTS "Give users access to own folder 1oj01k_2" ON storage.objects;
+DROP POLICY IF EXISTS "Give users access to own folder 1oj01k_3" ON storage.objects;
 
--- ============================================================
--- 3. POLÍTICAS DE ACESSO (CRUD)
--- A lógica baseia-se no caminho do arquivo: "office_uuid/filename.ext"
--- Extraímos a primeira parte do caminho (office_uuid) e verificamos a permissão.
--- ============================================================
+-- POLÍTICA DE ISOLAMENTO POR ESCRITÓRIO
+-- Lógica: O caminho do arquivo é sempre "OFFICE_ID/nome_arquivo".
+-- A função `storage.foldername(name)` retorna um array das pastas.
+-- Pegamos o primeiro item `[1]`, convertemos para UUID e checamos a permissão.
 
--- POLÍTICA UNIFICADA DE ACESSO (SELECT, INSERT, UPDATE, DELETE)
--- Permite que membros do escritório gerenciem arquivos dentro da pasta do seu escritório.
-CREATE POLICY "Office Members Access"
+CREATE POLICY "Office Isolation Policy"
 ON storage.objects
 FOR ALL
 USING (
   bucket_id = 'documents' 
   AND auth.role() = 'authenticated' 
   AND (
-    -- Extrai o primeiro segmento do caminho (o ID do escritório) e verifica membresia
-    -- A função public.check_is_member foi criada no setup do banco de dados
+    -- Verifica se o nome da primeira pasta (Office ID) é um escritório onde o usuário é membro
     public.check_is_member( (storage.foldername(name))[1]::uuid )
   )
 )
@@ -81,8 +101,8 @@ WITH CHECK (
 );
 
 -- ============================================================
--- 4. VERIFICAÇÃO
+-- 4. FINALIZAÇÃO
 -- ============================================================
--- Para testar, tente fazer upload de um arquivo via frontend. 
--- O caminho deve ser obrigatóriamente: {OFFICE_ID}/{NOME_ARQUIVO}
+-- Agora, qualquer upload feito pelo frontend deve incluir o ID do escritório no início do caminho.
+-- Exemplo no JS: supabase.storage.from('documents').upload(`${user.currentOfficeId}/contrato.pdf`, file)
 ```

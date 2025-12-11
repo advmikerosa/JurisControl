@@ -24,6 +24,12 @@ const pageVariants = {
   }
 };
 
+const pageTransition = {
+  type: 'tween',
+  ease: 'easeInOut',
+  duration: 0.4
+} as const;
+
 export const PageTransition: React.FC<PageTransitionProps> = ({ children, className = '' }) => {
   return (
     <motion.div
@@ -31,11 +37,7 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children, classN
       animate="in"
       exit="out"
       variants={pageVariants}
-      transition={{
-        type: 'tween',
-        ease: 'easeInOut' as const,
-        duration: 0.4
-      }}
+      transition={pageTransition}
       className={`w-full h-full ${className}`}
     >
       {children}
