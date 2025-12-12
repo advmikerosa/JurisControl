@@ -1,5 +1,5 @@
 
-import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, SearchResult, OfficeMember } from '../types';
+import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, SearchResult, OfficeMember, EmailSettings } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS, MOCK_OFFICES as MOCK_OFFICES_DATA } from './mockData';
 import { notificationService } from './notificationService';
@@ -606,15 +606,17 @@ class StorageService {
   
   // FIX: Robust getSettings method to prevent null pointer exceptions
   getSettings(): AppSettings {
+      const defaultEmailPreferences: EmailSettings = {
+          enabled: false,
+          frequency: 'immediate',
+          categories: { deadlines: true, processes: true, events: true, financial: false, marketing: true },
+          deadlineAlerts: { sevenDays: true, threeDays: true, oneDay: true, onDueDate: true }
+      };
+
       const defaultSettings: AppSettings = {
           general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' },
           notifications: { email: true, desktop: true, sound: false, dailyDigest: false },
-          emailPreferences: {
-              enabled: false,
-              frequency: 'immediate',
-              categories: { deadlines: true, processes: true, events: true, financial: false, marketing: true },
-              deadlineAlerts: { sevenDays: true, threeDays: true, oneDay: true, onDueDate: true }
-          },
+          emailPreferences: defaultEmailPreferences,
           automation: { autoArchiveWonCases: false, autoSaveDrafts: true }
       };
 
@@ -629,10 +631,10 @@ class StorageService {
             general: { ...defaultSettings.general, ...parsed.general },
             notifications: { ...defaultSettings.notifications, ...parsed.notifications },
             emailPreferences: { 
-                ...defaultSettings.emailPreferences, 
+                ...defaultEmailPreferences, 
                 ...parsed.emailPreferences,
-                categories: { ...defaultSettings.emailPreferences.categories, ...parsed.emailPreferences?.categories },
-                deadlineAlerts: { ...defaultSettings.emailPreferences.deadlineAlerts, ...parsed.emailPreferences?.deadlineAlerts }
+                categories: { ...defaultEmailPreferences.categories, ...parsed.emailPreferences?.categories },
+                deadlineAlerts: { ...defaultEmailPreferences.deadlineAlerts, ...parsed.emailPreferences?.deadlineAlerts }
             },
             automation: { ...defaultSettings.automation, ...parsed.automation }
           };
