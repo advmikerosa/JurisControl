@@ -1,3 +1,4 @@
+
 import React, { Component, Suspense, ReactNode, ErrorInfo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -23,6 +24,7 @@ const ClientDetails = React.lazy(() => import('./views/ClientDetails').then(m =>
 const UserProfile = React.lazy(() => import('./views/UserProfile').then(m => ({ default: m.UserProfile })));
 const Settings = React.lazy(() => import('./views/Settings').then(m => ({ default: m.Settings })));
 const Login = React.lazy(() => import('./views/Login').then(m => ({ default: m.Login })));
+const ResetPassword = React.lazy(() => import('./views/ResetPassword').then(m => ({ default: m.ResetPassword }))); // Nova rota
 const EmailConfirmation = React.lazy(() => import('./views/EmailConfirmation').then(m => ({ default: m.EmailConfirmation })));
 const Documents = React.lazy(() => import('./views/Documents').then(m => ({ default: m.Documents })));
 const PrivacyPolicy = React.lazy(() => import('./views/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
@@ -41,7 +43,6 @@ interface ErrorBoundaryState {
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = { hasError: false, error: null };
   
-  // Explicitly declare props to fix TS error in some environments
   public props: ErrorBoundaryProps;
 
   constructor(props: ErrorBoundaryProps) { 
@@ -101,6 +102,7 @@ const AppContent = () => {
           <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" replace />} />
           <Route path="/confirm-email" element={<EmailConfirmation />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/reset-password" element={<ResetPassword />} /> 
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfUse />} />
           <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
