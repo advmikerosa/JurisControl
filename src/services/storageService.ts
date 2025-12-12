@@ -3,6 +3,7 @@ import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, 
 import { supabase, isSupabaseConfigured } from './supabase';
 import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS, MOCK_OFFICES as MOCK_OFFICES_DATA } from './mockData';
 import { notificationService } from './notificationService';
+import { emailService } from './emailService';
 import { CaseRepository } from './repositories/caseRepository';
 
 // Constants mapping
@@ -603,7 +604,42 @@ class StorageService {
   
   getLogs(): ActivityLog[] { return this.getLocal(LOCAL_KEYS.LOGS, []); }
   
-  getSettings(): AppSettings { return this.getLocal(LOCAL_KEYS.SETTINGS, {} as any); }
+  // FIX: Robust getSettings method to prevent null pointer exceptions
+  getSettings(): AppSettings {
+      const defaultSettings: AppSettings = {
+          general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' },
+          notifications: { email: true, desktop: true, sound: false, dailyDigest: false },
+          emailPreferences: {
+              enabled: false,
+              frequency: 'immediate',
+              categories: { deadlines: true, processes: true, events: true, financial: false, marketing: true },
+              deadlineAlerts: { sevenDays: true, threeDays: true, oneDay: true, onDueDate: true }
+          },
+          automation: { autoArchiveWonCases: false, autoSaveDrafts: true }
+      };
+
+      try {
+          const s = localStorage.getItem(LOCAL_KEYS.SETTINGS);
+          if (!s) return defaultSettings;
+          
+          const parsed = JSON.parse(s);
+          
+          // Deep merge to ensure all properties exist
+          return {
+            general: { ...defaultSettings.general, ...parsed.general },
+            notifications: { ...defaultSettings.notifications, ...parsed.notifications },
+            emailPreferences: { 
+                ...defaultSettings.emailPreferences, 
+                ...parsed.emailPreferences,
+                categories: { ...defaultSettings.emailPreferences.categories, ...parsed.emailPreferences?.categories },
+                deadlineAlerts: { ...defaultSettings.emailPreferences.deadlineAlerts, ...parsed.emailPreferences?.deadlineAlerts }
+            },
+            automation: { ...defaultSettings.automation, ...parsed.automation }
+          };
+      } catch { 
+        return defaultSettings; 
+      }
+  }
   
   saveSettings(s: AppSettings) { this.setLocal(LOCAL_KEYS.SETTINGS, s); }
   
