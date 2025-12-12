@@ -1,9 +1,8 @@
 
-import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, SearchResult, OfficeMember, EmailSettings } from '../types';
+import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, SearchResult, OfficeMember } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS, MOCK_OFFICES as MOCK_OFFICES_DATA } from './mockData';
 import { notificationService } from './notificationService';
-import { emailService } from './emailService';
 import { CaseRepository } from './repositories/caseRepository';
 
 // Constants mapping
@@ -164,10 +163,6 @@ class StorageService {
   async saveClient(client: Client) {
     const userId = await this.getUserId();
     if (isSupabaseConfigured && supabase && userId) {
-      // If client doesn't have an officeId yet (new creation), we need to get it from session
-      // However, the RLS policies usually enforce office_id based on user membership
-      
-      // We need to fetch the current user's active office if not present
       let officeId = client.officeId;
       if (!officeId) {
           const { data } = await supabase.auth.getUser();
@@ -257,7 +252,6 @@ class StorageService {
   async saveTask(task: Task) {
     const userId = await this.getUserId();
     if(isSupabaseConfigured && supabase && userId) {
-        
         let officeId = task.officeId;
         if (!officeId) {
             const { data } = await supabase.auth.getUser();
@@ -331,7 +325,6 @@ class StorageService {
   async saveFinancial(record: FinancialRecord) {
       const userId = await this.getUserId();
       if(isSupabaseConfigured && supabase && userId) {
-          
           let officeId = record.officeId;
           if (!officeId) {
             const { data } = await supabase.auth.getUser();
@@ -393,7 +386,6 @@ class StorageService {
   async saveDocument(docData: SystemDocument) {
       const userId = await this.getUserId();
       if(isSupabaseConfigured && supabase && userId) {
-          
           let officeId = docData.officeId;
           if (!officeId) {
              const { data } = await supabase.auth.getUser();
@@ -471,7 +463,6 @@ class StorageService {
 
   async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, userData?: any): Promise<Office> {
       const userId = explicitOwnerId || (await this.getUserId());
-      // Logic simplified for this facade - similar to original but using user id
       if (!userId) throw new Error("User required");
 
       let handle = officeData.handle || `@office${Date.now()}`;
@@ -495,7 +486,6 @@ class StorageService {
       };
 
       if(isSupabaseConfigured && supabase) {
-          // Map to DB columns
           const dbOffice = {
               name: newOffice.name,
               handle: newOffice.handle,
@@ -604,19 +594,10 @@ class StorageService {
   
   getLogs(): ActivityLog[] { return this.getLocal(LOCAL_KEYS.LOGS, []); }
   
-  // FIX: Robust getSettings method to prevent null pointer exceptions
   getSettings(): AppSettings {
-      const defaultEmailPreferences: EmailSettings = {
-          enabled: false,
-          frequency: 'immediate',
-          categories: { deadlines: true, processes: true, events: true, financial: false, marketing: true },
-          deadlineAlerts: { sevenDays: true, threeDays: true, oneDay: true, onDueDate: true }
-      };
-
       const defaultSettings: AppSettings = {
           general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' },
-          notifications: { email: true, desktop: true, sound: false, dailyDigest: false },
-          emailPreferences: defaultEmailPreferences,
+          notifications: { desktop: true, sound: false, dailyDigest: false },
           automation: { autoArchiveWonCases: false, autoSaveDrafts: true }
       };
 
@@ -626,16 +607,10 @@ class StorageService {
           
           const parsed = JSON.parse(s);
           
-          // Deep merge to ensure all properties exist
+          // Deep merge without emailPreferences
           return {
             general: { ...defaultSettings.general, ...parsed.general },
             notifications: { ...defaultSettings.notifications, ...parsed.notifications },
-            emailPreferences: { 
-                ...defaultEmailPreferences, 
-                ...parsed.emailPreferences,
-                categories: { ...defaultEmailPreferences.categories, ...parsed.emailPreferences?.categories },
-                deadlineAlerts: { ...defaultEmailPreferences.deadlineAlerts, ...parsed.emailPreferences?.deadlineAlerts }
-            },
             automation: { ...defaultSettings.automation, ...parsed.automation }
           };
       } catch { 

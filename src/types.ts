@@ -1,5 +1,4 @@
 
-
 export enum CaseStatus {
   ACTIVE = 'Ativo',
   PENDING = 'Pendente',
@@ -270,7 +269,7 @@ export interface EmailSettings {
     processes: boolean;
     events: boolean;
     financial: boolean;
-    marketing: boolean;
+    marketing: boolean; 
   };
   deadlineAlerts: {
     sevenDays: boolean;
@@ -298,7 +297,6 @@ export interface AppSettings {
     dataJudApiKey?: string;
   };
   notifications: {
-    email: boolean;
     desktop: boolean;
     sound: boolean;
     dailyDigest: boolean;

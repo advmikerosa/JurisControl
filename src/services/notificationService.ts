@@ -1,7 +1,5 @@
-import { AppSettings, SystemNotification, NotificationType } from '../types';
 
-// Removido import do storageService para evitar dependência circular
-// import { storageService } from './storageService';
+import { AppSettings, SystemNotification, NotificationType } from '../types';
 
 export type { NotificationType, SystemNotification };
 
@@ -45,13 +43,6 @@ class NotificationService {
     }
   }
 
-  private async simulateEmailDispatch(title: string, body: string) {
-    console.groupCollapsed('📧 [Simulação de E-mail Enviado]');
-    console.log(`Subject: ${title}`);
-    console.log(`Body: ${body}`);
-    console.groupEnd();
-  }
-
   // Helper to read settings safely avoiding circular dependency
   private getNotificationSettings() {
     try {
@@ -63,7 +54,8 @@ class NotificationService {
     } catch (e) {
         console.warn("Failed to read notification settings", e);
     }
-    return { email: true, desktop: true, sound: false };
+    // Padrão sem e-mail
+    return { desktop: true, sound: false };
   }
 
   // Send notification based on user settings
@@ -91,11 +83,6 @@ class NotificationService {
     // 3. Desktop Notification (Browser Native)
     if (settings.desktop) {
       this.sendBrowserNotification(title, body);
-    }
-
-    // 4. Email Notification
-    if (settings.email && (type === 'error' || type === 'warning')) {
-      this.simulateEmailDispatch(title, body);
     }
   }
 
