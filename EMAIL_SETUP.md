@@ -14,10 +14,11 @@ O sistema frontend agora está preparado para enviar e-mails reais. Para que fun
 3. Inicialize o projeto (se necessário): `supabase init`
 
 ## 3. Criar a Função
-Crie um arquivo `supabase/functions/send-email/index.ts`:
+Crie um arquivo `supabase/functions/send-email/index.ts`.
+**Nota:** O código abaixo inclui tratamento robusto de CORS para evitar erros no frontend.
 
 ```typescript
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 
@@ -26,13 +27,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
     const { to, subject, html } = await req.json()
+
+    if (!RESEND_API_KEY) {
+      throw new Error('RESEND_API_KEY not set')
+    }
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -41,7 +47,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: 'JurisControl <nao-responda@seu-dominio.com>', // Ou onboarding@resend.dev
+        from: 'JurisControl <nao-responda@seu-dominio.com>', // Use 'onboarding@resend.dev' para testes sem domínio
         to: [to],
         subject: subject,
         html: html,
@@ -50,11 +56,16 @@ serve(async (req) => {
 
     const data = await res.json()
 
+    if (!res.ok) {
+        throw new Error(data.message || 'Failed to send email via Resend')
+    }
+
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
   } catch (error) {
+    // Retorna erro 500 MAS com os headers de CORS, para o frontend poder ler a mensagem de erro
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
