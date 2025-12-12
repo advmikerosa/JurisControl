@@ -32,7 +32,6 @@ class EmailService {
   }
 
   private async dispatch(to: string, subject: string, htmlBody: string, templateType: string): Promise<boolean> {
-    console.groupCollapsed(`📧 [Email Service] Sending: ${subject}`);
     
     let status: 'Sent' | 'Failed' | 'Queued' = 'Sent';
 
@@ -43,16 +42,15 @@ class EmailService {
             });
             if (error || data?.error) throw new Error(error?.message || data?.error);
         } catch (e: any) {
-            console.warn('⚠️ Falha no envio real. Caindo para simulação local.', e);
+            console.error('Email Dispatch Error:', e);
             status = 'Failed';
-            // Em dev, assume sucesso simulado
+            // In dev mode, we pretend it worked to not block UI
             if (import.meta.env.MODE !== 'production') status = 'Sent';
         }
     } else {
         await new Promise(resolve => setTimeout(resolve, 800)); // Mock delay
     }
     
-    console.groupEnd();
     this.saveLog({
       id: `email-${Date.now()}-${Math.random().toString(36).substring(7)}`,
       recipient: to,

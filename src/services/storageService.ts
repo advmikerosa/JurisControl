@@ -3,14 +3,12 @@ import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, 
 import { supabase, isSupabaseConfigured } from './supabase';
 import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS, MOCK_OFFICES as MOCK_OFFICES_DATA } from './mockData';
 import { notificationService } from './notificationService';
-import { emailService } from './emailService';
 import { CaseRepository } from './repositories/caseRepository';
-// import { ClientRepository } from './repositories/clientRepository'; // Would be implemented similarly
-// import { FinancialRepository } from './repositories/financialRepository'; // Would be implemented similarly
 
 // Constants mapping
 const TABLE_NAMES = {
   CLIENTS: 'clients',
+  CASES: 'cases',
   TASKS: 'tasks',
   FINANCIAL: 'financial',
   DOCUMENTS: 'documents',
@@ -38,10 +36,13 @@ class StorageService {
 
   constructor() {
     this.caseRepo = new CaseRepository();
-    this.seedDatabase();
+    // Only seed if NOT connected to Supabase to avoid polluting Prod DB
+    if (!isSupabaseConfigured) {
+      this.seedDatabase();
+    }
   }
 
-  // --- Helpers to maintain Facade Compatibility ---
+  // --- Helpers ---
   private getLocal<T>(key: string, defaultValue: T): T {
     try {
         const item = localStorage.getItem(key);
@@ -53,17 +54,13 @@ class StorageService {
     localStorage.setItem(key, JSON.stringify(value));
   }
 
-  private async getUserSession() {
+  private async getUserId(): Promise<string | null> {
       if (isSupabaseConfigured && supabase) {
           const { data } = await supabase.auth.getSession();
-          return { userId: data.session?.user.id || null };
+          return data.session?.user.id || null;
       }
-      return { userId: 'local-user' };
-  }
-
-  private async getUserId(): Promise<string | null> {
-      const s = await this.getUserSession();
-      return s.userId;
+      const stored = localStorage.getItem('@JurisControl:user');
+      return stored ? JSON.parse(stored).id : 'local-user';
   }
 
   // --- Account Management ---
@@ -72,8 +69,12 @@ class StorageService {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
+        
+        // Use maybeSingle to avoid error if not found
         const { data } = await supabase.from(TABLE_NAMES.PROFILES).select('id').eq('id', user.id).maybeSingle();
+        
         if (!data) {
+            console.log("Creating missing profile for user...");
             await supabase.from(TABLE_NAMES.PROFILES).insert({
                 id: user.id,
                 email: user.email,
@@ -98,16 +99,16 @@ class StorageService {
     const userId = await this.getUserId();
     if (!userId) return;
     if (isSupabaseConfigured && supabase) {
-        await supabase.from(TABLE_NAMES.PROFILES).update({ deleted_at: null }).eq('id', userId);
+        // Calls the database function to clear deleted_at
+        await supabase.rpc('reactivate_own_account');
     }
   }
 
   async deleteAccount() {
-      // In production, delegate to DB function
       const userId = await this.getUserId();
       if(isSupabaseConfigured && supabase && userId) {
-          // Soft delete via RPC or direct update
-          await supabase.from(TABLE_NAMES.PROFILES).update({ deleted_at: new Date().toISOString() }).eq('id', userId);
+          // Calls the database function to soft delete
+          await supabase.rpc('delete_own_account');
       } else {
           localStorage.clear();
       }
@@ -122,22 +123,39 @@ class StorageService {
   async saveCase(legalCase: LegalCase) { return this.caseRepo.save(legalCase); }
   async deleteCase(id: string) { return this.caseRepo.delete(id); }
 
-  // --- CLIENTS (Legacy Logic - Should be refactored to Repository) ---
+  // --- CLIENTS ---
   async getClients(): Promise<Client[]> {
     if (isSupabaseConfigured && supabase) {
       const userId = await this.getUserId();
       if (!userId) return [];
-      const { data } = await supabase.from(TABLE_NAMES.CLIENTS).select('*').eq('user_id', userId).order('name');
-      return (data || []).map((c: any) => ({
-          ...c,
+      
+      const { data, error } = await supabase.from(TABLE_NAMES.CLIENTS).select('*').order('name');
+      
+      if (error) {
+        console.error("Error fetching clients:", error);
+        return [];
+      }
+
+      return (data || []).map((c) => ({
+          id: c.id,
+          officeId: c.office_id,
+          name: c.name,
+          type: c.type,
+          status: c.status,
+          email: c.email,
+          phone: c.phone,
+          city: c.city,
+          state: c.state,
           avatarUrl: c.avatar_url,
+          cpf: c.cpf,
+          cnpj: c.cnpj,
           corporateName: c.corporate_name,
           createdAt: c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '',
           tags: c.tags || [],
           alerts: c.alerts || [],
           documents: c.documents || [],
           history: c.history || []
-      }));
+      })) as Client[];
     }
     return this.getLocal(LOCAL_KEYS.CLIENTS, []);
   }
@@ -145,8 +163,21 @@ class StorageService {
   async saveClient(client: Client) {
     const userId = await this.getUserId();
     if (isSupabaseConfigured && supabase && userId) {
+      // If client doesn't have an officeId yet (new creation), we need to get it from session
+      // However, the RLS policies usually enforce office_id based on user membership
+      
+      // We need to fetch the current user's active office if not present
+      let officeId = client.officeId;
+      if (!officeId) {
+          const { data } = await supabase.auth.getUser();
+          officeId = data.user?.user_metadata?.currentOfficeId;
+      }
+
+      if (!officeId) throw new Error("Office ID is required");
+
       const payload = {
           id: client.id && !client.id.startsWith('cli-') ? client.id : undefined,
+          office_id: officeId,
           user_id: userId,
           name: client.name,
           type: client.type,
@@ -160,9 +191,15 @@ class StorageService {
           cnpj: client.cnpj,
           corporate_name: client.corporateName,
           notes: client.notes,
-          tags: client.tags
+          tags: client.tags,
+          alerts: client.alerts,
+          documents: client.documents,
+          history: client.history
       };
-      await supabase.from(TABLE_NAMES.CLIENTS).upsert(payload);
+      
+      const { error } = await supabase.from(TABLE_NAMES.CLIENTS).upsert(payload);
+      if (error) throw error;
+
     } else {
       const list = await this.getClients();
       const idx = list.findIndex(i => i.id === client.id);
@@ -174,14 +211,14 @@ class StorageService {
   }
 
   async deleteClient(id: string) {
-    // Check constraints
     const cases = await this.getCases();
     if (cases.some(c => c.client.id === id && c.status !== CaseStatus.ARCHIVED)) {
         throw new Error("BLOQUEIO: Cliente possui processos ativos.");
     }
     
     if (isSupabaseConfigured && supabase) {
-        await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id);
+        const { error } = await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id);
+        if (error) throw error;
     } else {
         const list = await this.getClients();
         this.setLocal(LOCAL_KEYS.CLIENTS, list.filter(i => i.id !== id));
@@ -191,13 +228,22 @@ class StorageService {
   // --- TASKS ---
   async getTasks(): Promise<Task[]> {
     if(isSupabaseConfigured && supabase) {
-        const userId = await this.getUserId();
-        const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('user_id', userId);
-        return (data || []).map((t: any) => ({
-            id: t.id, title: t.title, dueDate: t.due_date, priority: t.priority, status: t.status,
-            assignedTo: t.assigned_to, description: t.description, caseId: t.case_id,
-            caseTitle: t.case_title, clientId: t.client_id, clientName: t.client_name
-        }));
+        const { data, error } = await supabase.from(TABLE_NAMES.TASKS).select('*');
+        if (error) return [];
+        return (data || []).map((t) => ({
+            id: t.id, 
+            officeId: t.office_id,
+            title: t.title, 
+            dueDate: t.due_date, 
+            priority: t.priority, 
+            status: t.status,
+            assignedTo: t.assigned_to, 
+            description: t.description, 
+            caseId: t.case_id,
+            caseTitle: t.case_title, 
+            clientId: t.client_id, 
+            clientName: t.client_name
+        })) as Task[];
     }
     return this.getLocal(LOCAL_KEYS.TASKS, []);
   }
@@ -210,8 +256,16 @@ class StorageService {
   async saveTask(task: Task) {
     const userId = await this.getUserId();
     if(isSupabaseConfigured && supabase && userId) {
+        
+        let officeId = task.officeId;
+        if (!officeId) {
+            const { data } = await supabase.auth.getUser();
+            officeId = data.user?.user_metadata?.currentOfficeId;
+        }
+
         const payload = {
             id: task.id && !task.id.startsWith('task-') ? task.id : undefined,
+            office_id: officeId,
             user_id: userId,
             title: task.title,
             due_date: task.dueDate,
@@ -224,7 +278,8 @@ class StorageService {
             client_id: task.clientId,
             client_name: task.clientName
         };
-        await supabase.from(TABLE_NAMES.TASKS).upsert(payload);
+        const { error } = await supabase.from(TABLE_NAMES.TASKS).upsert(payload);
+        if (error) throw error;
     } else {
         const list = await this.getTasks();
         const idx = list.findIndex(t => t.id === task.id);
@@ -246,13 +301,23 @@ class StorageService {
   // --- FINANCIAL ---
   async getFinancials(): Promise<FinancialRecord[]> {
       if(isSupabaseConfigured && supabase) {
-          const userId = await this.getUserId();
-          const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('user_id', userId);
-          return (data || []).map((f: any) => ({
-              id: f.id, title: f.title, amount: Number(f.amount), type: f.type, category: f.category,
-              status: f.status, dueDate: f.due_date, paymentDate: f.payment_date, clientId: f.client_id,
-              clientName: f.client_name, caseId: f.case_id, installment: f.installment
-          }));
+          const { data, error } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*');
+          if (error) return [];
+          return (data || []).map((f) => ({
+              id: f.id, 
+              officeId: f.office_id,
+              title: f.title, 
+              amount: Number(f.amount), 
+              type: f.type, 
+              category: f.category,
+              status: f.status, 
+              dueDate: f.due_date, 
+              paymentDate: f.payment_date, 
+              clientId: f.client_id,
+              clientName: f.client_name, 
+              caseId: f.case_id, 
+              installment: f.installment
+          })) as FinancialRecord[];
       }
       return this.getLocal(LOCAL_KEYS.FINANCIAL, []);
   }
@@ -265,8 +330,16 @@ class StorageService {
   async saveFinancial(record: FinancialRecord) {
       const userId = await this.getUserId();
       if(isSupabaseConfigured && supabase && userId) {
+          
+          let officeId = record.officeId;
+          if (!officeId) {
+            const { data } = await supabase.auth.getUser();
+            officeId = data.user?.user_metadata?.currentOfficeId;
+          }
+
           const payload = {
               id: record.id && !record.id.startsWith('trans-') ? record.id : undefined,
+              office_id: officeId,
               user_id: userId,
               title: record.title,
               amount: record.amount,
@@ -280,7 +353,8 @@ class StorageService {
               case_id: record.caseId,
               installment: record.installment
           };
-          await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
+          const { error } = await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
+          if (error) throw error;
       } else {
           const list = await this.getFinancials();
           const idx = list.findIndex(i => i.id === record.id);
@@ -293,11 +367,19 @@ class StorageService {
   // --- DOCUMENTS ---
   async getDocuments(): Promise<SystemDocument[]> {
       if(isSupabaseConfigured && supabase) {
-          const userId = await this.getUserId();
-          const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('user_id', userId);
-          return (data || []).map((d: any) => ({
-              id: d.id, name: d.name, size: d.size, type: d.type, date: d.date, category: d.category, caseId: d.case_id
-          }));
+          const { data, error } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*');
+          if (error) return [];
+          return (data || []).map((d) => ({
+              id: d.id, 
+              officeId: d.office_id,
+              name: d.name, 
+              size: d.size, 
+              type: d.type, 
+              date: d.date, 
+              category: d.category, 
+              caseId: d.case_id,
+              userId: d.user_id
+          })) as SystemDocument[];
       }
       return this.getLocal(LOCAL_KEYS.DOCUMENTS, []);
   }
@@ -310,8 +392,16 @@ class StorageService {
   async saveDocument(docData: SystemDocument) {
       const userId = await this.getUserId();
       if(isSupabaseConfigured && supabase && userId) {
+          
+          let officeId = docData.officeId;
+          if (!officeId) {
+             const { data } = await supabase.auth.getUser();
+             officeId = data.user?.user_metadata?.currentOfficeId;
+          }
+
           const payload = {
-              id: docData.id,
+              id: docData.id && !docData.id.startsWith('doc-') ? docData.id : undefined,
+              office_id: officeId,
               user_id: userId,
               name: docData.name,
               size: docData.size,
@@ -320,7 +410,8 @@ class StorageService {
               category: docData.category,
               case_id: docData.caseId
           };
-          await supabase.from(TABLE_NAMES.DOCUMENTS).insert(payload);
+          const { error } = await supabase.from(TABLE_NAMES.DOCUMENTS).insert(payload);
+          if (error) throw error;
       } else {
           const list = await this.getDocuments();
           list.unshift(docData);
@@ -342,11 +433,12 @@ class StorageService {
   async getOffices(): Promise<Office[]> {
       if (isSupabaseConfigured && supabase) {
           try {
-              const { data } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
-              return (data || []).map((o: any) => ({
+              const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
+              if (error) throw error;
+              return (data || []).map((o) => ({
                   id: o.id, name: o.name, handle: o.handle, location: o.location, ownerId: o.owner_id,
                   logoUrl: o.logo_url, createdAt: o.created_at, areaOfActivity: o.area_of_activity, members: o.members || []
-              }));
+              })) as Office[];
           } catch { return []; }
       }
       return this.getLocal(LOCAL_KEYS.OFFICES, []);
@@ -421,23 +513,20 @@ class StorageService {
   }
 
   async joinOffice(handle: string): Promise<Office> {
-      const offices = await this.getOffices();
-      const office = offices.find(o => o.handle === handle);
-      if (!office && !isSupabaseConfigured) throw new Error("Escritório não encontrado (Demo)");
-      
       if(isSupabaseConfigured && supabase) {
           const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', handle).single();
           if(error || !data) throw new Error("Escritório não encontrado");
           
-          // Add member logic would be here (usually handled by RLS policy/RPC in production)
-          // For now returning the office object
           return {
               id: data.id, name: data.name, handle: data.handle, ownerId: data.owner_id,
               location: data.location, members: data.members || []
-          };
+          } as Office;
+      } else {
+          const offices = await this.getOffices();
+          const office = offices.find(o => o.handle === handle);
+          if (!office) throw new Error("Escritório não encontrado (Demo)");
+          return office;
       }
-      
-      return office!;
   }
 
   async inviteUserToOffice(officeId: string, handle: string): Promise<boolean> {

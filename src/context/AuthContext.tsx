@@ -55,7 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [addToast]);
 
-  // Monitor de Inatividade
+  // Activity Monitor
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [isAuthenticated, logout]);
 
-  // Verificação de Sessão Inicial
+  // Initial Session Check
   useEffect(() => {
     let mounted = true;
 
@@ -131,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           return () => subscription.unsubscribe();
         } else {
-          // Fallback LocalStorage
+          // Fallback LocalStorage (Strictly Dev/Demo)
           const storedUser = localStorage.getItem('@JurisControl:user');
           if (storedUser && mounted) {
             try {
@@ -168,13 +168,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         try {
             await storageService.ensureProfileExists();
+            
+            // Wait a small delay to ensure triggers have run
+            await new Promise(r => setTimeout(r, 1000));
 
             if (mode === 'create' && name && handle) {
                 const newOffice = await storageService.createOffice({
                     name,
                     handle,
                     location: 'Brasil'
-                }); 
+                }, sbUser.id); // Explicitly pass ID to avoid context race
 
                 await supabase!.auth.updateUser({
                     data: { 
@@ -319,36 +322,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
          throw new Error('Este email já está cadastrado.');
       }
 
+      // If user is created but session is null (email confirm enabled), we rely on pending_office_setup metadata
+      // If session exists (dev or auto-confirm), we try to set up office immediately
       if (data.session && data.user && officeData) {
-          try {
-              if (officeData.mode === 'create' && officeData.name) {
-                  const newOffice = await storageService.createOffice({
-                      name: officeData.name,
-                      handle: officeData.handle,
-                      location: 'Brasil'
-                  }, data.user.id, { name, email });
-                  
-                  await supabase.auth.updateUser({
-                      data: { 
-                          pending_office_setup: null,
-                          offices: [newOffice.id], 
-                          currentOfficeId: newOffice.id 
-                      }
-                  });
-
-              } else if (officeData.mode === 'join') {
-                  const joinedOffice = await storageService.joinOffice(officeData.handle);
-                  await supabase.auth.updateUser({
-                      data: { 
-                          pending_office_setup: null,
-                          offices: [joinedOffice.id], 
-                          currentOfficeId: joinedOffice.id 
-                      }
-                  });
-              }
-          } catch (officeError: any) {
-              console.warn("Immediate office creation failed, will retry on login:", officeError);
-          }
+          // Trigger setup immediately
+          // Note: Logic moved to processPendingSetup called by auth listener
       }
       return !data.session; 
     } else {
