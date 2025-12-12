@@ -20,53 +20,39 @@ class EmailService {
     return this.getLogs();
   }
 
-  /**
-   * Dispara o e-mail. Tenta usar Supabase Edge Function se configurado.
-   * Caso contrário, usa o Mock para demonstração.
-   */
+  // Sanitization Helper
+  private escapeHtml(text: string): string {
+    if (!text) return '';
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+  }
+
   private async dispatch(to: string, subject: string, htmlBody: string, templateType: string): Promise<boolean> {
-    console.groupCollapsed(`📧 [Email Service] Preparing: ${subject}`);
+    console.groupCollapsed(`📧 [Email Service] Sending: ${subject}`);
     
     let status: 'Sent' | 'Failed' | 'Queued' = 'Sent';
-    let errorMsg = '';
 
-    // 1. Tentativa de Envio Real (Supabase Edge Function)
     if (isSupabaseConfigured && supabase) {
         try {
-            console.log('🚀 Tentando envio via Supabase Edge Function...');
             const { data, error } = await supabase.functions.invoke('send-email', {
-                body: {
-                    to,
-                    subject,
-                    html: htmlBody
-                }
+                body: { to, subject, html: htmlBody }
             });
-
-            if (error) throw error;
-            if (data?.error) throw new Error(data.error);
-            
-            console.log('✅ E-mail enviado com sucesso via Edge Function!');
-
+            if (error || data?.error) throw new Error(error?.message || data?.error);
         } catch (e: any) {
             console.warn('⚠️ Falha no envio real. Caindo para simulação local.', e);
             status = 'Failed';
-            errorMsg = e.message;
-            
-            // Em modo desenvolvimento/demo, marcamos como 'Sent' (Simulado) para UX
-            if (import.meta.env.MODE !== 'production' || e.message.includes('Functions')) {
-                 status = 'Sent'; 
-                 console.log('ℹ️ Modo Demo: E-mail registrado localmente.');
-            }
+            // Em dev, assume sucesso simulado
+            if (import.meta.env.MODE !== 'production') status = 'Sent';
         }
     } else {
-        // 2. Modo Offline/Demo
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Delay dramático
-        console.log('ℹ️ Modo Offline: E-mail registrado localmente.');
+        await new Promise(resolve => setTimeout(resolve, 800)); // Mock delay
     }
     
     console.groupEnd();
-
-    // 3. Registrar no Histórico Local (Audit Trail)
     this.saveLog({
       id: `email-${Date.now()}-${Math.random().toString(36).substring(7)}`,
       recipient: to,
@@ -79,20 +65,19 @@ class EmailService {
     return status === 'Sent';
   }
 
-  // --- Templates (HTML Bonito para E-mails) ---
+  // --- Templates ---
 
   private getBaseTemplate(content: string, title: string, color: string = '#4f46e5') {
       return `
         <div style="font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
             <div style="background-color: ${color}; padding: 24px; text-align: center;">
-                <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 0.5px;">${title}</h1>
+                <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 0.5px;">${this.escapeHtml(title)}</h1>
             </div>
             <div style="padding: 32px; color: #334155; line-height: 1.6;">
                 ${content}
             </div>
             <div style="background-color: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0;">
-                <p style="margin: 0;">© ${new Date().getFullYear()} JurisControl - Sistema Jurídico Inteligente</p>
-                <p style="margin: 5px 0 0 0;">Esta é uma mensagem automática. Por favor, não responda.</p>
+                <p style="margin: 0;">© ${new Date().getFullYear()} JurisControl</p>
             </div>
         </div>
       `;
@@ -103,22 +88,13 @@ class EmailService {
     const subject = `${isToday ? '🔴 URGENTE:' : '⚠️ LEMBRETE:'} Prazo ${isToday ? 'VENCE HOJE' : `em ${daysRemaining} dias`} - ${task.title}`;
     
     const content = `
-        <p style="font-size: 16px; margin-bottom: 20px;">Olá, <strong>${user.name}</strong>.</p>
-        <p>Este é um lembrete automático sobre um prazo processual importante que requer sua atenção.</p>
-        
+        <p style="font-size: 16px; margin-bottom: 20px;">Olá, <strong>${this.escapeHtml(user.name)}</strong>.</p>
+        <p>Lembrete automático sobre prazo processual.</p>
         <div style="background-color: #f1f5f9; padding: 20px; border-radius: 8px; border-left: 5px solid ${isToday ? '#ef4444' : '#6366f1'}; margin: 25px 0;">
-            <h2 style="margin: 0 0 10px 0; font-size: 18px; color: #1e293b;">${task.title}</h2>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Processo:</strong> ${task.caseTitle || 'Não vinculado'}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Cliente:</strong> ${task.clientName || 'Não vinculado'}</p>
-            <p style="margin: 15px 0 0 0; font-size: 16px; color: ${isToday ? '#ef4444' : '#0f172a'}; font-weight: bold;">
-                Vencimento: ${task.dueDate}
-            </p>
-        </div>
-
-        <div style="text-align: center; margin-top: 35px;">
-            <a href="${window.location.origin}/#/crm" style="display: inline-block; background-color: #0f172a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px;">
-                Visualizar Tarefa
-            </a>
+            <h2 style="margin: 0 0 10px 0; font-size: 18px; color: #1e293b;">${this.escapeHtml(task.title)}</h2>
+            <p style="margin: 5px 0;"><strong>Processo:</strong> ${this.escapeHtml(task.caseTitle || 'N/A')}</p>
+            <p style="margin: 5px 0;"><strong>Cliente:</strong> ${this.escapeHtml(task.clientName || 'N/A')}</p>
+            <p style="margin: 15px 0 0 0; font-weight: bold;">Vencimento: ${task.dueDate}</p>
         </div>
     `;
 
@@ -127,57 +103,21 @@ class EmailService {
 
   public async sendHearingReminder(user: User, legalCase: LegalCase, hoursLeft: number) {
     const subject = `⚖️ Audiência ${hoursLeft < 24 ? 'AMANHÃ' : 'em breve'}: ${legalCase.title}`;
-    
     const content = `
-        <p style="font-size: 16px;">Olá, <strong>${user.name}</strong>.</p>
-        <p>Você tem uma audiência agendada para ${hoursLeft < 24 ? 'amanhã' : 'breve'}.</p>
-
+        <p>Olá, <strong>${this.escapeHtml(user.name)}</strong>.</p>
+        <p>Você tem uma audiência agendada.</p>
         <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 20px 0;">
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                    <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Processo</td>
-                    <td style="padding: 8px 0; color: #1e293b; font-weight: 600;">${legalCase.cnj}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Cliente</td>
-                    <td style="padding: 8px 0; color: #1e293b; font-weight: 600;">${legalCase.client.name}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Local</td>
-                    <td style="padding: 8px 0; color: #1e293b; font-weight: 600;">${legalCase.court || 'Vide Processo'}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Data</td>
-                    <td style="padding: 8px 0; color: #4f46e5; font-weight: 700; font-size: 16px;">${legalCase.nextHearing}</td>
-                </tr>
-            </table>
-        </div>
-
-        <div style="text-align: center;">
-             <a href="${window.location.origin}/#/cases/${legalCase.id}" style="color: #4f46e5; text-decoration: none; font-weight: 600;">Abrir Processo &rarr;</a>
+            <p><strong>Processo:</strong> ${this.escapeHtml(legalCase.cnj)}</p>
+            <p><strong>Cliente:</strong> ${this.escapeHtml(legalCase.client.name)}</p>
+            <p><strong>Data:</strong> ${legalCase.nextHearing}</p>
         </div>
     `;
-
     return this.dispatch(user.email, subject, this.getBaseTemplate(content, 'Lembrete de Audiência', '#4f46e5'), 'Hearing Reminder');
   }
 
   public async sendTestEmail(user: User) {
     const subject = `✅ JurisControl: Teste de Configuração`;
-    
-    const content = `
-        <div style="text-align: center;">
-            <div style="font-size: 48px; margin-bottom: 10px;">🎉</div>
-            <h2 style="color: #10b981; margin-top: 0;">Configuração Validada!</h2>
-            <p style="font-size: 16px; color: #475569;">Olá, <strong>${user.name}</strong>.</p>
-            <p style="color: #475569; max-width: 400px; margin: 0 auto;">
-                Se você está lendo este e-mail, significa que o sistema de notificações do JurisControl está enviando mensagens corretamente para <strong>${user.email}</strong>.
-            </p>
-            <p style="margin-top: 30px; font-size: 12px; color: #94a3b8;">
-                Data do teste: ${new Date().toLocaleString('pt-BR')}
-            </p>
-        </div>
-    `;
-    
+    const content = `<p>Olá, <strong>${this.escapeHtml(user.name)}</strong>. O sistema de notificações está funcionando.</p>`;
     return this.dispatch(user.email, subject, this.getBaseTemplate(content, 'Teste de Sistema', '#10b981'), 'Test Email');
   }
 }
