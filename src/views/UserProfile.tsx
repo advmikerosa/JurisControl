@@ -131,8 +131,7 @@ export const UserProfile: React.FC = () => {
     }
     setIsSaving(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      updateProfile({
+      await updateProfile({
         name: formData.name,
         username: formData.username,
         email: formData.email,
@@ -143,7 +142,8 @@ export const UserProfile: React.FC = () => {
       storageService.logActivity('Atualizou dados pessoais');
       addToast('Perfil atualizado com sucesso!', 'success');
     } catch (error) {
-      addToast('Erro ao salvar alterações.', 'error');
+      console.error(error);
+      addToast('Erro ao salvar alterações. Tente novamente.', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -161,10 +161,13 @@ export const UserProfile: React.FC = () => {
     }, 2000);
   };
 
-  const handleSaveSecurity = (e: React.FormEvent) => {
+  const handleSaveSecurity = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    setTimeout(() => {
+    try {
+      // Simulation delay for security operations
+      await new Promise(r => setTimeout(r, 1000));
+      
       if (securityData.newPassword) {
           if (securityData.newPassword.length < 6) {
              addToast('A nova senha deve ter no mínimo 6 caracteres.', 'error');
@@ -174,13 +177,16 @@ export const UserProfile: React.FC = () => {
           addToast('Senha alterada com sucesso!', 'success');
           storageService.logActivity('Alteração de senha');
       }
-      updateProfile({ twoFactorEnabled: securityData.twoFactor });
+      await updateProfile({ twoFactorEnabled: securityData.twoFactor });
       if (securityData.twoFactor !== user?.twoFactorEnabled) {
           storageService.logActivity(`${securityData.twoFactor ? 'Ativou' : 'Desativou'} 2FA`);
       }
       setSecurityData(prev => ({ ...prev, currentPassword: '', newPassword: '' }));
-      setIsSaving(false);
-    }, 1000);
+    } catch (error) {
+        addToast('Erro ao atualizar segurança.', 'error');
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const handleExportData = () => {

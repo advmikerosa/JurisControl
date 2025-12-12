@@ -19,7 +19,7 @@ interface AuthContextData {
   register: (name: string, email: string, password: string, oab?: string, officeData?: OfficeRegistrationData) => Promise<boolean>;
   recoverPassword: (email: string) => Promise<boolean>;
   socialLogin: (provider: AuthProviderType) => Promise<void>;
-  updateProfile: (data: Partial<User>) => void;
+  updateProfile: (data: Partial<User>) => Promise<void>;
   requestReactivationOtp: (email: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
@@ -125,7 +125,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                setUser(null);
                setIsAuthenticated(false);
             } else if (session?.user) {
-               mapSupabaseUserToContext(session.user);
+               // Refresh profile data on token refresh or other events
+               await loadProfileAndMap(session.user);
             }
           });
 
@@ -222,7 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   await processPendingSetup(session);
                   if (supabase) {
                     const { data: { user: refreshedUser } } = await supabase.auth.getUser();
-                    mapSupabaseUserToContext(refreshedUser || sbUser);
+                    await loadProfileAndMap(refreshedUser || sbUser);
                   }
               } catch (e) {
                   await logout(false);
@@ -235,28 +236,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           if (updated && supabase) {
              const { data: { user: refreshedUser } } = await supabase.auth.getUser();
-             mapSupabaseUserToContext(refreshedUser || sbUser);
+             await loadProfileAndMap(refreshedUser || sbUser);
           } else {
-             mapSupabaseUserToContext(sbUser);
+             await loadProfileAndMap(sbUser);
           }
       }
   };
 
-  const mapSupabaseUserToContext = (sbUser: any) => {
+  const loadProfileAndMap = async (sbUser: any) => {
+      let profileData = null;
+      if (isSupabaseConfigured && supabase) {
+          const { data } = await supabase
+              .from('profiles')
+              .select('full_name, username, avatar_url, phone, oab, email')
+              .eq('id', sbUser.id)
+              .single();
+          profileData = data;
+      }
+      mapSupabaseUserToContext(sbUser, profileData);
+  };
+
+  const mapSupabaseUserToContext = (sbUser: any, profileData: any = null) => {
     const meta = sbUser.user_metadata || {};
+    
+    // Prefer data from public.profiles table if available (supports larger payloads)
+    const name = profileData?.full_name || meta.full_name || meta.name || 'Usuário';
+    const avatar = profileData?.avatar_url || meta.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`;
+    const username = profileData?.username || meta.username || '';
+    const phone = profileData?.phone || meta.phone || '';
+    const oab = profileData?.oab || meta.oab || '';
+
     const mappedUser: User = {
       id: sbUser.id,
-      name: meta.full_name || meta.name || 'Usuário',
-      username: meta.username || '',
+      name,
+      username,
       email: sbUser.email || '',
-      avatar: meta.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(meta.full_name || 'User')}&background=6366f1&color=fff`,
+      avatar,
       provider: sbUser.app_metadata?.provider || 'email',
       offices: meta.offices || [],
       currentOfficeId: meta.currentOfficeId,
       twoFactorEnabled: false,
       emailVerified: !!sbUser.email_confirmed_at,
-      phone: meta.phone || '',
-      oab: meta.oab || '',
+      phone,
+      oab,
       role: meta.role || 'Advogado'
     };
     setUser(mappedUser);
@@ -322,12 +344,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
          throw new Error('Este email já está cadastrado.');
       }
 
-      // If user is created but session is null (email confirm enabled), we rely on pending_office_setup metadata
-      // If session exists (dev or auto-confirm), we try to set up office immediately
-      if (data.session && data.user && officeData) {
-          // Trigger setup immediately
-          // Note: Logic moved to processPendingSetup called by auth listener
-      }
       return !data.session; 
     } else {
       const user = await authMockService.register(name, email, password, oab, officeData);
@@ -367,6 +383,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const updateProfile = useCallback(async (data: Partial<User>) => {
+    // 1. Optimistic Update (UI)
     setUser(prev => {
         if (!prev) return null;
         const newUser = { ...prev, ...data };
@@ -376,19 +393,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return newUser;
     });
 
+    // 2. Persist to Supabase
     if (isSupabaseConfigured && supabase) {
-        const updates: any = {};
-        if (data.name) updates.full_name = data.name;
-        if (data.avatar) updates.avatar_url = data.avatar;
-        if (data.phone) updates.phone = data.phone;
-        if (data.oab) updates.oab = data.oab;
-        if (data.username) updates.username = data.username;
-        if (data.offices) updates.offices = data.offices;
-        if (data.currentOfficeId) updates.currentOfficeId = data.currentOfficeId;
+        // Update Auth Metadata (limitado, pode falhar com base64 grande)
+        const authUpdates: any = {};
+        if (data.name) authUpdates.full_name = data.name;
+        if (data.avatar && data.avatar.length < 2048) authUpdates.avatar_url = data.avatar; // Only sync small avatars to auth
+        if (data.phone) authUpdates.phone = data.phone;
+        if (data.oab) authUpdates.oab = data.oab;
+        if (data.username) authUpdates.username = data.username;
+        if (data.offices) authUpdates.offices = data.offices;
+        if (data.currentOfficeId) authUpdates.currentOfficeId = data.currentOfficeId;
 
-        await supabase.auth.updateUser({ data: updates });
+        if (Object.keys(authUpdates).length > 0) {
+            await supabase.auth.updateUser({ data: authUpdates });
+        }
+
+        // Update Profiles Table (Source of truth for large data like base64 avatars)
+        if (user?.id) {
+            const tableUpdates: any = {};
+            if (data.name) tableUpdates.full_name = data.name;
+            if (data.avatar) tableUpdates.avatar_url = data.avatar;
+            if (data.phone) tableUpdates.phone = data.phone;
+            if (data.oab) tableUpdates.oab = data.oab;
+            if (data.username) tableUpdates.username = data.username;
+
+            if (Object.keys(tableUpdates).length > 0) {
+               const { error } = await supabase
+                  .from('profiles')
+                  .update(tableUpdates)
+                  .eq('id', user.id);
+               
+               if (error) console.error("Error updating profiles table:", error);
+            }
+        }
     }
-  }, []);
+  }, [user]);
 
   const contextValue = useMemo(() => ({
     isAuthenticated,
