@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { motion } from 'framer-motion';
 
@@ -25,10 +26,10 @@ const pageVariants = {
 };
 
 const pageTransition = {
-  type: 'tween',
-  ease: 'easeInOut',
+  type: 'tween' as const,
+  ease: 'anticipate' as const,
   duration: 0.4
-} as const;
+};
 
 export const PageTransition: React.FC<PageTransitionProps> = ({ children, className = '' }) => {
   return (

@@ -29,18 +29,21 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   useEffect(() => {
     if (isOpen) {
       const { innerWidth, innerHeight } = window;
-      const MENU_WIDTH = 256; 
+      const MENU_WIDTH = 256; // w-64
       
+      // Horizontal Centering: Center the menu on the click X coordinate
       let left = x - (MENU_WIDTH / 2);
       
+      // Horizontal Clamping (prevent going off-screen)
       if (left < 10) left = 10;
       if (left + MENU_WIDTH > innerWidth - 10) left = innerWidth - MENU_WIDTH - 10;
 
+      // Vertical Flipping: If clicked in the bottom 40% of screen, open upwards
       const isBottom = y > innerHeight * 0.6;
       
       setMenuState({
         left,
-        top: isBottom ? undefined : y + 5,
+        top: isBottom ? undefined : y + 5, // Small offset for visibility
         bottom: isBottom ? innerHeight - y + 5 : undefined,
         origin: isBottom ? 'bottom' : 'top'
       });
@@ -85,6 +88,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               shadow-xl dark:shadow-2xl shadow-slate-200/50 dark:shadow-black/50
               rounded-xl overflow-hidden flex flex-col 
               origin-${menuState.origin}
+              max-h-[300px] overflow-y-auto custom-scrollbar
             `}
           >
             {title && (

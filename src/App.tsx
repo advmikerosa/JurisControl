@@ -1,4 +1,3 @@
-
 import React, { Component, Suspense, ReactNode, ErrorInfo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -29,7 +28,6 @@ const Documents = React.lazy(() => import('./views/Documents').then(m => ({ defa
 const PrivacyPolicy = React.lazy(() => import('./views/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
 const TermsOfUse = React.lazy(() => import('./views/TermsOfUse').then(m => ({ default: m.TermsOfUse })));
 const AuthCallback = React.lazy(() => import('./views/AuthCallback').then(m => ({ default: m.AuthCallback })));
-const NotFound = React.lazy(() => import('./views/NotFound').then(m => ({ default: m.NotFound })));
 
 interface ErrorBoundaryProps {
   children?: ReactNode;
@@ -43,6 +41,7 @@ interface ErrorBoundaryState {
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = { hasError: false, error: null };
   
+  // Explicitly declare props to fix TS error in some environments
   public props: ErrorBoundaryProps;
 
   constructor(props: ErrorBoundaryProps) { 
@@ -115,7 +114,7 @@ const AppContent = () => {
           <Route path="/profile" element={<ProtectedRoute><Layout><UserProfile /></Layout></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
           <Route path="/documents" element={<ProtectedRoute><Layout><Documents /></Layout></ProtectedRoute>} />
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <CookieConsent />
       </Suspense>
