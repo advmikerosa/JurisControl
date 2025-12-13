@@ -1,10 +1,8 @@
 
-import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, SearchResult, OfficeMember } from '../types';
+import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
-import { MOCK_CLIENTS, MOCK_CASES, MOCK_TASKS, MOCK_FINANCIALS, MOCK_OFFICES as MOCK_OFFICES_DATA } from './mockData';
-import { CaseRepository } from './repositories/caseRepository';
+import { notificationService } from './notificationService';
 
-// Constants mapping
 const TABLE_NAMES = {
   CLIENTS: 'clients',
   CASES: 'cases',
@@ -28,114 +26,40 @@ const LOCAL_KEYS = {
   LOGS: '@JurisControl:logs',
 };
 
-export const MOCK_OFFICES: Office[] = MOCK_OFFICES_DATA;
+export const MOCK_OFFICES: Office[] = [];
 
 class StorageService {
-  private caseRepo: CaseRepository;
-
-  constructor() {
-    this.caseRepo = new CaseRepository();
-    if (!isSupabaseConfigured) {
-      this.seedDatabase();
-    }
-  }
-
-  // --- Helpers ---
-  private getLocal<T>(key: string, defaultValue: T): T {
-    try {
-        const item = localStorage.getItem(key);
-        return item ? JSON.parse(item) : defaultValue;
-    } catch { return defaultValue; }
-  }
   
-  private setLocal<T>(key: string, value: T): void {
-    localStorage.setItem(key, JSON.stringify(value));
-  }
-
   private async getUserId(): Promise<string | null> {
-      if (isSupabaseConfigured && supabase) {
-          try {
-            const { data, error } = await supabase.auth.getSession();
-            if (error) throw error;
-            return data.session?.user.id || null;
-          } catch (e) {
-            console.warn("Supabase Auth Error (Offline Mode activated):", e);
-            return null;
-          }
-      }
-      const stored = localStorage.getItem('@JurisControl:user');
-      return stored ? JSON.parse(stored).id : 'local-user';
-  }
-
-  // --- Account Management ---
-  public async ensureProfileExists(): Promise<void> {
-    if (!isSupabaseConfigured || !supabase) return;
-    try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        
-        const { data } = await supabase.from(TABLE_NAMES.PROFILES).select('id').eq('id', user.id).maybeSingle();
-        
-        if (!data) {
-            await supabase.from(TABLE_NAMES.PROFILES).insert({
-                id: user.id,
-                email: user.email,
-                full_name: user.user_metadata?.full_name || 'Usuário',
-                username: user.user_metadata?.username || `@user_${user.id.substring(0,8)}`
-            });
-        }
-    } catch (e) { console.error("Profile check error:", e); }
-  }
-
-  async checkAccountStatus(uid: string) {
-      if (isSupabaseConfigured && supabase) {
-          try {
-            const { data, error } = await supabase.from(TABLE_NAMES.PROFILES).select('deleted_at').eq('id', uid).single();
-            if (error) throw error;
-            return data || { deleted_at: null };
-          } catch { return { deleted_at: null }; }
-      }
-      return { deleted_at: null };
-  }
-
-  async reactivateAccount() {
-    const userId = await this.getUserId();
-    if (!userId) return;
     if (isSupabaseConfigured && supabase) {
-        await supabase.rpc('reactivate_own_account');
-    }
-  }
-
-  async deleteAccount() {
-      const userId = await this.getUserId();
-      if(isSupabaseConfigured && supabase && userId) {
-          await supabase.rpc('delete_own_account');
-      } else {
-          localStorage.clear();
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error || !data.session) return null;
+        return data.session.user.id;
+      } catch {
+        return null;
       }
+    }
+    const stored = localStorage.getItem('@JurisControl:user');
+    return stored ? JSON.parse(stored).id : 'local-user';
   }
 
-  // --- CASES ---
-  async getCases(): Promise<LegalCase[]> { return this.caseRepo.getCases(); }
-  async getCaseById(id: string): Promise<LegalCase | null> { return this.caseRepo.getCaseById(id); }
-  async getCasesPaginated(page: number, limit: number, searchTerm: string, status: string | null, category: string | null, dateRange: any) {
-      return this.caseRepo.getPaginated(page, limit, searchTerm, status, category, dateRange);
-  }
-  async saveCase(legalCase: LegalCase) { return this.caseRepo.save(legalCase); }
-  async deleteCase(id: string) { return this.caseRepo.delete(id); }
-
-  // --- CLIENTS ---
+  // --- Clientes ---
   async getClients(): Promise<Client[]> {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
-        if (!userId) throw new Error("Offline or No Auth");
-        
-        const { data, error } = await supabase.from(TABLE_NAMES.CLIENTS).select('*').order('name').limit(100);
+        if (!userId) return [];
+
+        const { data, error } = await supabase
+          .from(TABLE_NAMES.CLIENTS)
+          .select('*')
+          .eq('user_id', userId)
+          .order('name');
         
         if (error) throw error;
-
-        return (data || []).map((c) => ({
+        
+        return (data || []).map((c: any) => ({
             id: c.id,
             officeId: c.office_id,
             name: c.name,
@@ -152,531 +76,1014 @@ class StorageService {
             createdAt: c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '',
             tags: c.tags || [],
             alerts: c.alerts || [],
+            notes: c.notes,
             documents: c.documents || [],
             history: c.history || []
         })) as Client[];
-      } catch (e) {
-        console.warn("Fallback to local clients due to connection error");
-        return this.getLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS);
+      } catch (error) { 
+        console.error("Supabase Error (getClients):", error); 
+        return []; 
       }
+    } else {
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.CLIENTS) || '[]');
     }
-    return this.getLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS);
   }
-
+  
   async saveClient(client: Client) {
     const userId = await this.getUserId();
-    if (isSupabaseConfigured && supabase && userId) {
-      let officeId = client.officeId;
-      if (!officeId) {
-          const { data } = await supabase.auth.getUser();
-          officeId = data.user?.user_metadata?.currentOfficeId;
-      }
 
-      if (officeId) {
-        const payload = {
-            id: client.id && !client.id.startsWith('cli-') ? client.id : undefined,
-            office_id: officeId,
-            user_id: userId,
-            name: client.name,
-            type: client.type,
-            status: client.status,
-            email: client.email,
-            phone: client.phone,
-            city: client.city,
-            state: client.state,
-            avatar_url: client.avatarUrl,
-            cpf: client.cpf,
-            cnpj: client.cnpj,
-            corporate_name: client.corporateName,
-            notes: client.notes,
-            tags: client.tags,
-            alerts: client.alerts,
-            documents: client.documents,
-            history: client.history
-        };
-        const { error } = await supabase.from(TABLE_NAMES.CLIENTS).upsert(payload);
-        if (error) throw error;
+    if (isSupabaseConfigured && supabase) {
+      if (!userId) throw new Error("Usuário não autenticado");
+      
+      const payload = {
+          id: client.id && !client.id.startsWith('cli-') ? client.id : client.id,
+          user_id: userId,
+          office_id: client.officeId,
+          name: client.name,
+          type: client.type,
+          status: client.status,
+          email: client.email,
+          phone: client.phone,
+          city: client.city,
+          state: client.state,
+          avatar_url: client.avatarUrl,
+          cpf: client.cpf,
+          cnpj: client.cnpj,
+          corporate_name: client.corporateName,
+          notes: client.notes,
+          tags: client.tags,
+          alerts: client.alerts,
+          documents: client.documents,
+          history: client.history
+      };
+
+      if (client.id && !client.id.startsWith('cli-')) {
+        await supabase.from(TABLE_NAMES.CLIENTS).upsert(payload);
+      } else {
+        await supabase.from(TABLE_NAMES.CLIENTS).insert([payload]);
       }
+      this.logActivity(`Salvou cliente: ${client.name}`);
     } else {
       const list = await this.getClients();
       const idx = list.findIndex(i => i.id === client.id);
-      if (idx >= 0) list[idx] = client;
-      else list.unshift({ ...client, id: client.id || `cli-${Date.now()}` });
-      this.setLocal(LOCAL_KEYS.CLIENTS, list);
+      if (idx >= 0) {
+          list[idx] = client;
+      } else {
+          if (!client.id) client.id = `cli-${Date.now()}`;
+          list.unshift({ ...client, userId: userId || 'local' });
+      }
+      localStorage.setItem(LOCAL_KEYS.CLIENTS, JSON.stringify(list));
+      this.logActivity(`Salvou cliente: ${client.name}`);
     }
-    this.logActivity(`Salvou cliente: ${client.name}`);
   }
 
   async deleteClient(id: string) {
     const cases = await this.getCases();
-    if (cases.some(c => c.client.id === id && c.status !== CaseStatus.ARCHIVED)) {
-        throw new Error("BLOQUEIO: Cliente possui processos ativos.");
+    const hasActiveCases = cases.some(c => c.client.id === id && c.status !== CaseStatus.ARCHIVED);
+    
+    if (hasActiveCases) {
+        throw new Error("BLOQUEIO: Não é possível excluir este cliente pois ele possui processos ativos.");
     }
+
+    if (isSupabaseConfigured && supabase) {
+      const userId = await this.getUserId();
+      if (!userId) return;
+      await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id).eq('user_id', userId);
+    } else {
+      const list = await this.getClients();
+      localStorage.setItem(LOCAL_KEYS.CLIENTS, JSON.stringify(list.filter(i => i.id !== id)));
+    }
+    this.logActivity(`Excluiu cliente ID: ${id}`, 'Warning');
+  }
+
+  // --- Processos (Cases) ---
+  async getCases(): Promise<LegalCase[]> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const userId = await this.getUserId();
+        if (!userId) return [];
+
+        const { data, error } = await supabase
+          .from(TABLE_NAMES.CASES)
+          .select(`*, client:clients!cases_client_id_fkey(*)`)
+          .eq('user_id', userId);
+        if (error) throw error;
+        
+        return (data || []).map((item: any) => this.mapDBCaseToLegalCase(item));
+      } catch (e) { 
+        console.error("Supabase Error (getCases):", e); 
+        return []; 
+      }
+    } else {
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.CASES) || '[]');
+    }
+  }
+
+  async getCaseById(id: string): Promise<LegalCase | null> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const userId = await this.getUserId();
+        if (!userId) return null;
+
+        const { data, error } = await supabase
+          .from(TABLE_NAMES.CASES)
+          .select(`*, client:clients!cases_client_id_fkey(*)`)
+          .eq('id', id)
+          .eq('user_id', userId)
+          .single();
+        
+        if (error) throw error;
+        return this.mapDBCaseToLegalCase(data);
+      } catch (e) { 
+        return null; 
+      }
+    } else {
+      const cases = await this.getCases();
+      return cases.find(c => c.id === id) || null;
+    }
+  }
+
+  private mapDBCaseToLegalCase(item: any): LegalCase {
+      const clientData = item.client;
+      const mappedClient = clientData ? {
+          id: clientData.id,
+          officeId: clientData.office_id,
+          name: clientData.name,
+          type: clientData.type,
+          avatarUrl: clientData.avatar_url
+      } : { id: 'unknown', officeId: '', name: 'Cliente Desconhecido', type: 'PF', avatarUrl: '' };
+
+      return {
+        id: item.id,
+        officeId: item.office_id,
+        cnj: item.cnj,
+        title: item.title,
+        status: item.status,
+        category: item.category,
+        phase: item.phase,
+        value: Number(item.value),
+        responsibleLawyer: item.responsible_lawyer,
+        court: item.court,
+        nextHearing: item.next_hearing,
+        distributionDate: item.created_at,
+        description: item.description,
+        movements: item.movements,
+        changeLog: item.change_log,
+        lastUpdate: item.last_update,
+        client: mappedClient as Client
+      };
+  }
+
+  async getCasesPaginated(
+    page: number = 1, 
+    limit: number = 20, 
+    searchTerm: string = '', 
+    statusFilter: string | null = null,
+    categoryFilter: string | null = null, 
+    dateRange: { start: string, end: string } | null = null
+  ): Promise<{ data: LegalCase[], total: number }> {
+    const allCases = await this.getCases();
+    
+    let filtered = allCases;
+
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase();
+      filtered = filtered.filter(c => 
+        c.title.toLowerCase().includes(lower) || 
+        c.cnj.includes(lower) || 
+        c.client.name.toLowerCase().includes(lower)
+      );
+    }
+    if (statusFilter && statusFilter !== 'Todos') filtered = filtered.filter(c => c.status === statusFilter);
+    if (categoryFilter && categoryFilter !== 'Todos') filtered = filtered.filter(c => c.category === categoryFilter);
+    if (dateRange && dateRange.start && dateRange.end) {
+        filtered = filtered.filter(c => {
+            const d = c.lastUpdate ? c.lastUpdate.split('T')[0] : '';
+            return d >= dateRange.start && d <= dateRange.end;
+        });
+    }
+
+    const start = (page - 1) * limit;
+    return {
+        data: filtered.slice(start, start + limit),
+        total: filtered.length
+    };
+  }
+
+  async saveCase(legalCase: LegalCase) {
+    const userId = await this.getUserId();
+    legalCase.lastUpdate = new Date().toISOString();
     
     if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id);
-        if (error) {
-           const list = await this.getClients();
-           this.setLocal(LOCAL_KEYS.CLIENTS, list.filter(i => i.id !== id));
-        }
+      if (!userId) throw new Error("Usuário não autenticado");
+      
+      const payload: any = {
+        id: legalCase.id && !legalCase.id.startsWith('case-') ? legalCase.id : legalCase.id,
+        user_id: userId,
+        office_id: legalCase.officeId,
+        client_id: legalCase.client.id,
+        cnj: legalCase.cnj,
+        title: legalCase.title,
+        status: legalCase.status,
+        category: legalCase.category,
+        phase: legalCase.phase,
+        value: legalCase.value,
+        responsible_lawyer: legalCase.responsibleLawyer,
+        court: legalCase.court,
+        next_hearing: legalCase.nextHearing,
+        description: legalCase.description,
+        movements: legalCase.movements,
+        change_log: legalCase.changeLog,
+        last_update: legalCase.lastUpdate
+      };
+      
+      if (legalCase.id && !legalCase.id.startsWith('case-')) {
+        await supabase.from(TABLE_NAMES.CASES).upsert(payload);
+      } else {
+        await supabase.from(TABLE_NAMES.CASES).insert([payload]);
+      }
+      this.logActivity(`Salvou processo: ${legalCase.title}`);
     } else {
-        const list = await this.getClients();
-        this.setLocal(LOCAL_KEYS.CLIENTS, list.filter(i => i.id !== id));
+      const list = await this.getCases();
+      const idx = list.findIndex(i => i.id === legalCase.id);
+      if (idx >= 0) {
+          list[idx] = legalCase;
+      } else {
+          if (!legalCase.id) legalCase.id = `case-${Date.now()}`;
+          list.push({ ...legalCase, userId: userId || 'local' });
+      }
+      localStorage.setItem(LOCAL_KEYS.CASES, JSON.stringify(list));
+      this.logActivity(`Salvou processo: ${legalCase.title}`);
     }
   }
 
-  // --- TASKS ---
+  async deleteCase(id: string) {
+    if (isSupabaseConfigured && supabase) {
+      const userId = await this.getUserId();
+      if (!userId) return;
+      await supabase.from(TABLE_NAMES.CASES).delete().eq('id', id).eq('user_id', userId);
+    } else {
+      const list = await this.getCases();
+      localStorage.setItem(LOCAL_KEYS.CASES, JSON.stringify(list.filter(i => i.id !== id)));
+    }
+    this.logActivity(`Excluiu processo ID: ${id}`, 'Warning');
+  }
+
+  // --- Tarefas ---
   async getTasks(): Promise<Task[]> {
-    if(isSupabaseConfigured && supabase) {
-        try {
-          const { data, error } = await supabase.from(TABLE_NAMES.TASKS).select('*').order('due_date', { ascending: true }).limit(100);
-          if (error) throw error;
-          return (data || []).map((t) => ({
-              id: t.id, 
-              officeId: t.office_id,
-              title: t.title, 
-              dueDate: t.due_date, 
-              priority: t.priority, 
-              status: t.status,
-              assignedTo: t.assigned_to, 
-              description: t.description, 
-              caseId: t.case_id, 
-              caseTitle: t.case_title, 
-              clientId: t.client_id, 
-              clientName: t.client_name
-          })) as Task[];
-        } catch {
-          return this.getLocal(LOCAL_KEYS.TASKS, MOCK_TASKS);
-        }
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const userId = await this.getUserId();
+        if (!userId) return [];
+        const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('user_id', userId);
+        return (data || []).map((t: any) => ({
+            id: t.id,
+            officeId: t.office_id,
+            title: t.title,
+            dueDate: t.due_date,
+            priority: t.priority,
+            status: t.status,
+            assignedTo: t.assigned_to,
+            description: t.description,
+            caseId: t.case_id,
+            caseTitle: t.case_title,
+            clientId: t.client_id,
+            clientName: t.client_name
+        })) as Task[];
+      } catch { return []; }
+    } else {
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.TASKS) || '[]');
     }
-    return this.getLocal(LOCAL_KEYS.TASKS, MOCK_TASKS);
   }
 
-  async getTasksByCaseId(caseId: string) {
-      const tasks = await this.getTasks();
-      return tasks.filter(t => t.caseId === caseId);
+  async getTasksByCaseId(caseId: string): Promise<Task[]> {
+    const tasks = await this.getTasks();
+    return tasks.filter(t => t.caseId === caseId);
   }
-
+  
   async saveTask(task: Task) {
     const userId = await this.getUserId();
-    if(isSupabaseConfigured && supabase && userId) {
-        let officeId = task.officeId;
-        if (!officeId) {
-            const { data } = await supabase.auth.getUser();
-            officeId = data.user?.user_metadata?.currentOfficeId;
-        }
-
-        const payload = {
-            id: task.id && !task.id.startsWith('task-') ? task.id : undefined,
-            office_id: officeId,
-            user_id: userId,
-            title: task.title,
-            due_date: task.dueDate,
-            priority: task.priority,
-            status: task.status,
-            assigned_to: task.assignedTo,
-            description: task.description,
-            case_id: task.caseId,
-            case_title: task.caseTitle,
-            client_id: task.clientId,
-            client_name: task.clientName
-        };
+    if (isSupabaseConfigured && supabase) {
+      if (!userId) throw new Error("Usuário não autenticado");
+      const payload = { 
+          id: task.id && !task.id.startsWith('task-') ? task.id : task.id,
+          user_id: userId,
+          office_id: task.officeId,
+          title: task.title,
+          due_date: task.dueDate,
+          priority: task.priority,
+          status: task.status,
+          assigned_to: task.assignedTo,
+          description: task.description,
+          case_id: task.caseId,
+          case_title: task.caseTitle,
+          client_id: task.clientId,
+          client_name: task.clientName
+      };
+      if (task.id && !task.id.startsWith('task-')) {
         await supabase.from(TABLE_NAMES.TASKS).upsert(payload);
+      } else {
+        await supabase.from(TABLE_NAMES.TASKS).insert([payload]);
+      }
     } else {
-        const list = await this.getTasks();
-        const idx = list.findIndex(t => t.id === task.id);
-        if(idx >= 0) list[idx] = task;
-        else list.push({ ...task, id: task.id || `task-${Date.now()}` });
-        this.setLocal(LOCAL_KEYS.TASKS, list);
+      const list = await this.getTasks();
+      const idx = list.findIndex(i => i.id === task.id);
+      if (idx >= 0) list[idx] = task;
+      else {
+          if(!task.id) task.id = `task-${Date.now()}`;
+          list.push(task);
+      }
+      localStorage.setItem(LOCAL_KEYS.TASKS, JSON.stringify(list));
+    }
+  }
+  
+  async deleteTask(id: string) {
+    if (isSupabaseConfigured && supabase) {
+      const userId = await this.getUserId();
+      if (!userId) return;
+      await supabase.from(TABLE_NAMES.TASKS).delete().eq('id', id).eq('user_id', userId);
+    } else {
+      const list = await this.getTasks();
+      localStorage.setItem(LOCAL_KEYS.TASKS, JSON.stringify(list.filter(i => i.id !== id)));
     }
   }
 
-  async deleteTask(id: string) {
-      if(isSupabaseConfigured && supabase) {
-          try { await supabase.from(TABLE_NAMES.TASKS).delete().eq('id', id); } catch {}
-      } 
-      const list = await this.getTasks();
-      this.setLocal(LOCAL_KEYS.TASKS, list.filter(t => t.id !== id));
-  }
-
-  // --- FINANCIAL ---
+  // --- Financeiro ---
   async getFinancials(): Promise<FinancialRecord[]> {
-      if(isSupabaseConfigured && supabase) {
-          try {
-            const { data, error } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').order('due_date', { ascending: false }).limit(200);
-            if (error) throw error;
-            return (data || []).map((f) => ({
-                id: f.id, 
-                officeId: f.office_id,
-                title: f.title, 
-                amount: Number(f.amount), 
-                type: f.type, 
-                category: f.category,
-                status: f.status, 
-                dueDate: f.due_date, 
-                paymentDate: f.payment_date, 
-                clientId: f.client_id, 
-                clientName: f.client_name, 
-                caseId: f.case_id, 
-                installment: f.installment
-            })) as FinancialRecord[];
-          } catch {
-            return this.getLocal(LOCAL_KEYS.FINANCIAL, MOCK_FINANCIALS);
-          }
-      }
-      return this.getLocal(LOCAL_KEYS.FINANCIAL, MOCK_FINANCIALS);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const userId = await this.getUserId();
+        if (!userId) return [];
+        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('user_id', userId);
+        return (data || []).map((f: any) => ({
+            id: f.id,
+            officeId: f.office_id,
+            title: f.title,
+            amount: Number(f.amount),
+            type: f.type,
+            category: f.category,
+            status: f.status,
+            dueDate: f.due_date,
+            paymentDate: f.payment_date,
+            clientId: f.client_id,
+            clientName: f.client_name,
+            caseId: f.case_id,
+            installment: f.installment
+        })) as FinancialRecord[];
+      } catch { return []; }
+    } else {
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.FINANCIAL) || '[]');
+    }
   }
 
-  async getFinancialsByCaseId(caseId: string) {
-      const fins = await this.getFinancials();
-      return fins.filter(f => f.caseId === caseId);
+  async getFinancialsByCaseId(caseId: string): Promise<FinancialRecord[]> {
+    const fins = await this.getFinancials();
+    return fins.filter(f => f.caseId === caseId);
   }
-
+  
   async saveFinancial(record: FinancialRecord) {
-      const userId = await this.getUserId();
-      if(isSupabaseConfigured && supabase && userId) {
-          let officeId = record.officeId;
-          if (!officeId) {
-            const { data } = await supabase.auth.getUser();
-            officeId = data.user?.user_metadata?.currentOfficeId;
-          }
-
-          const payload = {
-              id: record.id && !record.id.startsWith('trans-') ? record.id : undefined,
-              office_id: officeId,
-              user_id: userId,
-              title: record.title,
-              amount: record.amount,
-              type: record.type,
-              category: record.category,
-              status: record.status,
-              due_date: record.dueDate,
-              payment_date: record.paymentDate,
-              client_id: record.clientId,
-              client_name: record.clientName,
-              case_id: record.caseId,
-              installment: record.installment
-          };
-          await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
+    const userId = await this.getUserId();
+    if (isSupabaseConfigured && supabase) {
+      if (!userId) throw new Error("Usuário não autenticado");
+      const payload = {
+          id: record.id && !record.id.startsWith('trans-') ? record.id : record.id,
+          user_id: userId,
+          office_id: record.officeId,
+          title: record.title,
+          amount: record.amount,
+          type: record.type,
+          category: record.category,
+          status: record.status,
+          due_date: record.dueDate,
+          payment_date: record.paymentDate,
+          client_id: record.clientId,
+          client_name: record.clientName,
+          case_id: record.caseId,
+          installment: record.installment
+      };
+      if (record.id && !record.id.startsWith('trans-')) {
+        await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
       } else {
-          const list = await this.getFinancials();
-          const idx = list.findIndex(i => i.id === record.id);
-          if(idx >= 0) list[idx] = record;
-          else list.push({ ...record, id: record.id || `trans-${Date.now()}` });
-          this.setLocal(LOCAL_KEYS.FINANCIAL, list);
+        await supabase.from(TABLE_NAMES.FINANCIAL).insert([payload]);
       }
+    } else {
+      const list = await this.getFinancials();
+      const idx = list.findIndex(i => i.id === record.id);
+      if (idx >= 0) list[idx] = record;
+      else {
+          if(!record.id) record.id = `trans-${Date.now()}`;
+          list.push(record);
+      }
+      localStorage.setItem(LOCAL_KEYS.FINANCIAL, JSON.stringify(list));
+    }
   }
 
-  // --- DOCUMENTS ---
+  // --- Documentos ---
   async getDocuments(): Promise<SystemDocument[]> {
-      if(isSupabaseConfigured && supabase) {
-          try {
-            const { data, error } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').order('created_at', { ascending: false }).limit(100);
-            if (error) throw error;
-            return (data || []).map((d) => ({
-                id: d.id, 
-                officeId: d.office_id,
-                name: d.name, 
-                size: d.size, 
-                type: d.type, 
-                date: d.date, 
-                category: d.category, 
-                caseId: d.case_id,
-                userId: d.user_id,
-                storagePath: d.storage_path
-            })) as SystemDocument[];
-          } catch { return this.getLocal(LOCAL_KEYS.DOCUMENTS, []); }
-      }
-      return this.getLocal(LOCAL_KEYS.DOCUMENTS, []);
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const userId = await this.getUserId();
+        if (!userId) return [];
+        const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('user_id', userId);
+        return (data || []).map((d: any) => ({
+            id: d.id,
+            officeId: d.office_id,
+            name: d.name,
+            size: d.size,
+            type: d.type,
+            date: d.date,
+            category: d.category,
+            caseId: d.case_id,
+            userId: d.user_id
+        })) as SystemDocument[];
+      } catch { return []; }
+    } else {
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.DOCUMENTS) || '[]');
+    }
   }
 
-  async getDocumentsByCaseId(caseId: string) {
-      const docs = await this.getDocuments();
-      return docs.filter(d => d.caseId === caseId);
+  async getDocumentsByCaseId(caseId: string): Promise<SystemDocument[]> {
+    const docs = await this.getDocuments();
+    return docs.filter(d => d.caseId === caseId);
   }
 
-  // Upload Logic with Storage Support
-  async saveDocument(docData: SystemDocument, file?: File) {
-      const userId = await this.getUserId();
-      
-      if(isSupabaseConfigured && supabase && userId) {
-          let officeId = docData.officeId;
-          if (!officeId) {
-             const { data } = await supabase.auth.getUser();
-             officeId = data.user?.user_metadata?.currentOfficeId;
-          }
-
-          // 1. Upload file to Storage if provided
-          let storagePath = null;
-          if (file && officeId) {
-              const fileExt = file.name.split('.').pop()?.toLowerCase();
-              const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-              const fileName = `${Date.now()}-${sanitizedName}`;
-              const filePath = `${officeId}/${fileName}`;
-              
-              const { error: uploadError } = await supabase.storage
-                  .from('documents')
-                  .upload(filePath, file);
-              
-              if (uploadError) {
-                  console.error("Storage upload failed:", uploadError);
-                  throw new Error("Falha no upload do arquivo para o bucket.");
-              }
-              storagePath = filePath;
-          }
-
-          // 2. Save Metadata to Database
-          const payload = {
-              id: docData.id && !docData.id.startsWith('doc-') ? docData.id : undefined,
-              office_id: officeId,
-              user_id: userId,
-              name: docData.name,
-              size: docData.size,
-              type: docData.type,
-              date: docData.date,
-              category: docData.category,
-              case_id: docData.caseId,
-              storage_path: storagePath
-          };
-          await supabase.from(TABLE_NAMES.DOCUMENTS).insert(payload);
-      } else {
-          // Fallback Local
-          const list = await this.getDocuments();
-          list.unshift(docData);
-          this.setLocal(LOCAL_KEYS.DOCUMENTS, list);
-      }
-      this.logActivity(`Upload de documento: ${docData.name}`);
+  async saveDocument(docData: SystemDocument) {
+    const userId = await this.getUserId();
+    if (isSupabaseConfigured && supabase) {
+      if (!userId) throw new Error("Usuário não autenticado");
+      const payload = { 
+          id: docData.id,
+          user_id: userId,
+          office_id: docData.officeId,
+          name: docData.name,
+          size: docData.size,
+          type: docData.type,
+          date: docData.date,
+          category: docData.category,
+          case_id: docData.caseId
+      };
+      await supabase.from(TABLE_NAMES.DOCUMENTS).insert([payload]);
+    } else {
+      const list = await this.getDocuments();
+      list.unshift({ ...docData, userId: userId || 'local' });
+      localStorage.setItem(LOCAL_KEYS.DOCUMENTS, JSON.stringify(list));
+    }
+    this.logActivity(`Upload de documento: ${docData.name}`);
   }
 
   async deleteDocument(id: string) {
-      if(isSupabaseConfigured && supabase) {
-          try { 
-              // First get storage path to delete file
-              const { data: doc } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('storage_path').eq('id', id).single();
-              
-              await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id);
-              
-              if (doc?.storage_path) {
-                  await supabase.storage.from('documents').remove([doc.storage_path]);
-              }
-          } catch {}
-      } 
+    if (isSupabaseConfigured && supabase) {
+      const userId = await this.getUserId();
+      if (!userId) return;
+      await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id).eq('user_id', userId);
+    } else {
       const list = await this.getDocuments();
-      this.setLocal(LOCAL_KEYS.DOCUMENTS, list.filter(i => i.id !== id));
+      localStorage.setItem(LOCAL_KEYS.DOCUMENTS, JSON.stringify(list.filter(i => i.id !== id)));
+    }
   }
 
-  // --- OFFICES ---
+  // --- Escritórios (Office Management) ---
   async getOffices(): Promise<Office[]> {
-      if (isSupabaseConfigured && supabase) {
-          try {
-              const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
-              if (error) throw error;
-              return (data || []).map((o) => ({
-                  id: o.id, name: o.name, handle: o.handle, location: o.location, ownerId: o.owner_id,
-                  logoUrl: o.logo_url, createdAt: o.created_at, areaOfActivity: o.area_of_activity, members: o.members || []
-              })) as Office[];
-          } catch { 
-              return this.getLocal(LOCAL_KEYS.OFFICES, MOCK_OFFICES_DATA); 
-          }
+    if (isSupabaseConfigured && supabase) {
+      try {
+          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*');
+          if (error) throw error;
+
+          return (data || []).map((o: any) => ({
+              id: o.id,
+              name: o.name,
+              handle: o.handle,
+              location: o.location,
+              ownerId: o.owner_id,
+              logoUrl: o.logo_url,
+              createdAt: o.created_at,
+              areaOfActivity: o.area_of_activity,
+              members: o.members || []
+          }));
+      } catch (e) {
+          console.error("Error fetching offices:", e);
+          return [];
       }
-      return this.getLocal(LOCAL_KEYS.OFFICES, MOCK_OFFICES_DATA);
+    } else {
+      return JSON.parse(localStorage.getItem(LOCAL_KEYS.OFFICES) || '[]');
+    }
   }
 
   async getOfficeById(id: string): Promise<Office | undefined> {
-      const offices = await this.getOffices();
-      return offices.find(o => o.id === id);
+    if (isSupabaseConfigured && supabase) {
+       try {
+           const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', id).single();
+           if (error || !data) return undefined;
+           return {
+              id: data.id,
+              name: data.name,
+              handle: data.handle,
+              location: data.location,
+              ownerId: data.owner_id,
+              logoUrl: data.logo_url,
+              createdAt: data.created_at,
+              areaOfActivity: data.area_of_activity,
+              members: data.members || []
+           };
+       } catch { return undefined; }
+    }
+    const offices = await this.getOffices();
+    return offices.find(o => o.id === id);
   }
-
+  
   async saveOffice(office: Office): Promise<void> {
-      if(isSupabaseConfigured && supabase) {
-          const payload = {
-              id: office.id, name: office.name, handle: office.handle, location: office.location,
-              owner_id: office.ownerId, logo_url: office.logoUrl, area_of_activity: office.areaOfActivity,
-              members: office.members, social: office.social
-          };
-          await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
-      } else {
-          const offices = await this.getOffices();
-          const index = offices.findIndex(o => o.id === office.id);
-          if (index >= 0) {
-              offices[index] = office;
-              this.setLocal(LOCAL_KEYS.OFFICES, offices);
-          }
-      }
-      this.logActivity(`Atualizou escritório: ${office.name}`);
+    if (isSupabaseConfigured && supabase) {
+        const payload = {
+            id: office.id,
+            name: office.name,
+            handle: office.handle,
+            location: office.location,
+            owner_id: office.ownerId,
+            logo_url: office.logoUrl,
+            created_at: office.createdAt,
+            area_of_activity: office.areaOfActivity,
+            members: office.members,
+            social: office.social
+        };
+        
+        await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
+        this.logActivity(`Atualizou escritório: ${office.name}`);
+    } else {
+        const offices = await this.getOffices();
+        const index = offices.findIndex(o => o.id === office.id);
+        if (index >= 0) {
+          offices[index] = office;
+          localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
+          this.logActivity(`Atualizou dados do escritório: ${office.name}`);
+        }
+    }
   }
 
   async createOffice(officeData: Partial<Office>, explicitOwnerId?: string, userData?: any): Promise<Office> {
-      const userId = explicitOwnerId || (await this.getUserId());
-      if (!userId) throw new Error("User required");
+    const userId = explicitOwnerId || await this.getUserId();
+    if (!userId) throw new Error("Usuário não autenticado para criar escritório");
 
-      let handle = officeData.handle || `@office${Date.now()}`;
-      if (!handle.startsWith('@')) handle = '@' + handle;
+    // Fallback user data from storage if not provided
+    let userDetails = userData;
+    if (!userDetails) {
+        const userStr = localStorage.getItem('@JurisControl:user');
+        userDetails = userStr ? JSON.parse(userStr) : { name: 'Admin', email: '', avatar: '' };
+    }
 
-      const newOffice: Office = {
-          id: `office-${Date.now()}`,
-          name: officeData.name || 'Novo Escritório',
-          handle: handle,
-          location: officeData.location || 'Brasil',
-          ownerId: userId,
-          members: [{
-              userId: userId,
-              name: userData?.name || 'Admin',
-              role: 'Admin',
-              permissions: { financial: true, cases: true, documents: true, settings: true },
-              email: userData?.email,
-              avatarUrl: ''
-          }],
-          createdAt: new Date().toISOString()
-      };
+    let handle = officeData.handle?.toLowerCase().replace(/[^a-z0-9_@]/g, '') || `@office${Date.now()}`;
+    if (!handle.startsWith('@')) handle = '@' + handle;
 
-      if(isSupabaseConfigured && supabase) {
-          const dbOffice = {
-              name: newOffice.name,
-              handle: newOffice.handle,
-              location: newOffice.location,
-              owner_id: newOffice.ownerId,
-              members: newOffice.members
-          };
-          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).insert(dbOffice).select().single();
-          if(error) throw error;
-          return { ...newOffice, id: data.id };
+    const newOffice: Office = {
+        id: `office-${Date.now()}`,
+        name: officeData.name || 'Novo Escritório',
+        handle: handle,
+        location: officeData.location || 'Brasil',
+        ownerId: userId,
+        members: [{
+            userId: userId,
+            name: userDetails?.name || 'Admin',
+            email: userDetails?.email || '',
+            avatarUrl: userDetails?.avatar || '',
+            role: 'Admin',
+            permissions: { financial: true, cases: true, documents: true, settings: true }
+        }],
+        createdAt: new Date().toISOString(),
+        social: {}
+    };
+
+    if (isSupabaseConfigured && supabase) {
+        try {
+            const dbOffice = {
+                name: newOffice.name,
+                handle: newOffice.handle,
+                location: newOffice.location,
+                owner_id: newOffice.ownerId,
+                members: newOffice.members
+            };
+            
+            const { data: officeDataDB, error: officeError } = await supabase.from(TABLE_NAMES.OFFICES).insert(dbOffice).select().single();
+            
+            if(officeError) {
+                if (officeError.code === '23505') throw new Error("Este identificador (@handle) já está em uso.");
+                throw officeError;
+            }
+            
+            return { 
+                ...newOffice, 
+                id: officeDataDB.id,
+                createdAt: officeDataDB.created_at
+            };
+        } catch (e: any) {
+            console.error("Create Office Error:", e);
+            throw new Error(e.message || "Erro ao criar escritório.");
+        }
+    } else {
+        const offices = await this.getOffices();
+        if (offices.some(o => o.handle.toLowerCase() === handle.toLowerCase())) {
+          throw new Error("Este identificador de escritório (@handle) já está em uso.");
+        }
+        localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify([...offices, newOffice]));
+        this.logActivity(`Criou novo escritório: ${newOffice.name}`);
+        return newOffice;
+    }
+  }
+
+  async joinOffice(officeHandle: string): Promise<Office> {
+    if (isSupabaseConfigured && supabase) {
+        const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', officeHandle).single();
+        
+        if (error || !office) throw new Error("Escritório não encontrado ou acesso restrito.");
+
+        const userId = await this.getUserId();
+        if (!userId) throw new Error("Usuário não autenticado para entrar em escritório");
+
+        const { data: { session } } = await supabase.auth.getSession();
+        const u = session?.user?.user_metadata || {};
+
+        const members = office.members || [];
+        const existingMember = members.find((m: any) => m.userId === userId);
+        
+        if (existingMember) {
+             return {
+                id: office.id,
+                name: office.name,
+                handle: office.handle,
+                location: office.location,
+                ownerId: office.owner_id,
+                logoUrl: office.logo_url,
+                createdAt: office.created_at,
+                areaOfActivity: office.area_of_activity,
+                members
+            };
+        }
+
+        const newMember: OfficeMember = {
+             userId: userId,
+             name: u.full_name || 'Novo Membro',
+             email: session?.user?.email || '',
+             avatarUrl: u.avatar_url || '',
+             role: 'Advogado',
+             permissions: { financial: false, cases: true, documents: true, settings: false }
+        };
+        
+        const updatedMembers = [...members, newMember];
+        const { error: updateError } = await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', office.id);
+        if (updateError) throw updateError;
+
+        this.logActivity(`Entrou no escritório: ${office.name}`);
+        return {
+            id: office.id,
+            name: office.name,
+            handle: office.handle,
+            location: office.location,
+            ownerId: office.owner_id,
+            logoUrl: office.logo_url,
+            createdAt: office.created_at,
+            areaOfActivity: office.area_of_activity,
+            members: updatedMembers
+        };
+
+    } else {
+        const offices = await this.getOffices();
+        const targetOffice = offices.find(o => o.handle.toLowerCase() === officeHandle.toLowerCase());
+        if (!targetOffice) throw new Error("Escritório não encontrado com este identificador.");
+
+        const userId = await this.getUserId();
+        const userStr = localStorage.getItem('@JurisControl:user');
+        const user = userStr ? JSON.parse(userStr) : { name: 'Novo Membro', email: '', avatar: '' };
+        
+        if (!targetOffice.members.some(m => m.userId === userId)) {
+           targetOffice.members.push({
+             userId: userId || 'local',
+             name: user?.name || 'Novo Membro',
+             email: user?.email || '',
+             avatarUrl: user?.avatar || '',
+             role: 'Advogado',
+             permissions: { financial: false, cases: true, documents: true, settings: false }
+           });
+           const updatedOffices = offices.map(o => o.id === targetOffice.id ? targetOffice : o);
+           localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(updatedOffices));
+           this.logActivity(`Entrou no escritório: ${targetOffice.name}`);
+        }
+        return targetOffice;
+    }
+  }
+
+  async inviteUserToOffice(officeId: string, userHandle: string): Promise<boolean> {
+     if (!userHandle.startsWith('@') && !userHandle.includes('@')) throw new Error("Informe e-mail ou @usuario.");
+     await new Promise(resolve => setTimeout(resolve, 800));
+     // Here you would implement logic to find the user by handle and add them to office members
+     return true; 
+  }
+
+  async removeMemberFromOffice(officeId: string, memberId: string) {
+      if (isSupabaseConfigured && supabase) {
+          const { data: office } = await supabase.from(TABLE_NAMES.OFFICES).select('members').eq('id', officeId).single();
+          if (office) {
+              const updatedMembers = (office.members || []).filter((m: any) => m.userId !== memberId);
+              await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', officeId);
+          }
       } else {
           const offices = await this.getOffices();
-          this.setLocal(LOCAL_KEYS.OFFICES, [...offices, newOffice]);
-          return newOffice;
+          const office = offices.find(o => o.id === officeId);
+          if (office) {
+              office.members = office.members.filter(m => m.userId !== memberId);
+              localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
+          }
       }
   }
 
-  async joinOffice(handle: string): Promise<Office> {
-      if(isSupabaseConfigured && supabase) {
-          const { data, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', handle).single();
-          if(error || !data) throw new Error("Escritório não encontrado");
+  async checkAccountStatus(userId: string): Promise<{ deleted_at?: string }> {
+    if (isSupabaseConfigured && supabase) {
+        const { data } = await supabase.from(TABLE_NAMES.PROFILES).select('deleted_at').eq('id', userId).single();
+        return data || {};
+    }
+    return {};
+  }
+
+  async reactivateAccount() {
+    if (isSupabaseConfigured && supabase) {
+        const userId = await this.getUserId();
+        if(userId) await supabase.from(TABLE_NAMES.PROFILES).update({ deleted_at: null }).eq('id', userId);
+    }
+  }
+
+  async ensureProfileExists() {
+    const userId = await this.getUserId();
+    if (isSupabaseConfigured && supabase && userId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const updates = {
+                id: user.id,
+                full_name: user.user_metadata.full_name || user.user_metadata.name,
+                email: user.email,
+                username: user.user_metadata.username,
+                avatar_url: user.user_metadata.avatar_url
+            };
+            await supabase.from(TABLE_NAMES.PROFILES).upsert(updates, { onConflict: 'id' });
+        }
+    }
+  }
+
+  async deleteAccount() {
+    const userId = await this.getUserId();
+    
+    if (isSupabaseConfigured && supabase) {
+      if (!userId) return;
+      
+      const tables = [
+        TABLE_NAMES.LOGS,
+        TABLE_NAMES.FINANCIAL,
+        TABLE_NAMES.TASKS,
+        TABLE_NAMES.DOCUMENTS,
+        TABLE_NAMES.CASES,
+        TABLE_NAMES.CLIENTS,
+        TABLE_NAMES.PROFILES
+      ];
+
+      for (const table of tables) {
+        try {
+            await supabase.from(table).delete().eq('user_id', userId);
+        } catch (e) {
+            console.error(`Error deleting from ${table}`, e);
+        }
+      }
+      
+    } else {
+      localStorage.clear();
+    }
+  }
+
+  // --- Utils & Logs ---
+  getLogs(): ActivityLog[] { 
+    try { return JSON.parse(localStorage.getItem(LOCAL_KEYS.LOGS) || '[]'); } catch { return []; }
+  }
+  
+  logActivity(action: string, status: 'Success' | 'Failed' | 'Warning' = 'Success') {
+    if (isSupabaseConfigured && supabase) {
+        this.getUserId().then(uid => {
+            if (uid) {
+                supabase!.from(TABLE_NAMES.LOGS).insert([{
+                    user_id: uid,
+                    action,
+                    status,
+                    device: navigator.userAgent,
+                    ip: 'IP_PLACEHOLDER',
+                    date: new Date().toLocaleString('pt-BR')
+                }]).then(({ error }) => {
+                    if(error) console.warn("Failed to log to Supabase", error);
+                });
+            }
+        });
+    } else {
+        const logs = this.getLogs();
+        const newLog: ActivityLog = {
+          id: Date.now().toString(),
+          action,
+          date: new Date().toLocaleString('pt-BR'),
+          device: navigator.userAgent.split(')')[0] + ')',
+          ip: '127.0.0.1', 
+          status
+        };
+        logs.unshift(newLog);
+        localStorage.setItem(LOCAL_KEYS.LOGS, JSON.stringify(logs.slice(0, 50)));
+    }
+  }
+
+  getSettings(): AppSettings {
+      try {
+          const s = localStorage.getItem(LOCAL_KEYS.SETTINGS);
+          const parsed = s ? JSON.parse(s) : {};
           
           return {
-              id: data.id, name: data.name, handle: data.handle, ownerId: data.owner_id,
-              location: data.location, members: data.members || []
-          } as Office;
-      } else {
-          const offices = await this.getOffices();
-          const office = offices.find(o => o.handle === handle);
-          if (!office) throw new Error("Escritório não encontrado (Demo)");
-          return office;
+            general: parsed.general || { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' },
+            notifications: parsed.notifications || { desktop: true, sound: false, dailyDigest: false },
+            emailPreferences: parsed.emailPreferences || {
+                enabled: false,
+                frequency: 'immediate',
+                categories: { deadlines: true, processes: true, events: true, financial: false, marketing: true },
+                deadlineAlerts: { sevenDays: true, threeDays: true, oneDay: true, onDueDate: true }
+            },
+            automation: parsed.automation || { autoArchiveWonCases: false, autoSaveDrafts: true }
+          };
+      } catch { return {} as any; }
+  }
+
+  saveSettings(settings: AppSettings) {
+      localStorage.setItem(LOCAL_KEYS.SETTINGS, JSON.stringify(settings));
+      if (isSupabaseConfigured && supabase) {
+          this.getUserId().then(uid => {
+              if (uid) {
+                  supabase!.from(TABLE_NAMES.PROFILES).upsert({ id: uid, settings });
+              }
+          });
       }
   }
 
-  async inviteUserToOffice(officeId: string, handle: string): Promise<boolean> {
-      await new Promise(r => setTimeout(r, 500));
-      return true;
-  }
-
-  async removeMemberFromOffice(officeId: string, userId: string) {
-      const offices = await this.getOffices();
-      const office = offices.find(o => o.id === officeId);
-      if(office) {
-          office.members = office.members.filter(m => m.userId !== userId);
-          this.saveOffice(office);
-      }
-  }
-
-  // --- Dashboard & Search ---
   async getDashboardSummary(): Promise<DashboardData> {
-      const cases = await this.getCases();
-      const tasks = await this.getTasks();
-      
-      const counts = {
-          activeCases: cases.filter(c => c.status === CaseStatus.ACTIVE).length,
-          wonCases: cases.filter(c => c.status === CaseStatus.WON).length,
-          pendingCases: cases.filter(c => c.status === CaseStatus.PENDING).length,
-          hearings: cases.filter(c => !!c.nextHearing).length,
-          highPriorityTasks: tasks.filter(t => t.priority === 'Alta' && t.status !== 'Concluído').length
-      };
+    const [allCases, allTasks] = await Promise.all([
+      this.getCases(),
+      this.getTasks()
+    ]);
 
-      return {
-          counts,
-          charts: { caseDistribution: [] }, // Simplified for brevity
-          lists: {
-              upcomingHearings: cases.filter(c => !!c.nextHearing).slice(0, 5),
-              todaysAgenda: [],
-              recentMovements: []
-          }
-      };
+    let activeCases = 0, wonCases = 0, pendingCases = 0, hearings = 0;
+    
+    for (const c of allCases) {
+        if (c.status === CaseStatus.ACTIVE) activeCases++;
+        else if (c.status === CaseStatus.WON) wonCases++;
+        else if (c.status === CaseStatus.PENDING) pendingCases++;
+        
+        if (c.nextHearing) hearings++;
+    }
+
+    const highPriorityTasks = allTasks.filter(t => t.priority === 'Alta' && t.status !== 'Concluído').length;
+
+    const caseDistribution = [
+        { name: 'Ativos', value: activeCases, color: '#818cf8' },
+        { name: 'Pendentes', value: pendingCases, color: '#fbbf24' },
+        { name: 'Ganhos', value: wonCases, color: '#34d399' },
+    ];
+
+    const upcomingHearings = allCases
+        .filter(c => c.nextHearing)
+        .sort((a, b) => {
+            if (!a.nextHearing || !b.nextHearing) return 0;
+            const [dA, mA, yA] = a.nextHearing.split('/').map(Number);
+            const [dB, mB, yB] = b.nextHearing.split('/').map(Number);
+            return new Date(yA, mA - 1, dA).getTime() - new Date(yB, mB - 1, dB).getTime();
+        })
+        .slice(0, 4); 
+
+    const todayStr = new Date().toLocaleDateString('pt-BR');
+    const todaysAgenda = [
+        ...allTasks.filter(t => t.dueDate === todayStr && t.status !== 'Concluído').map(t => ({ type: 'task' as const, title: t.title, sub: 'Prazo Fatal', id: t.id })),
+        ...allCases.filter(c => c.nextHearing === todayStr).map(c => ({ type: 'hearing' as const, title: c.title, sub: 'Audiência', id: c.id }))
+    ].slice(0, 5);
+
+    const recentMovements = allCases
+      .flatMap(c => (c.movements || []).map(m => ({
+        id: m.id,
+        caseId: c.id,
+        caseTitle: c.title,
+        description: m.description,
+        date: m.date,
+        type: m.type,
+        sortTime: (() => {
+           try {
+             const [day, month, year] = m.date.split(' ')[0].split('/');
+             return new Date(`${year}-${month}-${day}`).getTime();
+           } catch { return 0; }
+        })()
+      })))
+      .sort((a, b) => (b.sortTime || 0) - (a.sortTime || 0))
+      .slice(0, 5)
+      .map(({ sortTime, ...rest }) => rest);
+
+    return {
+        counts: { activeCases, wonCases, pendingCases, hearings, highPriorityTasks },
+        charts: { caseDistribution },
+        lists: { upcomingHearings, todaysAgenda, recentMovements }
+    };
   }
 
   async searchGlobal(query: string): Promise<SearchResult[]> {
-      if(!query) return [];
-      const lower = query.toLowerCase();
-      const [cases, clients] = await Promise.all([this.getCases(), this.getClients()]);
-      
-      const results: SearchResult[] = [];
-      cases.forEach(c => {
-          if(c.title.toLowerCase().includes(lower) || c.cnj.includes(lower)) {
-              results.push({ id: c.id, type: 'case', title: c.title, subtitle: c.cnj, url: `/cases/${c.id}` });
-          }
-      });
-      clients.forEach(c => {
-          if(c.name.toLowerCase().includes(lower)) {
-              results.push({ id: c.id, type: 'client', title: c.name, subtitle: c.email, url: `/clients/${c.id}` });
-          }
-      });
-      return results;
+    if (!query || query.length < 2) return [];
+    
+    const lowerQuery = query.toLowerCase();
+    const [clients, cases, tasks] = await Promise.all([
+        this.getClients(),
+        this.getCases(),
+        this.getTasks()
+    ]);
+
+    const results: SearchResult[] = [];
+
+    for (const c of clients) {
+        if (c.name.toLowerCase().includes(lowerQuery) || 
+            (c.email && c.email.toLowerCase().includes(lowerQuery)) || 
+            (c.cpf && c.cpf.includes(lowerQuery)) || 
+            (c.cnpj && c.cnpj.includes(lowerQuery))) {
+            results.push({
+                id: c.id,
+                type: 'client',
+                title: c.name,
+                subtitle: c.type === 'PF' ? c.cpf : c.cnpj,
+                url: `/clients/${c.id}`
+            });
+        }
+    }
+
+    for (const c of cases) {
+        if (c.title.toLowerCase().includes(lowerQuery) || 
+            c.cnj.includes(lowerQuery) || 
+            c.client.name.toLowerCase().includes(lowerQuery)) {
+            results.push({
+                id: c.id,
+                type: 'case',
+                title: c.title,
+                subtitle: `CNJ: ${c.cnj} • ${c.client.name}`,
+                url: `/cases/${c.id}`
+            });
+        }
+    }
+
+    for (const t of tasks) {
+        if (t.title.toLowerCase().includes(lowerQuery)) {
+            results.push({
+                id: t.id,
+                type: 'task',
+                title: t.title,
+                subtitle: `Vence: ${t.dueDate} • ${t.status}`,
+                url: '/crm'
+            });
+        }
+    }
+
+    return results.slice(0, 8);
   }
 
-  // --- Automation ---
-  async checkRealtimeAlerts() {
-      // Stub for checking deadlines
+  async checkDeadlines() {
+    const lastCheck = localStorage.getItem(LOCAL_KEYS.LAST_CHECK);
+    const today = new Date();
+    const todayStr = today.toDateString();
+
+    if (lastCheck === todayStr) return;
+
+    const tasks = await this.getTasks();
+    const cases = await this.getCases();
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const isDate = (dateStr: string, targetDate: Date) => {
+       if (!dateStr) return false;
+       const [d, m, y] = dateStr.split('/').map(Number);
+       if (!d || !m || !y) return false;
+       return d === targetDate.getDate() && m === targetDate.getMonth() + 1 && y === targetDate.getFullYear();
+    };
+
+    for (const task of tasks) {
+        if (task.status !== 'Concluído' && isDate(task.dueDate, tomorrow)) {
+            notificationService.notify('Prazo de Tarefa Próximo', `A tarefa "${task.title}" vence amanhã (${task.dueDate}).`, 'warning');
+        }
+    }
+
+    for (const legalCase of cases) {
+        if (legalCase.status === CaseStatus.ACTIVE && legalCase.nextHearing && isDate(legalCase.nextHearing, tomorrow)) {
+            notificationService.notify('Audiência Amanhã', `Audiência do processo "${legalCase.title}" agendada para amanhã.`, 'warning');
+        }
+    }
+
+    localStorage.setItem(LOCAL_KEYS.LAST_CHECK, todayStr);
   }
 
-  // --- Utils ---
-  logActivity(action: string, status: 'Success' | 'Failed' | 'Warning' = 'Success') {
-      const logs = this.getLogs();
-      logs.unshift({
-          id: Date.now().toString(), action, status, ip: '127.0.0.1', device: 'Browser',
-          date: new Date().toLocaleString('pt-BR')
-      });
-      this.setLocal(LOCAL_KEYS.LOGS, logs.slice(0, 50));
+  checkRealtimeAlerts() {
+      this.checkDeadlines();
   }
   
-  getLogs(): ActivityLog[] { return this.getLocal(LOCAL_KEYS.LOGS, []); }
-  
-  getSettings(): AppSettings {
-      const defaultSettings: AppSettings = {
-          general: { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' },
-          notifications: { desktop: true, sound: false, dailyDigest: false },
-          automation: { autoArchiveWonCases: false, autoSaveDrafts: true }
-      };
-
-      try {
-          const s = localStorage.getItem(LOCAL_KEYS.SETTINGS);
-          if (!s) return defaultSettings;
-          
-          const parsed = JSON.parse(s);
-          
-          return {
-            general: { ...defaultSettings.general, ...parsed.general },
-            notifications: { ...defaultSettings.notifications, ...parsed.notifications },
-            automation: { ...defaultSettings.automation, ...parsed.automation }
-          };
-      } catch { 
-        return defaultSettings; 
-      }
-  }
-  
-  saveSettings(s: AppSettings) { this.setLocal(LOCAL_KEYS.SETTINGS, s); }
-  
-  async seedDatabase() {
-      if (this.getLocal<any[]>(LOCAL_KEYS.CASES, []).length === 0) {
-          this.setLocal(LOCAL_KEYS.CASES, MOCK_CASES);
-          this.setLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS);
-          this.setLocal(LOCAL_KEYS.TASKS, MOCK_TASKS);
-          this.setLocal(LOCAL_KEYS.FINANCIAL, MOCK_FINANCIALS);
-          this.setLocal(LOCAL_KEYS.OFFICES, MOCK_OFFICES_DATA);
-      }
-  }
-
   factoryReset() {
-      localStorage.clear();
-      window.location.reload();
+    localStorage.clear();
+    window.location.reload();
   }
 }
 

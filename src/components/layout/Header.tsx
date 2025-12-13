@@ -1,9 +1,10 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, Sun, Moon, ChevronDown, Menu, Loader2, X, Trash2 } from 'lucide-react';
+import { Search, Bell, Sun, Moon, ChevronDown, Menu, Loader2, X, Trash2, Plus, LogIn, Briefcase, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Office, SearchResult, SystemNotification } from '../../types';
+import { OfficeSetupModal } from '../OfficeSetupModal';
 
 interface HeaderProps {
   user: User | null;
@@ -34,6 +35,11 @@ export const Header: React.FC<HeaderProps> = (props) => {
   const navigate = useNavigate();
   const [isOfficeMenuOpen, setIsOfficeMenuOpen] = React.useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = React.useState(false);
+  
+  // Office Setup Modal State
+  const [isOfficeSetupOpen, setIsOfficeSetupOpen] = useState(false);
+  const [setupMode, setSetupMode] = useState<'create' | 'join'>('create');
+
   const searchRef = React.useRef<HTMLDivElement>(null);
   const notificationRef = React.useRef<HTMLDivElement>(null);
 
@@ -53,6 +59,12 @@ export const Header: React.FC<HeaderProps> = (props) => {
       props.onClearSearch();
   };
 
+  const openSetup = (mode: 'create' | 'join') => {
+      setSetupMode(mode);
+      setIsOfficeSetupOpen(true);
+      setIsOfficeMenuOpen(false);
+  };
+
   const timeAgo = (date: Date) => {
     const diff = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
     if (diff < 60) return 'agora';
@@ -63,6 +75,7 @@ export const Header: React.FC<HeaderProps> = (props) => {
   };
 
   return (
+    <>
     <header className="h-20 px-4 md:px-10 flex items-center justify-between sticky top-0 z-40 transition-all bg-white/70 dark:bg-[#0f172a]/70 backdrop-blur-xl border-b border-slate-200/60 dark:border-white/5 shadow-sm">
         
         {/* Mobile Toggle */}
@@ -124,17 +137,53 @@ export const Header: React.FC<HeaderProps> = (props) => {
             <div className="relative hidden sm:block">
                 <button onClick={() => setIsOfficeMenuOpen(!isOfficeMenuOpen)} className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white transition-colors py-2 px-3 rounded-xl hover:bg-white dark:hover:bg-white/5">
                     <span>{props.currentOffice?.name || 'Sem Escritório'}</span>
-                    <ChevronDown size={14} />
+                    <ChevronDown size={14} className={`transition-transform duration-200 ${isOfficeMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 <AnimatePresence>
                     {isOfficeMenuOpen && (
-                        <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 5 }} className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-50">
-                            {props.userOffices.map(office => (
-                                <button key={office.id} onClick={() => { props.setCurrentOffice(office); setIsOfficeMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300">
-                                    {office.name}
-                                </button>
-                            ))}
-                            {props.userOffices.length === 0 && <div className="p-4 text-center text-xs text-slate-500">Nenhum escritório.</div>}
+                        <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 5 }} className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-50">
+                            
+                            <div className="p-2">
+                                {props.userOffices.length > 0 ? (
+                                    <>
+                                        <div className="max-h-[200px] overflow-y-auto custom-scrollbar mb-2">
+                                            {props.userOffices.map(office => (
+                                                <button key={office.id} onClick={() => { props.setCurrentOffice(office); setIsOfficeMenuOpen(false); }} className={`w-full text-left px-3 py-2.5 text-sm rounded-lg transition-colors flex items-center justify-between ${props.currentOffice?.id === office.id ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}>
+                                                    <span className="truncate">{office.name}</span>
+                                                    {props.currentOffice?.id === office.id && <Check size={14} />}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="h-px bg-slate-200 dark:bg-white/5 my-1" />
+                                    </>
+                                ) : (
+                                    <div className="p-4 text-center">
+                                        <div className="w-10 h-10 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-2 text-slate-400">
+                                            <Briefcase size={20} />
+                                        </div>
+                                        <p className="text-xs text-slate-500 mb-3">Você não está vinculado a nenhum escritório.</p>
+                                    </div>
+                                )}
+
+                                {/* Action Buttons */}
+                                <div className="grid grid-cols-2 gap-2 mt-1">
+                                    <button 
+                                        onClick={() => openSetup('create')}
+                                        className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-slate-200 dark:border-white/10 hover:border-indigo-500/50 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-all group"
+                                    >
+                                        <Plus size={16} className="text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-400" />
+                                        <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-300">Criar Novo</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => openSetup('join')}
+                                        className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-slate-200 dark:border-white/10 hover:border-emerald-500/50 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all group"
+                                    >
+                                        <LogIn size={16} className="text-slate-500 dark:text-slate-400 group-hover:text-emerald-500 dark:group-hover:text-emerald-400" />
+                                        <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300 group-hover:text-emerald-600 dark:group-hover:text-emerald-300">Entrar</span>
+                                    </button>
+                                </div>
+                            </div>
+
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -188,5 +237,12 @@ export const Header: React.FC<HeaderProps> = (props) => {
             </div>
         </div>
     </header>
+    
+    <OfficeSetupModal 
+        isOpen={isOfficeSetupOpen} 
+        onClose={() => setIsOfficeSetupOpen(false)} 
+        initialMode={setupMode}
+    />
+    </>
   );
 };
