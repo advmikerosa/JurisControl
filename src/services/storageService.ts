@@ -1,3 +1,4 @@
+// src/services/storageService.ts
 
 import { Client, LegalCase, Task, FinancialRecord, ActivityLog, SystemDocument, AppSettings, Office, DashboardData, CaseStatus, User, CaseMovement, SearchResult, OfficeMember } from '../types';
 import { supabase, isSupabaseConfigured } from './supabase';
@@ -49,11 +50,11 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
-        if (!userId) return [];
+        if (!userId) return []; 
 
         const { data, error } = await supabase
           .from(TABLE_NAMES.CLIENTS)
-          .select('*')
+          .select('*') 
           .eq('user_id', userId)
           .order('name');
         
@@ -96,9 +97,8 @@ class StorageService {
       if (!userId) throw new Error("Usuário não autenticado");
       
       const payload = {
-          id: client.id && !client.id.startsWith('cli-') ? client.id : client.id,
+          id: client.id && !client.id.startsWith('cli-') ? client.id : undefined,
           user_id: userId,
-          office_id: client.officeId,
           name: client.name,
           type: client.type,
           status: client.status,
@@ -114,7 +114,8 @@ class StorageService {
           tags: client.tags,
           alerts: client.alerts,
           documents: client.documents,
-          history: client.history
+          history: client.history,
+          office_id: client.officeId
       };
 
       if (client.id && !client.id.startsWith('cli-')) {
@@ -129,7 +130,7 @@ class StorageService {
       if (idx >= 0) {
           list[idx] = client;
       } else {
-          if (!client.id) client.id = `cli-${Date.now()}`;
+          if (!client.id || client.id.startsWith('cli-')) client.id = `cli-${Date.now()}`;
           list.unshift({ ...client, userId: userId || 'local' });
       }
       localStorage.setItem(LOCAL_KEYS.CLIENTS, JSON.stringify(list));
@@ -165,11 +166,44 @@ class StorageService {
 
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
-          .select(`*, client:clients!cases_client_id_fkey(*)`)
+          .select(`
+            *,
+            client:clients!cases_client_id_fkey(*)
+          `)
           .eq('user_id', userId);
         if (error) throw error;
         
-        return (data || []).map((item: any) => this.mapDBCaseToLegalCase(item));
+        const mappedData = (data || []).map((item: any) => {
+          const clientData = item.client;
+          const mappedClient = clientData ? {
+              id: clientData.id,
+              name: clientData.name,
+              type: clientData.type,
+              avatarUrl: clientData.avatar_url
+          } : { id: 'unknown', name: 'Cliente Desconhecido', type: 'PF', avatarUrl: '' };
+
+          return {
+            id: item.id,
+            officeId: item.office_id,
+            cnj: item.cnj,
+            title: item.title,
+            status: item.status,
+            category: item.category,
+            phase: item.phase,
+            value: Number(item.value),
+            responsibleLawyer: item.responsible_lawyer,
+            court: item.court,
+            nextHearing: item.next_hearing,
+            distributionDate: item.created_at,
+            description: item.description,
+            movements: item.movements,
+            changeLog: item.change_log,
+            lastUpdate: item.last_update,
+            client: mappedClient
+          };
+        });
+
+        return mappedData as LegalCase[];
       } catch (e) { 
         console.error("Supabase Error (getCases):", e); 
         return []; 
@@ -193,7 +227,36 @@ class StorageService {
           .single();
         
         if (error) throw error;
-        return this.mapDBCaseToLegalCase(data);
+        
+        const clientData = data.client;
+        const mappedClient = clientData ? {
+            id: clientData.id,
+            name: clientData.name,
+            type: clientData.type,
+            avatarUrl: clientData.avatar_url,
+            email: clientData.email,
+            phone: clientData.phone
+        } : { id: 'unknown', name: 'Cliente Desconhecido' };
+
+        return {
+            id: data.id,
+            officeId: data.office_id,
+            cnj: data.cnj,
+            title: data.title,
+            status: data.status,
+            category: data.category,
+            phase: data.phase,
+            value: Number(data.value),
+            responsibleLawyer: data.responsible_lawyer,
+            court: data.court,
+            nextHearing: data.next_hearing,
+            distributionDate: data.created_at,
+            description: data.description,
+            movements: data.movements,
+            changeLog: data.change_log,
+            lastUpdate: data.last_update,
+            client: mappedClient
+        } as LegalCase;
       } catch (e) { 
         return null; 
       }
@@ -201,37 +264,6 @@ class StorageService {
       const cases = await this.getCases();
       return cases.find(c => c.id === id) || null;
     }
-  }
-
-  private mapDBCaseToLegalCase(item: any): LegalCase {
-      const clientData = item.client;
-      const mappedClient = clientData ? {
-          id: clientData.id,
-          officeId: clientData.office_id,
-          name: clientData.name,
-          type: clientData.type,
-          avatarUrl: clientData.avatar_url
-      } : { id: 'unknown', officeId: '', name: 'Cliente Desconhecido', type: 'PF', avatarUrl: '' };
-
-      return {
-        id: item.id,
-        officeId: item.office_id,
-        cnj: item.cnj,
-        title: item.title,
-        status: item.status,
-        category: item.category,
-        phase: item.phase,
-        value: Number(item.value),
-        responsibleLawyer: item.responsible_lawyer,
-        court: item.court,
-        nextHearing: item.next_hearing,
-        distributionDate: item.created_at,
-        description: item.description,
-        movements: item.movements,
-        changeLog: item.change_log,
-        lastUpdate: item.last_update,
-        client: mappedClient as Client
-      };
   }
 
   async getCasesPaginated(
@@ -278,9 +310,8 @@ class StorageService {
       if (!userId) throw new Error("Usuário não autenticado");
       
       const payload: any = {
-        id: legalCase.id && !legalCase.id.startsWith('case-') ? legalCase.id : legalCase.id,
+        id: legalCase.id && !legalCase.id.startsWith('case-') ? legalCase.id : undefined,
         user_id: userId,
-        office_id: legalCase.officeId,
         client_id: legalCase.client.id,
         cnj: legalCase.cnj,
         title: legalCase.title,
@@ -294,7 +325,8 @@ class StorageService {
         description: legalCase.description,
         movements: legalCase.movements,
         change_log: legalCase.changeLog,
-        last_update: legalCase.lastUpdate
+        last_update: legalCase.lastUpdate,
+        office_id: legalCase.officeId
       };
       
       if (legalCase.id && !legalCase.id.startsWith('case-')) {
@@ -309,7 +341,7 @@ class StorageService {
       if (idx >= 0) {
           list[idx] = legalCase;
       } else {
-          if (!legalCase.id) legalCase.id = `case-${Date.now()}`;
+          if (!legalCase.id || legalCase.id.startsWith('case-')) legalCase.id = `case-${Date.now()}`;
           list.push({ ...legalCase, userId: userId || 'local' });
       }
       localStorage.setItem(LOCAL_KEYS.CASES, JSON.stringify(list));
@@ -366,9 +398,8 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       if (!userId) throw new Error("Usuário não autenticado");
       const payload = { 
-          id: task.id && !task.id.startsWith('task-') ? task.id : task.id,
+          id: task.id && !task.id.startsWith('task-') ? task.id : undefined,
           user_id: userId,
-          office_id: task.officeId,
           title: task.title,
           due_date: task.dueDate,
           priority: task.priority,
@@ -378,7 +409,8 @@ class StorageService {
           case_id: task.caseId,
           case_title: task.caseTitle,
           client_id: task.clientId,
-          client_name: task.clientName
+          client_name: task.clientName,
+          office_id: task.officeId
       };
       if (task.id && !task.id.startsWith('task-')) {
         await supabase.from(TABLE_NAMES.TASKS).upsert(payload);
@@ -390,7 +422,7 @@ class StorageService {
       const idx = list.findIndex(i => i.id === task.id);
       if (idx >= 0) list[idx] = task;
       else {
-          if(!task.id) task.id = `task-${Date.now()}`;
+          if(!task.id || task.id.startsWith('task-')) task.id = `task-${Date.now()}`;
           list.push(task);
       }
       localStorage.setItem(LOCAL_KEYS.TASKS, JSON.stringify(list));
@@ -446,9 +478,8 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       if (!userId) throw new Error("Usuário não autenticado");
       const payload = {
-          id: record.id && !record.id.startsWith('trans-') ? record.id : record.id,
+          id: record.id && !record.id.startsWith('trans-') ? record.id : undefined,
           user_id: userId,
-          office_id: record.officeId,
           title: record.title,
           amount: record.amount,
           type: record.type,
@@ -459,7 +490,8 @@ class StorageService {
           client_id: record.clientId,
           client_name: record.clientName,
           case_id: record.caseId,
-          installment: record.installment
+          installment: record.installment,
+          office_id: record.officeId
       };
       if (record.id && !record.id.startsWith('trans-')) {
         await supabase.from(TABLE_NAMES.FINANCIAL).upsert(payload);
@@ -471,7 +503,7 @@ class StorageService {
       const idx = list.findIndex(i => i.id === record.id);
       if (idx >= 0) list[idx] = record;
       else {
-          if(!record.id) record.id = `trans-${Date.now()}`;
+          if(!record.id || record.id.startsWith('trans-')) record.id = `trans-${Date.now()}`;
           list.push(record);
       }
       localStorage.setItem(LOCAL_KEYS.FINANCIAL, JSON.stringify(list));
@@ -512,15 +544,15 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       if (!userId) throw new Error("Usuário não autenticado");
       const payload = { 
-          id: docData.id,
+          id: docData.id && !docData.id.startsWith('doc-') ? docData.id : undefined,
           user_id: userId,
-          office_id: docData.officeId,
           name: docData.name,
           size: docData.size,
           type: docData.type,
           date: docData.date,
           category: docData.category,
-          case_id: docData.caseId
+          case_id: docData.caseId,
+          office_id: docData.officeId
       };
       await supabase.from(TABLE_NAMES.DOCUMENTS).insert([payload]);
     } else {
@@ -623,7 +655,6 @@ class StorageService {
     const userId = explicitOwnerId || await this.getUserId();
     if (!userId) throw new Error("Usuário não autenticado para criar escritório");
 
-    // Fallback user data from storage if not provided
     let userDetails = userData;
     if (!userDetails) {
         const userStr = localStorage.getItem('@JurisControl:user');
@@ -646,7 +677,7 @@ class StorageService {
             avatarUrl: userDetails?.avatar || '',
             role: 'Admin',
             permissions: { financial: true, cases: true, documents: true, settings: true },
-            status: 'active' // Dono nasce ativo
+            status: 'active'
         }],
         createdAt: new Date().toISOString(),
         social: {}
@@ -659,7 +690,7 @@ class StorageService {
                 handle: newOffice.handle,
                 location: newOffice.location,
                 owner_id: newOffice.ownerId,
-                members: newOffice.members
+                members: newOffice.members 
             };
             
             const { data: officeDataDB, error: officeError } = await supabase.from(TABLE_NAMES.OFFICES).insert(dbOffice).select().single();
@@ -693,7 +724,9 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
         const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', officeHandle).single();
         
-        if (error || !office) throw new Error("Escritório não encontrado ou acesso restrito.");
+        if (error || !office) {
+            throw new Error("Escritório não encontrado ou acesso restrito. Verifique o identificador.");
+        }
 
         const userId = await this.getUserId();
         if (!userId) throw new Error("Usuário não autenticado para entrar em escritório");
@@ -703,7 +736,6 @@ class StorageService {
 
         const members = office.members || [];
         const existingMember = members.find((m: any) => m.userId === userId);
-        
         if (existingMember) {
              return {
                 id: office.id,
@@ -718,7 +750,6 @@ class StorageService {
             };
         }
 
-        // Insere com status PENDING
         const newMember: OfficeMember = {
              userId: userId,
              name: u.full_name || 'Novo Membro',
@@ -726,11 +757,16 @@ class StorageService {
              avatarUrl: u.avatar_url || '',
              role: 'Advogado',
              permissions: { financial: false, cases: true, documents: true, settings: false },
-             status: 'pending' // Aguardando aprovação
+             status: 'pending'
         };
         
         const updatedMembers = [...members, newMember];
-        const { error: updateError } = await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', office.id);
+        
+        const { error: updateError } = await supabase
+            .from(TABLE_NAMES.OFFICES)
+            .update({ members: updatedMembers })
+            .eq('id', office.id);
+            
         if (updateError) throw updateError;
 
         this.logActivity(`Solicitou entrada no escritório: ${office.name}`);
@@ -747,7 +783,6 @@ class StorageService {
         };
 
     } else {
-        // Mock Implementation: For simulation simplicity, we just add as pending but UI might show immediately if not careful
         const offices = await this.getOffices();
         const targetOffice = offices.find(o => o.handle.toLowerCase() === officeHandle.toLowerCase());
         if (!targetOffice) throw new Error("Escritório não encontrado com este identificador.");
@@ -764,7 +799,7 @@ class StorageService {
              avatarUrl: user?.avatar || '',
              role: 'Advogado',
              permissions: { financial: false, cases: true, documents: true, settings: false },
-             status: 'pending' // Mock Pending
+             status: 'pending'
            });
            const updatedOffices = offices.map(o => o.id === targetOffice.id ? targetOffice : o);
            localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(updatedOffices));
@@ -774,98 +809,12 @@ class StorageService {
     }
   }
 
-  async approveMember(officeId: string, userId: string): Promise<void> {
-      if (isSupabaseConfigured && supabase) {
-          const { data: office } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', officeId).single();
-          if (office) {
-              const updatedMembers = office.members.map((m: any) => {
-                  if (m.userId === userId) return { ...m, status: 'active' };
-                  return m;
-              });
-              await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', officeId);
-          }
-      } else {
-          const offices = await this.getOffices();
-          const office = offices.find(o => o.id === officeId);
-          if (office) {
-              const member = office.members.find(m => m.userId === userId);
-              if (member) member.status = 'active';
-              localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
-          }
-      }
-  }
-
-  async rejectMember(officeId: string, userId: string): Promise<void> {
-      if (isSupabaseConfigured && supabase) {
-          const { data: office } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', officeId).single();
-          if (office) {
-              const updatedMembers = office.members.filter((m: any) => m.userId !== userId);
-              await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', officeId);
-          }
-      } else {
-          const offices = await this.getOffices();
-          const office = offices.find(o => o.id === officeId);
-          if (office) {
-              office.members = office.members.filter(m => m.userId !== userId);
-              localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
-          }
-      }
-  }
-
   async inviteUserToOffice(officeId: string, userHandle: string): Promise<boolean> {
-     if (!userHandle.startsWith('@') && !userHandle.includes('@')) throw new Error("Informe e-mail ou @usuario.");
+     if (!userHandle.includes('@')) throw new Error("O nome de usuário deve conter @.");
+     // Simulação de delay
      await new Promise(resolve => setTimeout(resolve, 800));
-     // Here you would implement logic to find the user by handle and add them to office members with status 'invited'
+     // Here you would implement logic to find the user by handle and add them to office members as pending/invited
      return true; 
-  }
-
-  async removeMemberFromOffice(officeId: string, memberId: string) {
-      if (isSupabaseConfigured && supabase) {
-          const { data: office } = await supabase.from(TABLE_NAMES.OFFICES).select('members').eq('id', officeId).single();
-          if (office) {
-              const updatedMembers = (office.members || []).filter((m: any) => m.userId !== memberId);
-              await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', officeId);
-          }
-      } else {
-          const offices = await this.getOffices();
-          const office = offices.find(o => o.id === officeId);
-          if (office) {
-              office.members = office.members.filter(m => m.userId !== memberId);
-              localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
-          }
-      }
-  }
-
-  async checkAccountStatus(userId: string): Promise<{ deleted_at?: string }> {
-    if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase.from(TABLE_NAMES.PROFILES).select('deleted_at').eq('id', userId).single();
-        return data || {};
-    }
-    return {};
-  }
-
-  async reactivateAccount() {
-    if (isSupabaseConfigured && supabase) {
-        const userId = await this.getUserId();
-        if(userId) await supabase.from(TABLE_NAMES.PROFILES).update({ deleted_at: null }).eq('id', userId);
-    }
-  }
-
-  async ensureProfileExists() {
-    const userId = await this.getUserId();
-    if (isSupabaseConfigured && supabase && userId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const updates = {
-                id: user.id,
-                full_name: user.user_metadata.full_name || user.user_metadata.name,
-                email: user.email,
-                username: user.user_metadata.username,
-                avatar_url: user.user_metadata.avatar_url
-            };
-            await supabase.from(TABLE_NAMES.PROFILES).upsert(updates, { onConflict: 'id' });
-        }
-    }
   }
 
   async deleteAccount() {
@@ -940,7 +889,7 @@ class StorageService {
           
           return {
             general: parsed.general || { language: 'pt-BR', dateFormat: 'DD/MM/YYYY', compactMode: false, dataJudApiKey: '' },
-            notifications: parsed.notifications || { desktop: true, sound: false, dailyDigest: false },
+            notifications: parsed.notifications || { email: true, desktop: true, sound: false, dailyDigest: false },
             emailPreferences: parsed.emailPreferences || {
                 enabled: false,
                 frequency: 'immediate',
@@ -1043,7 +992,7 @@ class StorageService {
 
     for (const c of clients) {
         if (c.name.toLowerCase().includes(lowerQuery) || 
-            (c.email && c.email.toLowerCase().includes(lowerQuery)) || 
+            (c.email || '').toLowerCase().includes(lowerQuery) || 
             (c.cpf && c.cpf.includes(lowerQuery)) || 
             (c.cnpj && c.cnpj.includes(lowerQuery))) {
             results.push({
@@ -1085,6 +1034,14 @@ class StorageService {
     return results.slice(0, 8);
   }
 
+  async seedDatabase() {
+    // void intentionally
+  }
+
+  async runAutomations() {
+    await this.checkDeadlines();
+  }
+
   async checkDeadlines() {
     const lastCheck = localStorage.getItem(LOCAL_KEYS.LAST_CHECK);
     const today = new Date();
@@ -1119,14 +1076,90 @@ class StorageService {
 
     localStorage.setItem(LOCAL_KEYS.LAST_CHECK, todayStr);
   }
-
-  checkRealtimeAlerts() {
-      this.checkDeadlines();
-  }
   
   factoryReset() {
     localStorage.clear();
     window.location.reload();
+  }
+
+  async checkAccountStatus(userId: string): Promise<{ deleted_at: string | null }> {
+    if (isSupabaseConfigured && supabase) {
+        const { data } = await supabase.from(TABLE_NAMES.PROFILES).select('deleted_at').eq('id', userId).single();
+        return data || { deleted_at: null };
+    }
+    return { deleted_at: null };
+  }
+
+  async ensureProfileExists() {
+      if (isSupabaseConfigured && supabase) {
+          const userId = await this.getUserId();
+          if (!userId) return;
+          // Check if profile exists, if not create it based on auth meta
+          const { data } = await supabase.from(TABLE_NAMES.PROFILES).select('id').eq('id', userId).single();
+          if (!data) {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                  const meta = user.user_metadata;
+                  await supabase.from(TABLE_NAMES.PROFILES).insert({
+                      id: user.id,
+                      full_name: meta.full_name,
+                      email: user.email,
+                      avatar_url: meta.avatar_url,
+                      username: meta.username,
+                      role: 'Advogado'
+                  });
+              }
+          }
+      }
+  }
+
+  async reactivateAccount() {
+      if (isSupabaseConfigured && supabase) {
+          const userId = await this.getUserId();
+          if (!userId) return;
+          await supabase.from(TABLE_NAMES.PROFILES).update({ deleted_at: null }).eq('id', userId);
+      }
+  }
+
+  // Office Member management
+  async removeMemberFromOffice(officeId: string, userId: string) {
+      if (isSupabaseConfigured && supabase) {
+          const office = await this.getOfficeById(officeId);
+          if (!office) return;
+          const updatedMembers = office.members.filter(m => m.userId !== userId);
+          await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', officeId);
+      } else {
+          const offices = await this.getOffices();
+          const office = offices.find(o => o.id === officeId);
+          if (office) {
+              office.members = office.members.filter(m => m.userId !== userId);
+              localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
+          }
+      }
+  }
+
+  async approveMember(officeId: string, userId: string) {
+      if (isSupabaseConfigured && supabase) {
+          const office = await this.getOfficeById(officeId);
+          if (!office) return;
+          const updatedMembers = office.members.map(m => m.userId === userId ? { ...m, status: 'active' } : m);
+          await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', officeId);
+      } else {
+          const offices = await this.getOffices();
+          const office = offices.find(o => o.id === officeId);
+          if (office) {
+              office.members = office.members.map(m => m.userId === userId ? { ...m, status: 'active' as const } : m);
+              localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
+          }
+      }
+  }
+
+  async rejectMember(officeId: string, userId: string) {
+      await this.removeMemberFromOffice(officeId, userId);
+  }
+
+  async checkRealtimeAlerts() {
+      // Placeholder for polling alerts
   }
 }
 
