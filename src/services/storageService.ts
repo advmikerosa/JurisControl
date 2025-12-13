@@ -61,7 +61,7 @@ class StorageService {
         const userId = await this.getUserId();
         const officeId = await this.getCurrentOfficeId();
         
-        // Se não tiver escritório, não tenta buscar dados (evita erro de RLS recursion)
+        // Se não tiver escritório, não tenta buscar dados (evita erro de RLS recursion se a política depender de escritório)
         if (!userId || !officeId) return [];
 
         const { data, error } = await supabase
