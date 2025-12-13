@@ -49,9 +49,9 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ onSave, onCancel
   };
 
   const handleFile = (selectedFile: File) => {
-    const validTypes = ['image/jpeg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const validTypes = ['image/jpeg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
     if (!validTypes.includes(selectedFile.type)) {
-      addToast('Formato não suportado. Use PDF, DOCX, PNG ou JPG.', 'error');
+      addToast('Formato não suportado. Use PDF, DOCX, PNG, JPG ou TXT.', 'error');
       return;
     }
     if (selectedFile.size > 20 * 1024 * 1024) { // 20MB
@@ -75,8 +75,13 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ onSave, onCancel
   const handleConfirm = async () => {
     if (file && title) {
         setIsProcessing(true);
-        await onSave(file, { title, category });
-        setIsProcessing(false);
+        try {
+            await onSave(file, { title, category });
+        } catch (e) {
+            console.error("Upload failed", e);
+        } finally {
+            setIsProcessing(false);
+        }
     } else {
         addToast('Preencha os campos obrigatórios.', 'warning');
     }
@@ -106,7 +111,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ onSave, onCancel
                     <Upload size={48} className={`mb-4 ${dragActive ? 'text-indigo-400' : 'text-slate-500'}`} />
                     <p className="text-slate-300 font-medium">Arraste seu documento aqui</p>
                     <p className="text-slate-500 text-sm mt-1">PDF, DOCX, PNG ou JPG (Máx 20MB)</p>
-                    <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} accept=".pdf,.doc,.docx,image/png,image/jpeg" />
+                    <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} accept=".pdf,.doc,.docx,image/png,image/jpeg,.txt" />
                 </div>
             ) : (
                 <div className="flex flex-col lg:flex-row gap-6">
@@ -163,7 +168,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({ onSave, onCancel
                             className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
-                            {isProcessing ? 'Salvando...' : 'Confirmar Upload'}
+                            {isProcessing ? 'Enviando...' : 'Confirmar Upload'}
                         </button>
                     </div>
                 </div>

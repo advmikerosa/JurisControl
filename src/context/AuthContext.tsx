@@ -96,6 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const checkSession = async () => {
       try {
+        // Prevent flash of unauthorized content by keeping loading true initially
         if (isSupabaseConfigured && supabase) {
           const { data, error } = await supabase.auth.getSession();
           
@@ -120,10 +121,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!mounted) return;
             
             if (event === 'SIGNED_IN' && session?.user) {
+               setIsLoading(true); // Re-trigger loading on sign-in
                await handleUserSessionValidation(session);
+               setIsLoading(false);
             } else if (event === 'SIGNED_OUT') {
                setUser(null);
                setIsAuthenticated(false);
+               setIsLoading(false);
             } else if (session?.user) {
                // Refresh profile data on token refresh or other events
                await loadProfileAndMap(session.user);
@@ -286,26 +290,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = useCallback(async (email: string, password: string) => {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message);
+    setIsLoading(true);
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw new Error(error.message);
 
-      if (data.user) {
-          const status = await storageService.checkAccountStatus(data.user.id);
-          
-          if (status.deleted_at) {
-              await supabase.auth.signOut();
-              const err = new Error('Esta conta foi excluída. Reative via e-mail.');
-              (err as any).code = 'ACCOUNT_SUSPENDED'; 
-              throw err;
-          }
+        if (data.user) {
+            const status = await storageService.checkAccountStatus(data.user.id);
+            
+            if (status.deleted_at) {
+                await supabase.auth.signOut();
+                const err = new Error('Esta conta foi excluída. Reative via e-mail.');
+                (err as any).code = 'ACCOUNT_SUSPENDED'; 
+                throw err;
+            }
+        }
+      } else {
+        const user = await authMockService.login(email, password);
+        setUser(user);
+        setIsAuthenticated(true);
+        localStorage.setItem('@JurisControl:user', JSON.stringify(user));
+        localStorage.setItem('@JurisControl:lastActivity', Date.now().toString());
       }
-    } else {
-      const user = await authMockService.login(email, password);
-      setUser(user);
-      setIsAuthenticated(true);
-      localStorage.setItem('@JurisControl:user', JSON.stringify(user));
-      localStorage.setItem('@JurisControl:lastActivity', Date.now().toString());
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -324,34 +333,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const register = useCallback(async (name: string, email: string, password: string, oab?: string, officeData?: OfficeRegistrationData): Promise<boolean> => {
-    if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: name,
-            role: 'Advogado',
-            oab: oab || '',
-            username: '@' + name.toLowerCase().replace(/\s+/g, ''),
-            pending_office_setup: officeData 
+    setIsLoading(true);
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+              role: 'Advogado',
+              oab: oab || '',
+              username: '@' + name.toLowerCase().replace(/\s+/g, ''),
+              pending_office_setup: officeData 
+            }
           }
+        });
+        
+        if (error) throw new Error(error.message);
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+           throw new Error('Este email já está cadastrado.');
         }
-      });
-      
-      if (error) throw new Error(error.message);
-      if (data.user && data.user.identities && data.user.identities.length === 0) {
-         throw new Error('Este email já está cadastrado.');
-      }
 
-      return !data.session; 
-    } else {
-      const user = await authMockService.register(name, email, password, oab, officeData);
-      setUser(user);
-      setIsAuthenticated(true);
-      localStorage.setItem('@JurisControl:user', JSON.stringify(user));
-      localStorage.setItem('@JurisControl:lastActivity', Date.now().toString());
-      return false; 
+        return !data.session; 
+      } else {
+        const user = await authMockService.register(name, email, password, oab, officeData);
+        setUser(user);
+        setIsAuthenticated(true);
+        localStorage.setItem('@JurisControl:user', JSON.stringify(user));
+        localStorage.setItem('@JurisControl:lastActivity', Date.now().toString());
+        return false; 
+      }
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 

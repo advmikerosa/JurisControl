@@ -10,7 +10,6 @@ import { useNotifications } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
 import { SearchResult, Office } from '../types';
 import { Breadcrumbs } from './Breadcrumbs';
-import { AiAssistant } from './AiAssistant';
 import { Sidebar } from './layout/Sidebar';
 import { Header } from './layout/Header';
 
@@ -146,8 +145,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Plus size={28} strokeWidth={2.5} />
         </button>
       </div>
-
-      <AiAssistant isOpen={false} onClose={() => {}} />
     </div>
   );
 };

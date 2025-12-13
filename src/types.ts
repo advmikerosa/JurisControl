@@ -71,6 +71,7 @@ export interface SystemDocument {
   category?: string;
   caseId?: string;
   userId?: string;
+  storagePath?: string; // Caminho real no bucket
 }
 
 export interface ClientInteraction {

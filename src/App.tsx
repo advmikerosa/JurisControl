@@ -1,6 +1,6 @@
 
 import React, { Component, Suspense, ReactNode, ErrorInfo } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { CookieConsent } from './components/CookieConsent';
 import { ToastProvider } from './context/ToastContext';
@@ -24,7 +24,7 @@ const ClientDetails = React.lazy(() => import('./views/ClientDetails').then(m =>
 const UserProfile = React.lazy(() => import('./views/UserProfile').then(m => ({ default: m.UserProfile })));
 const Settings = React.lazy(() => import('./views/Settings').then(m => ({ default: m.Settings })));
 const Login = React.lazy(() => import('./views/Login').then(m => ({ default: m.Login })));
-const ResetPassword = React.lazy(() => import('./views/ResetPassword').then(m => ({ default: m.ResetPassword }))); // Nova rota
+const ResetPassword = React.lazy(() => import('./views/ResetPassword').then(m => ({ default: m.ResetPassword }))); 
 const EmailConfirmation = React.lazy(() => import('./views/EmailConfirmation').then(m => ({ default: m.EmailConfirmation })));
 const Documents = React.lazy(() => import('./views/Documents').then(m => ({ default: m.Documents })));
 const PrivacyPolicy = React.lazy(() => import('./views/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })));
@@ -93,18 +93,18 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
 };
 
 const AppContent = () => {
-  const { isAuthenticated } = useAuth();
   return (
     <Router>
       <ConnectionStatus />
       <Suspense fallback={<LoadingScreen />}>
         <Routes>
-          <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" replace />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/confirm-email" element={<EmailConfirmation />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/reset-password" element={<ResetPassword />} /> 
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfUse />} />
+          
           <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
           <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarView /></Layout></ProtectedRoute>} />
           <Route path="/cases" element={<ProtectedRoute><Layout><Cases /></Layout></ProtectedRoute>} />
@@ -116,6 +116,7 @@ const AppContent = () => {
           <Route path="/profile" element={<ProtectedRoute><Layout><UserProfile /></Layout></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
           <Route path="/documents" element={<ProtectedRoute><Layout><Documents /></Layout></ProtectedRoute>} />
+          
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <CookieConsent />

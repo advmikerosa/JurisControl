@@ -81,7 +81,6 @@ const Column = ({ title, statusKey, color, tasks, availableCases, onAddTask, onE
     if (quickTitle.trim()) {
       await onQuickAdd(quickTitle, statusKey);
       setQuickTitle('');
-      // Keep input open for multiple adds
       setTimeout(() => {
          listRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
       }, 100);
@@ -109,7 +108,6 @@ const Column = ({ title, statusKey, color, tasks, availableCases, onAddTask, onE
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Column Header */}
       <div className={`flex justify-between items-center mb-2 px-4 pt-4 shrink-0 ${isOver ? 'text-indigo-600 dark:text-indigo-300' : ''}`}>
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${color} shadow-sm`}></div>
@@ -129,7 +127,6 @@ const Column = ({ title, statusKey, color, tasks, availableCases, onAddTask, onE
         </div>
       </div>
       
-      {/* Quick Add Input Area */}
       <AnimatePresence>
         {isQuickAdding && (
           <motion.div 
@@ -160,7 +157,6 @@ const Column = ({ title, statusKey, color, tasks, availableCases, onAddTask, onE
         )}
       </AnimatePresence>
 
-      {/* Tasks List */}
       <div ref={listRef} className="space-y-3 flex-1 overflow-y-auto custom-scrollbar p-3 min-h-[100px]">
         <AnimatePresence mode="popLayout">
           {displayedTasks.map(task => {
@@ -271,7 +267,6 @@ export const Kanban: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  // Form State
   const [formData, setFormData] = useState<{
     title: string;
     dueDate: string;
@@ -327,6 +322,9 @@ export const Kanban: React.FC = () => {
     const task = tasks[taskIndex];
     if (task.status === newStatus) return;
 
+    // Save previous state for rollback
+    const previousTasks = [...tasks];
+
     // Optimistic Update
     const updatedTasks = [...tasks];
     updatedTasks[taskIndex] = { ...task, status: newStatus };
@@ -335,11 +333,10 @@ export const Kanban: React.FC = () => {
     try {
       const taskToSave = { ...task, status: newStatus };
       await storageService.saveTask(taskToSave);
-      // No notification toast to keep it snappy, maybe a subtle sound in future
     } catch (error) {
       console.error("Failed to update task status", error);
-      addToast("Erro ao mover tarefa", "error");
-      updateData(); // Revert on error
+      addToast("Erro ao mover tarefa. Revertendo...", "error");
+      setTasks(previousTasks); // Atomic rollback
     }
   };
 
@@ -355,6 +352,9 @@ export const Kanban: React.FC = () => {
       description: ''
     };
 
+    // Save previous state
+    const previousTasks = [...tasks];
+
     // Optimistic Add
     setTasks(prev => [...prev, newTask]);
 
@@ -363,7 +363,7 @@ export const Kanban: React.FC = () => {
       notificationService.notify('Nova Tarefa', `"${title}" adicionada em ${status}.`);
     } catch (e) {
       addToast('Erro ao criar tarefa rápida', 'error');
-      updateData();
+      setTasks(previousTasks); // Rollback
     }
   };
 
@@ -374,7 +374,6 @@ export const Kanban: React.FC = () => {
         return;
     }
     
-    // Explicit types to fix implicit 'any' error
     let finalCaseId: string | undefined = undefined;
     let finalCaseTitle: string | undefined = undefined;
     let finalClientId: string | undefined = undefined;
@@ -436,7 +435,7 @@ export const Kanban: React.FC = () => {
 
     const taskToSave: Task = {
       id: editingTask ? editingTask.id : `task-${Date.now()}`,
-      officeId: editingTask ? editingTask.officeId : '', // Will be handled
+      officeId: editingTask ? editingTask.officeId : '', 
       title: formData.title,
       dueDate: formData.dueDate ? new Date(formData.dueDate).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
       priority: formData.priority,
@@ -524,7 +523,6 @@ export const Kanban: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col space-y-6 pb-6">
-      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-2">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Pipeline CRM</h1>
@@ -539,7 +537,6 @@ export const Kanban: React.FC = () => {
         </button>
       </div>
       
-      {/* BOARD */}
       <div className="flex-1 overflow-x-auto">
         <div className="flex gap-6 pb-6 h-full min-h-[500px]">
           <Column title="A Fazer" statusKey="A Fazer" color="bg-slate-400" tasks={todo} availableCases={availableCases} onAddTask={openNewTask} onEditTask={openEditTask} onDropTask={handleTaskDrop} onQuickAdd={handleQuickAdd} />
@@ -572,6 +569,7 @@ export const Kanban: React.FC = () => {
         }
       >
         <form className="space-y-6">
+           {/* ... Form UI (same as before) ... */}
            {/* Seção Principal */}
            <div className="space-y-4">
               <div className="space-y-1.5">

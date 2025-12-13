@@ -35,7 +35,6 @@ class StorageService {
 
   constructor() {
     this.caseRepo = new CaseRepository();
-    // Only seed if NOT connected to Supabase to avoid polluting Prod DB
     if (!isSupabaseConfigured) {
       this.seedDatabase();
     }
@@ -116,7 +115,7 @@ class StorageService {
       }
   }
 
-  // --- CASES (Delegated to Repository) ---
+  // --- CASES ---
   async getCases(): Promise<LegalCase[]> { return this.caseRepo.getCases(); }
   async getCaseById(id: string): Promise<LegalCase | null> { return this.caseRepo.getCaseById(id); }
   async getCasesPaginated(page: number, limit: number, searchTerm: string, status: string | null, category: string | null, dateRange: any) {
@@ -158,7 +157,7 @@ class StorageService {
         })) as Client[];
       } catch (e) {
         console.warn("Fallback to local clients due to connection error");
-        return this.getLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS); // Fallback to MOCK if configured but fails
+        return this.getLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS);
       }
     }
     return this.getLocal(LOCAL_KEYS.CLIENTS, MOCK_CLIENTS);
@@ -217,7 +216,6 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
         const { error } = await supabase.from(TABLE_NAMES.CLIENTS).delete().eq('id', id);
         if (error) {
-           // If error, try local delete as fallback if it was a local mock
            const list = await this.getClients();
            this.setLocal(LOCAL_KEYS.CLIENTS, list.filter(i => i.id !== id));
         }
@@ -242,7 +240,7 @@ class StorageService {
               status: t.status,
               assignedTo: t.assigned_to, 
               description: t.description, 
-              caseId: t.case_id,
+              caseId: t.case_id, 
               caseTitle: t.case_title, 
               clientId: t.client_id, 
               clientName: t.client_name
@@ -317,7 +315,7 @@ class StorageService {
                 status: f.status, 
                 dueDate: f.due_date, 
                 paymentDate: f.payment_date, 
-                clientId: f.client_id,
+                clientId: f.client_id, 
                 clientName: f.client_name, 
                 caseId: f.case_id, 
                 installment: f.installment
@@ -384,7 +382,8 @@ class StorageService {
                 date: d.date, 
                 category: d.category, 
                 caseId: d.case_id,
-                userId: d.user_id
+                userId: d.user_id,
+                storagePath: d.storage_path
             })) as SystemDocument[];
           } catch { return this.getLocal(LOCAL_KEYS.DOCUMENTS, []); }
       }
@@ -396,8 +395,10 @@ class StorageService {
       return docs.filter(d => d.caseId === caseId);
   }
 
-  async saveDocument(docData: SystemDocument) {
+  // Upload Logic with Storage Support
+  async saveDocument(docData: SystemDocument, file?: File) {
       const userId = await this.getUserId();
+      
       if(isSupabaseConfigured && supabase && userId) {
           let officeId = docData.officeId;
           if (!officeId) {
@@ -405,6 +406,26 @@ class StorageService {
              officeId = data.user?.user_metadata?.currentOfficeId;
           }
 
+          // 1. Upload file to Storage if provided
+          let storagePath = null;
+          if (file && officeId) {
+              const fileExt = file.name.split('.').pop()?.toLowerCase();
+              const sanitizedName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+              const fileName = `${Date.now()}-${sanitizedName}`;
+              const filePath = `${officeId}/${fileName}`;
+              
+              const { error: uploadError } = await supabase.storage
+                  .from('documents')
+                  .upload(filePath, file);
+              
+              if (uploadError) {
+                  console.error("Storage upload failed:", uploadError);
+                  throw new Error("Falha no upload do arquivo para o bucket.");
+              }
+              storagePath = filePath;
+          }
+
+          // 2. Save Metadata to Database
           const payload = {
               id: docData.id && !docData.id.startsWith('doc-') ? docData.id : undefined,
               office_id: officeId,
@@ -414,10 +435,12 @@ class StorageService {
               type: docData.type,
               date: docData.date,
               category: docData.category,
-              case_id: docData.caseId
+              case_id: docData.caseId,
+              storage_path: storagePath
           };
           await supabase.from(TABLE_NAMES.DOCUMENTS).insert(payload);
       } else {
+          // Fallback Local
           const list = await this.getDocuments();
           list.unshift(docData);
           this.setLocal(LOCAL_KEYS.DOCUMENTS, list);
@@ -427,7 +450,16 @@ class StorageService {
 
   async deleteDocument(id: string) {
       if(isSupabaseConfigured && supabase) {
-          try { await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id); } catch {}
+          try { 
+              // First get storage path to delete file
+              const { data: doc } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('storage_path').eq('id', id).single();
+              
+              await supabase.from(TABLE_NAMES.DOCUMENTS).delete().eq('id', id);
+              
+              if (doc?.storage_path) {
+                  await supabase.storage.from('documents').remove([doc.storage_path]);
+              }
+          } catch {}
       } 
       const list = await this.getDocuments();
       this.setLocal(LOCAL_KEYS.DOCUMENTS, list.filter(i => i.id !== id));
@@ -574,7 +606,6 @@ class StorageService {
   async searchGlobal(query: string): Promise<SearchResult[]> {
       if(!query) return [];
       const lower = query.toLowerCase();
-      // Optimization: Parallel fetch but limited if backend supported it better.
       const [cases, clients] = await Promise.all([this.getCases(), this.getClients()]);
       
       const results: SearchResult[] = [];
@@ -621,7 +652,6 @@ class StorageService {
           
           const parsed = JSON.parse(s);
           
-          // Deep merge without emailPreferences
           return {
             general: { ...defaultSettings.general, ...parsed.general },
             notifications: { ...defaultSettings.notifications, ...parsed.notifications },
