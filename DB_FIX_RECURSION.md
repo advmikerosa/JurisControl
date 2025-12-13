@@ -17,6 +17,7 @@ DROP POLICY IF EXISTS "Manage members" ON public.office_members;
 DROP POLICY IF EXISTS "Members manage" ON public.office_members;
 DROP POLICY IF EXISTS "View team members" ON public.office_members;
 DROP POLICY IF EXISTS "Manage team members" ON public.office_members;
+DROP POLICY IF EXISTS "Join requests" ON public.office_members; -- Correção: Remove política pré-existente
 
 -- 2. Recriar a função de verificação como SECURITY DEFINER
 -- Isso é CRUCIAL: A função roda com privilégios de "admin" (postgres),
