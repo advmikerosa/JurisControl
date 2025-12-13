@@ -25,8 +25,6 @@ export const OfficeSetupModal: React.FC<OfficeSetupModalProps> = ({ isOpen, onCl
   const [officeLocation, setOfficeLocation] = useState('');
   const [joinHandle, setJoinHandle] = useState('');
 
-  // Reset form when opening/changing modes could be implemented here if needed
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!officeName || !officeHandle) {
@@ -54,12 +52,16 @@ export const OfficeSetupModal: React.FC<OfficeSetupModalProps> = ({ isOpen, onCl
       
       addToast('Escritório criado com sucesso!', 'success');
       onClose();
-      // Reset form
       setOfficeName('');
       setOfficeHandle('');
       setOfficeLocation('');
     } catch (error: any) {
-      addToast(error.message, 'error');
+      console.error(error);
+      if (error.message && error.message.includes('23503')) {
+          addToast('Erro de sincronia. Tentando corrigir seu perfil... Tente novamente em instantes.', 'warning');
+      } else {
+          addToast(error.message || 'Erro ao criar escritório.', 'error');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -77,12 +79,9 @@ export const OfficeSetupModal: React.FC<OfficeSetupModalProps> = ({ isOpen, onCl
         const joinedOffice = await storageService.joinOffice(joinHandle);
         updateProfile({
             offices: [...(user?.offices || []), joinedOffice.id],
-            // Note: We don't set currentOfficeId immediately if pending, 
-            // but we add it to list so user can see status
         });
         
-        // Custom Feedback for Join Request
-        addToast(`Solicitação enviada para ${joinedOffice.name}! Aguarde a aprovação do administrador.`, 'info');
+        addToast(`Solicitação enviada para ${joinedOffice.name}! Aguarde a aprovação.`, 'info');
         
         onClose();
         setJoinHandle('');
@@ -105,7 +104,7 @@ export const OfficeSetupModal: React.FC<OfficeSetupModalProps> = ({ isOpen, onCl
       onClose={onClose} 
       title={mode === 'create' ? 'Criar Novo Escritório' : 'Entrar em Escritório'}
       maxWidth="max-w-md"
-      footer={null} // Custom footer inside forms
+      footer={null} 
     >
       <div className="flex bg-slate-100 dark:bg-black/20 rounded-lg p-1 mb-6">
         <button 

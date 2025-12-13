@@ -621,11 +621,8 @@ class StorageService {
             
           // Tratamento para Erro 500 (Recursão) e Erro 406 (Not Acceptable)
           if (error) {
-              if (error.code === '42P17' || error.code === '406') { 
-                  console.error("CRITICAL DB ERROR: Recursion or RLS policy failure. Please run DB_FIX_RECURSION.md.");
-                  return [];
-              }
-              throw error;
+              console.error("CRITICAL DB ERROR:", error);
+              return [];
           }
 
           return (data || []).map((o: any) => ({
@@ -767,6 +764,10 @@ class StorageService {
     };
 
     if (isSupabaseConfigured && supabase) {
+        // --- AUTO-REPAIR LOGIC ---
+        // Ensure profile exists before creating office to avoid 23503 FK error
+        await this.ensureProfileExists();
+
         try {
             const dbOffice = {
                 name: newOffice.name,
@@ -805,7 +806,9 @@ class StorageService {
 
   async joinOffice(officeHandle: string): Promise<Office> {
     if (isSupabaseConfigured && supabase) {
-        // Attempt to find office. If RLS blocks reading non-member offices, this might fail unless public RLS policy allows it.
+        // Ensure profile exists before joining
+        await this.ensureProfileExists();
+
         const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', officeHandle).single();
         
         if (error || !office) throw new Error("Escritório não encontrado ou acesso restrito.");
@@ -922,19 +925,27 @@ class StorageService {
     }
   }
 
+  // FIX: Robustez melhorada para criar perfil se não existir
   async ensureProfileExists() {
     const userId = await this.getUserId();
     if (isSupabaseConfigured && supabase && userId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const updates = {
-                id: user.id,
-                full_name: user.user_metadata.full_name || user.user_metadata.name,
-                email: user.email,
-                username: user.user_metadata.username,
-                avatar_url: user.user_metadata.avatar_url
-            };
-            await supabase.from(TABLE_NAMES.PROFILES).upsert(updates, { onConflict: 'id' });
+        // Tenta buscar o perfil
+        const { data: profile } = await supabase.from(TABLE_NAMES.PROFILES).select('id').eq('id', userId).single();
+        
+        // Se não existir, cria usando dados do Auth
+        if (!profile) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const updates = {
+                    id: user.id,
+                    full_name: user.user_metadata.full_name || user.user_metadata.name || 'Usuário',
+                    email: user.email,
+                    username: user.user_metadata.username || `@user_${user.id.substring(0,8)}`,
+                    avatar_url: user.user_metadata.avatar_url || ''
+                };
+                await supabase.from(TABLE_NAMES.PROFILES).insert(updates);
+                console.log("Self-healing: Profile created manually.");
+            }
         }
     }
   }
