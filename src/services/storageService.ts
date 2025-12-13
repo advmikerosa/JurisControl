@@ -745,21 +745,21 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
         try {
-            // FIX: Removed 'members' from the DB payload.
-            // The trigger 'add_creator_as_admin' on the DB side will automatically 
-            // insert the owner into the 'office_members' table.
+            // NOTE: We do NOT insert members manually here. The DB trigger handles the owner.
             const dbOffice = {
                 name: newOffice.name,
                 handle: newOffice.handle,
                 location: newOffice.location,
                 owner_id: newOffice.ownerId,
-                // members: newOffice.members // REMOVED to fix PGRST204
             };
             
             const { data: officeDataDB, error: officeError } = await supabase.from(TABLE_NAMES.OFFICES).insert(dbOffice).select().single();
             
             if(officeError) {
                 if (officeError.code === '23505') throw new Error("Este identificador (@handle) já está em uso.");
+                if (officeError.code === '42P17' || officeError.message.includes("infinite recursion")) {
+                    throw new Error("Erro de permissão no banco de dados (Recursão RLS). Contate o suporte ou execute o script de correção DB_FIX_RECURSION.md.");
+                }
                 throw officeError;
             }
             
@@ -804,7 +804,6 @@ class StorageService {
              return this.getOfficeById(office.id) as Promise<Office>;
         }
 
-        // FIX: Insert into 'office_members' table instead of updating 'offices' table
         const { error: insertError } = await supabase
             .from(TABLE_NAMES.OFFICE_MEMBERS)
             .insert({
