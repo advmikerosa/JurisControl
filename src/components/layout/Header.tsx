@@ -38,14 +38,12 @@ export const Header: React.FC<HeaderProps> = (props) => {
   const [isOfficeMenuOpen, setIsOfficeMenuOpen] = React.useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = React.useState(false);
   
-  // Office Setup Modal State
   const [isOfficeSetupOpen, setIsOfficeSetupOpen] = useState(false);
   const [setupMode, setSetupMode] = useState<'create' | 'join'>('create');
 
   const searchRef = React.useRef<HTMLDivElement>(null);
   const notificationRef = React.useRef<HTMLDivElement>(null);
 
-  // Close dropdowns on click outside
   React.useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) {
@@ -68,7 +66,6 @@ export const Header: React.FC<HeaderProps> = (props) => {
   };
 
   const handleOfficeSelect = (office: Office) => {
-      // Find current user status in this office
       const member = office.members.find(m => m.userId === props.user?.id);
       
       if (member?.status === 'pending') {
@@ -98,14 +95,12 @@ export const Header: React.FC<HeaderProps> = (props) => {
     <>
     <header className="h-20 px-4 md:px-10 flex items-center justify-between sticky top-0 z-40 transition-all bg-white/70 dark:bg-[#0f172a]/70 backdrop-blur-xl border-b border-slate-200/60 dark:border-white/5 shadow-sm">
         
-        {/* Mobile Toggle */}
         <div className="flex items-center gap-4 md:hidden">
             <button onClick={props.onMobileMenuToggle} className="p-2 text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 rounded-lg" aria-label="Abrir menu">
                 <Menu size={24} />
             </button>
         </div>
 
-        {/* Search */}
         <div className="hidden md:block flex-1 max-w-lg mr-8 relative" ref={searchRef}>
             <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -147,7 +142,6 @@ export const Header: React.FC<HeaderProps> = (props) => {
             </AnimatePresence>
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-3 md:gap-5 ml-auto">
             <button onClick={props.onThemeToggle} className="p-2.5 rounded-xl text-slate-500 hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-slate-200 dark:hover:border-white/10 transition-all shadow-sm" aria-label="Alternar tema">
                 {props.theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
@@ -155,7 +149,7 @@ export const Header: React.FC<HeaderProps> = (props) => {
 
             {/* Office Switcher */}
             <div className="relative hidden sm:block">
-                <button onClick={() => setIsOfficeMenuOpen(!isOfficeMenuOpen)} className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white transition-colors py-2 px-3 rounded-xl hover:bg-white dark:hover:bg-white/5">
+                <button onClick={() => setIsOfficeMenuOpen(!isOfficeMenuOpen)} className={`flex items-center gap-2 text-sm font-medium transition-colors py-2 px-3 rounded-xl border ${!props.currentOffice ? 'bg-amber-500/10 border-amber-500/20 text-amber-500 animate-pulse' : 'text-slate-700 dark:text-slate-300 border-transparent hover:bg-white dark:hover:bg-white/5'}`}>
                     <span>{props.currentOffice?.name || 'Sem Escritório'}</span>
                     <ChevronDown size={14} className={`transition-transform duration-200 ${isOfficeMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -170,7 +164,6 @@ export const Header: React.FC<HeaderProps> = (props) => {
                                             {props.userOffices.map(office => {
                                                 const status = getMemberStatus(office);
                                                 const isPending = status === 'pending';
-                                                
                                                 return (
                                                     <button 
                                                         key={office.id} 
@@ -196,26 +189,19 @@ export const Header: React.FC<HeaderProps> = (props) => {
                                     </>
                                 ) : (
                                     <div className="p-4 text-center">
-                                        <div className="w-10 h-10 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-2 text-slate-400">
-                                            <Briefcase size={20} />
+                                        <div className="w-10 h-10 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-2 text-amber-500">
+                                            <AlertCircle size={20} />
                                         </div>
-                                        <p className="text-xs text-slate-500 mb-3">Você não está vinculado a nenhum escritório.</p>
+                                        <p className="text-xs text-slate-500 mb-3">Você não está vinculado a nenhum escritório. Crie um ou entre em um existente para começar.</p>
                                     </div>
                                 )}
 
-                                {/* Action Buttons */}
                                 <div className="grid grid-cols-2 gap-2 mt-1">
-                                    <button 
-                                        onClick={() => openSetup('create')}
-                                        className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-slate-200 dark:border-white/10 hover:border-indigo-500/50 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-all group"
-                                    >
+                                    <button onClick={() => openSetup('create')} className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-slate-200 dark:border-white/10 hover:border-indigo-500/50 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-all group">
                                         <Plus size={16} className="text-slate-500 dark:text-slate-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-400" />
                                         <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-300">Criar Novo</span>
                                     </button>
-                                    <button 
-                                        onClick={() => openSetup('join')}
-                                        className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-slate-200 dark:border-white/10 hover:border-emerald-500/50 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all group"
-                                    >
+                                    <button onClick={() => openSetup('join')} className="flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-slate-200 dark:border-white/10 hover:border-emerald-500/50 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all group">
                                         <LogIn size={16} className="text-slate-500 dark:text-slate-400 group-hover:text-emerald-500 dark:group-hover:text-emerald-400" />
                                         <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300 group-hover:text-emerald-600 dark:group-hover:text-emerald-300">Entrar</span>
                                     </button>
@@ -227,7 +213,6 @@ export const Header: React.FC<HeaderProps> = (props) => {
                 </AnimatePresence>
             </div>
 
-            {/* Notifications */}
             <div className="relative" ref={notificationRef}>
                 <button onClick={() => setIsNotificationOpen(!isNotificationOpen)} className="relative p-2.5 rounded-xl text-slate-500 hover:bg-white dark:hover:bg-white/5 transition-all" aria-label="Notificações">
                     <Bell size={20} />
@@ -261,7 +246,6 @@ export const Header: React.FC<HeaderProps> = (props) => {
                 </AnimatePresence>
             </div>
 
-            {/* Profile Link */}
             <div onClick={() => navigate('/profile')} className="flex items-center gap-3 pl-4 md:pl-6 md:border-l border-slate-200 dark:border-white/10 cursor-pointer group">
                <div className="text-right hidden sm:block">
                    <p className="text-sm font-medium text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors">{props.user?.name || 'Usuário'}</p>

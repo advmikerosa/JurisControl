@@ -96,7 +96,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const checkSession = async () => {
       try {
-        // Prevent flash of unauthorized content by keeping loading true initially
         if (isSupabaseConfigured && supabase) {
           const { data, error } = await supabase.auth.getSession();
           
@@ -182,7 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     name,
                     handle,
                     location: 'Brasil'
-                }, sbUser.id); // Explicitly pass ID to avoid context race
+                }, sbUser.id);
 
                 await supabase!.auth.updateUser({
                     data: { 
@@ -206,6 +205,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         } catch (e) {
             console.error("Error processing pending office setup:", e);
+            // Optionally clear the pending setup if it fails so we don't retry forever
+            // await supabase!.auth.updateUser({ data: { pending_office_setup: null } });
         }
     }
     return false;
@@ -278,7 +279,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       avatar,
       provider: sbUser.app_metadata?.provider || 'email',
       offices: meta.offices || [],
-      currentOfficeId: meta.currentOfficeId,
+      currentOfficeId: meta.currentOfficeId, // Can be undefined if user has no office
       twoFactorEnabled: false,
       emailVerified: !!sbUser.email_confirmed_at,
       phone,
@@ -298,7 +299,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (data.user) {
             const status = await storageService.checkAccountStatus(data.user.id);
-            
             if (status.deleted_at) {
                 await supabase.auth.signOut();
                 const err = new Error('Esta conta foi excluída. Reative via e-mail.');
@@ -322,9 +322,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isSupabaseConfigured && supabase) {
           const { error } = await supabase.auth.signInWithOtp({
               email,
-              options: {
-                  shouldCreateUser: false
-              }
+              options: { shouldCreateUser: false }
           });
           if (error) throw new Error("Erro ao enviar e-mail: " + error.message);
       } else {
@@ -345,7 +343,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: 'Advogado',
               oab: oab || '',
               username: '@' + name.toLowerCase().replace(/\s+/g, ''),
-              pending_office_setup: officeData 
+              pending_office_setup: officeData || null // Pass null if undefined
             }
           }
         });
@@ -409,21 +407,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2. Persist to Supabase
     if (isSupabaseConfigured && supabase) {
-        // Update Auth Metadata (limitado, pode falhar com base64 grande)
         const authUpdates: any = {};
         if (data.name) authUpdates.full_name = data.name;
-        if (data.avatar && data.avatar.length < 2048) authUpdates.avatar_url = data.avatar; // Only sync small avatars to auth
+        if (data.avatar && data.avatar.length < 2048) authUpdates.avatar_url = data.avatar;
         if (data.phone) authUpdates.phone = data.phone;
         if (data.oab) authUpdates.oab = data.oab;
         if (data.username) authUpdates.username = data.username;
         if (data.offices) authUpdates.offices = data.offices;
-        if (data.currentOfficeId) authUpdates.currentOfficeId = data.currentOfficeId;
+        // Allows clearing currentOfficeId or setting it
+        if (data.currentOfficeId !== undefined) authUpdates.currentOfficeId = data.currentOfficeId;
 
         if (Object.keys(authUpdates).length > 0) {
             await supabase.auth.updateUser({ data: authUpdates });
         }
 
-        // Update Profiles Table (Source of truth for large data like base64 avatars)
         if (user?.id) {
             const tableUpdates: any = {};
             if (data.name) tableUpdates.full_name = data.name;
@@ -433,12 +430,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (data.username) tableUpdates.username = data.username;
 
             if (Object.keys(tableUpdates).length > 0) {
-               const { error } = await supabase
+               await supabase
                   .from('profiles')
                   .update(tableUpdates)
                   .eq('id', user.id);
-               
-               if (error) console.error("Error updating profiles table:", error);
             }
         }
     }

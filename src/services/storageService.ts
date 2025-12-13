@@ -45,17 +45,29 @@ class StorageService {
     return stored ? JSON.parse(stored).id : 'local-user';
   }
 
+  // Verifica se o usuário tem um escritório ativo antes de tentar fazer queries
+  private async getCurrentOfficeId(): Promise<string | null> {
+      if (isSupabaseConfigured && supabase) {
+          const { data: { user } } = await supabase.auth.getUser();
+          return user?.user_metadata?.currentOfficeId || null;
+      }
+      return 'office-1'; // Mock default
+  }
+
   // --- Clientes ---
   async getClients(): Promise<Client[]> {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
-        if (!userId) return []; 
+        const officeId = await this.getCurrentOfficeId();
+        
+        // Se não tiver escritório, não tenta buscar dados (evita erro de RLS recursion)
+        if (!userId || !officeId) return [];
 
         const { data, error } = await supabase
           .from(TABLE_NAMES.CLIENTS)
           .select('*') 
-          .eq('user_id', userId)
+          .eq('office_id', officeId) // Filter by office context
           .order('name');
         
         if (error) throw error;
@@ -92,14 +104,16 @@ class StorageService {
   
   async saveClient(client: Client) {
     const userId = await this.getUserId();
+    const officeId = await this.getCurrentOfficeId();
 
     if (isSupabaseConfigured && supabase) {
       if (!userId) throw new Error("Usuário não autenticado");
+      if (!officeId) throw new Error("Você precisa criar ou entrar em um escritório antes de adicionar dados.");
       
       const payload = {
           id: client.id && !client.id.startsWith('cli-') ? client.id : undefined,
           user_id: userId,
-          office_id: client.officeId, // Ensure officeId is passed
+          office_id: officeId, // Always use current context
           name: client.name,
           type: client.type,
           status: client.status,
@@ -162,7 +176,8 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
-        if (!userId) return [];
+        const officeId = await this.getCurrentOfficeId();
+        if (!userId || !officeId) return [];
 
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
@@ -170,7 +185,7 @@ class StorageService {
             *,
             client:clients!cases_client_id_fkey(*)
           `)
-          .eq('user_id', userId);
+          .eq('office_id', officeId); // Filter by office context
         if (error) throw error;
         
         const mappedData = (data || []).map((item: any) => {
@@ -217,13 +232,14 @@ class StorageService {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await this.getUserId();
-        if (!userId) return null;
+        const officeId = await this.getCurrentOfficeId();
+        if (!userId || !officeId) return null;
 
         const { data, error } = await supabase
           .from(TABLE_NAMES.CASES)
           .select(`*, client:clients!cases_client_id_fkey(*)`)
           .eq('id', id)
-          .eq('user_id', userId)
+          .eq('office_id', officeId) // Security check
           .single();
         
         if (error) throw error;
@@ -304,15 +320,17 @@ class StorageService {
 
   async saveCase(legalCase: LegalCase) {
     const userId = await this.getUserId();
+    const officeId = await this.getCurrentOfficeId();
     legalCase.lastUpdate = new Date().toISOString();
     
     if (isSupabaseConfigured && supabase) {
       if (!userId) throw new Error("Usuário não autenticado");
+      if (!officeId) throw new Error("Sem escritório selecionado.");
       
       const payload: any = {
         id: legalCase.id && !legalCase.id.startsWith('case-') ? legalCase.id : undefined,
         user_id: userId,
-        office_id: legalCase.officeId, // Ensure officeId is passed
+        office_id: officeId,
         client_id: legalCase.client.id,
         cnj: legalCase.cnj,
         title: legalCase.title,
@@ -365,9 +383,9 @@ class StorageService {
   async getTasks(): Promise<Task[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        const userId = await this.getUserId();
-        if (!userId) return [];
-        const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('user_id', userId);
+        const officeId = await this.getCurrentOfficeId();
+        if (!officeId) return [];
+        const { data } = await supabase.from(TABLE_NAMES.TASKS).select('*').eq('office_id', officeId);
         return (data || []).map((t: any) => ({
             id: t.id,
             officeId: t.office_id,
@@ -395,12 +413,14 @@ class StorageService {
   
   async saveTask(task: Task) {
     const userId = await this.getUserId();
+    const officeId = await this.getCurrentOfficeId();
     if (isSupabaseConfigured && supabase) {
       if (!userId) throw new Error("Usuário não autenticado");
+      if (!officeId) throw new Error("Sem escritório.");
       const payload = { 
           id: task.id && !task.id.startsWith('task-') ? task.id : undefined,
           user_id: userId,
-          office_id: task.officeId, // Ensure officeId
+          office_id: officeId,
           title: task.title,
           due_date: task.dueDate,
           priority: task.priority,
@@ -444,9 +464,9 @@ class StorageService {
   async getFinancials(): Promise<FinancialRecord[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        const userId = await this.getUserId();
-        if (!userId) return [];
-        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('user_id', userId);
+        const officeId = await this.getCurrentOfficeId();
+        if (!officeId) return [];
+        const { data } = await supabase.from(TABLE_NAMES.FINANCIAL).select('*').eq('office_id', officeId);
         return (data || []).map((f: any) => ({
             id: f.id,
             officeId: f.office_id,
@@ -475,12 +495,13 @@ class StorageService {
   
   async saveFinancial(record: FinancialRecord) {
     const userId = await this.getUserId();
+    const officeId = await this.getCurrentOfficeId();
     if (isSupabaseConfigured && supabase) {
-      if (!userId) throw new Error("Usuário não autenticado");
+      if (!userId || !officeId) throw new Error("Erro de autenticação/contexto.");
       const payload = {
           id: record.id && !record.id.startsWith('trans-') ? record.id : undefined,
           user_id: userId,
-          office_id: record.officeId,
+          office_id: officeId,
           title: record.title,
           amount: record.amount,
           type: record.type,
@@ -514,9 +535,9 @@ class StorageService {
   async getDocuments(): Promise<SystemDocument[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-        const userId = await this.getUserId();
-        if (!userId) return [];
-        const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('user_id', userId);
+        const officeId = await this.getCurrentOfficeId();
+        if (!officeId) return [];
+        const { data } = await supabase.from(TABLE_NAMES.DOCUMENTS).select('*').eq('office_id', officeId);
         return (data || []).map((d: any) => ({
             id: d.id,
             officeId: d.office_id,
@@ -541,12 +562,13 @@ class StorageService {
 
   async saveDocument(docData: SystemDocument) {
     const userId = await this.getUserId();
+    const officeId = await this.getCurrentOfficeId();
     if (isSupabaseConfigured && supabase) {
-      if (!userId) throw new Error("Usuário não autenticado");
+      if (!userId || !officeId) throw new Error("Erro de contexto.");
       const payload = { 
           id: docData.id && !docData.id.startsWith('doc-') ? docData.id : undefined,
           user_id: userId,
-          office_id: docData.officeId, // Ensure officeId
+          office_id: officeId, 
           name: docData.name,
           size: docData.size,
           type: docData.type,
@@ -576,12 +598,9 @@ class StorageService {
 
   // --- Escritórios (Office Management) ---
   
-  // FIX: Leitura de escritório deve fazer JOIN com members para popular a lista
   async getOffices(): Promise<Office[]> {
     if (isSupabaseConfigured && supabase) {
       try {
-          // Select offices, and join with office_members to get the members array
-          // Also join profiles inside office_members to get member details
           const { data, error } = await supabase
             .from(TABLE_NAMES.OFFICES)
             .select(`
@@ -611,7 +630,6 @@ class StorageService {
               logoUrl: o.logo_url,
               createdAt: o.created_at,
               areaOfActivity: o.area_of_activity,
-              // Map nested relational data back to flat OfficeMember structure
               members: (o.members || []).map((m: any) => ({
                   userId: m.user_id,
                   role: m.role,
@@ -694,10 +712,8 @@ class StorageService {
             logo_url: office.logoUrl,
             created_at: office.createdAt,
             area_of_activity: office.areaOfActivity,
-            // members: excluded here, updated via separate calls if needed
             social: office.social
         };
-        
         await supabase.from(TABLE_NAMES.OFFICES).upsert(payload);
         this.logActivity(`Atualizou escritório: ${office.name}`);
     } else {
@@ -745,7 +761,6 @@ class StorageService {
 
     if (isSupabaseConfigured && supabase) {
         try {
-            // NOTE: We do NOT insert members manually here. The DB trigger handles the owner.
             const dbOffice = {
                 name: newOffice.name,
                 handle: newOffice.handle,
@@ -757,9 +772,6 @@ class StorageService {
             
             if(officeError) {
                 if (officeError.code === '23505') throw new Error("Este identificador (@handle) já está em uso.");
-                if (officeError.code === '42P17' || officeError.message.includes("infinite recursion")) {
-                    throw new Error("Erro de permissão no banco de dados (Recursão RLS). Contate o suporte ou execute o script de correção DB_FIX_RECURSION.md.");
-                }
                 throw officeError;
             }
             
@@ -785,6 +797,7 @@ class StorageService {
 
   async joinOffice(officeHandle: string): Promise<Office> {
     if (isSupabaseConfigured && supabase) {
+        // Attempt to find office. If RLS blocks reading non-member offices, this might fail unless public RLS policy allows it.
         const { data: office, error } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('handle', officeHandle).single();
         
         if (error || !office) throw new Error("Escritório não encontrado ou acesso restrito.");
@@ -792,7 +805,6 @@ class StorageService {
         const userId = await this.getUserId();
         if (!userId) throw new Error("Usuário não autenticado para entrar em escritório");
 
-        // Verifique se já é membro consultando office_members
         const { data: existingMember } = await supabase
             .from(TABLE_NAMES.OFFICE_MEMBERS)
             .select('*')
@@ -811,7 +823,7 @@ class StorageService {
                 user_id: userId,
                 role: 'Advogado',
                 permissions: { financial: false, cases: true, documents: true, settings: false },
-                status: 'pending' // Aguardando aprovação
+                status: 'pending' 
             });
             
         if (insertError) throw insertError;
@@ -825,15 +837,11 @@ class StorageService {
         if (!targetOffice) throw new Error("Escritório não encontrado com este identificador.");
 
         const userId = await this.getUserId();
-        const userStr = localStorage.getItem('@JurisControl:user');
-        const user = userStr ? JSON.parse(userStr) : { name: 'Novo Membro', email: '', avatar: '' };
         
         if (!targetOffice.members.some(m => m.userId === userId)) {
            targetOffice.members.push({
              userId: userId || 'local',
-             name: user?.name || 'Novo Membro',
-             email: user?.email || '',
-             avatarUrl: user?.avatar || '',
+             name: 'Novo Membro',
              role: 'Advogado',
              permissions: { financial: false, cases: true, documents: true, settings: false },
              status: 'pending'
@@ -848,7 +856,6 @@ class StorageService {
 
   async approveMember(officeId: string, userId: string): Promise<void> {
       if (isSupabaseConfigured && supabase) {
-          // FIX: Update 'office_members' table
           await supabase
             .from(TABLE_NAMES.OFFICE_MEMBERS)
             .update({ status: 'active' })
@@ -870,7 +877,6 @@ class StorageService {
 
   async removeMemberFromOffice(officeId: string, memberId: string) {
       if (isSupabaseConfigured && supabase) {
-          // FIX: Delete from 'office_members' table
           await supabase
             .from(TABLE_NAMES.OFFICE_MEMBERS)
             .delete()
@@ -888,7 +894,6 @@ class StorageService {
   async inviteUserToOffice(officeId: string, userHandle: string): Promise<boolean> {
      if (!userHandle.includes('@')) throw new Error("Informe e-mail ou @usuario.");
      await new Promise(resolve => setTimeout(resolve, 800));
-     // Here you would implement logic to find the user by handle and add them to office members
      return true; 
   }
 
@@ -931,9 +936,6 @@ class StorageService {
     
     if (isSupabaseConfigured && supabase) {
       if (!userId) return;
-      // In production, calling the RPC function 'delete_own_account' is safer/better
-      // await supabase.rpc('delete_own_account');
-      // For now, attempting cascading delete or soft delete logic manually if RPC not available
       const tables = [TABLE_NAMES.PROFILES]; 
       for (const table of tables) {
         try {
