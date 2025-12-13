@@ -6,7 +6,7 @@ Este script resolve os erros `42P17` (Infinite Recursion), `500` (Internal Error
 Execute este script no **SQL Editor** do Supabase.
 
 ## O que este script faz:
-1.  Remove forçadamente TODAS as políticas relacionadas a escritórios e membros para garantir um estado limpo.
+1.  Remove forçadamente TODAS as políticas relacionadas a escritórios, membros e perfis para garantir um estado limpo.
 2.  Recria a função de segurança crítica `check_is_member` com privilégios de sistema para evitar o loop de verificação.
 3.  Reaplica as políticas de segurança corretas.
 
@@ -38,12 +38,15 @@ DROP POLICY IF EXISTS "View team members" ON public.office_members;
 DROP POLICY IF EXISTS "Manage team members" ON public.office_members;
 DROP POLICY IF EXISTS "Join requests" ON public.office_members;
 DROP POLICY IF EXISTS "Create join request" ON public.office_members;
+DROP POLICY IF EXISTS "Admin manage members" ON public.office_members;
+DROP POLICY IF EXISTS "Admin delete members" ON public.office_members;
 
 -- Tabela: PROFILES (Causa do erro 406/42710)
 DROP POLICY IF EXISTS "Profiles viewable" ON public.profiles;
 DROP POLICY IF EXISTS "Public Profiles Access" ON public.profiles;
 DROP POLICY IF EXISTS "Profiles are viewable by everyone" ON public.profiles;
 DROP POLICY IF EXISTS "Profiles update own" ON public.profiles;
+DROP POLICY IF EXISTS "Profiles editable own" ON public.profiles;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Profiles insert own" ON public.profiles;
 DROP POLICY IF EXISTS "Insert Own Profile" ON public.profiles;
