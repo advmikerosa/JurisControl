@@ -12,6 +12,7 @@ const TABLE_NAMES = {
   OFFICES: 'offices',
   PROFILES: 'profiles',
   LOGS: 'activity_logs',
+    OFFICE_MEMBERS: 'office_members',
 };
 
 const LOCAL_KEYS = {
@@ -671,14 +672,9 @@ class StorageService {
                 location: officeData.location || 'Brasil',
                 owner_id: userId,
                 created_at: new Date().toISOString(),
-                members: [{
-                    userId: userId,
-                    name: user?.name || 'User',
-                    email: user?.email || '',
-                    avatarUrl: user?.avatar || '',
-                    role: 'Admin',
-                    permissions: { financial: true, cases: true, documents: true, settings: true }
-                }],
+                      };
+
+                    
                 social: {}
             };
 
