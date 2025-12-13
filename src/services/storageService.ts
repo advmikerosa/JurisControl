@@ -286,7 +286,7 @@ class StorageService {
     page: number = 1, 
     limit: number = 20, 
     searchTerm: string = '', 
-    statusFilter: string | null = null, 
+    statusFilter: string | null = null,
     categoryFilter: string | null = null, 
     dateRange: { start: string, end: string } | null = null
   ): Promise<{ data: LegalCase[], total: number }> {
