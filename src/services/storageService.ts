@@ -61,7 +61,7 @@ class StorageService {
         const userId = await this.getUserId();
         const officeId = await this.getCurrentOfficeId();
         
-        // Se não tiver escritório, não tenta buscar dados (evita erro de RLS recursion se a política depender de escritório)
+        // Se não tiver escritório, não tenta buscar dados (evita erro de RLS recursion)
         if (!userId || !officeId) return [];
 
         const { data, error } = await supabase
@@ -619,10 +619,10 @@ class StorageService {
                 )
             `);
             
-          // Tratamento para Erro 500 (Recursão)
+          // Tratamento para Erro 500 (Recursão) e Erro 406 (Not Acceptable)
           if (error) {
-              if (error.code === '42P17') { // Infinite Recursion Code
-                  console.error("FATAL: Infinite Recursion in Database Policies. Please run DB_FIX_RECURSION.md script.");
+              if (error.code === '42P17' || error.code === '406') { 
+                  console.error("CRITICAL DB ERROR: Recursion or RLS policy failure. Please run DB_FIX_RECURSION.md.");
                   return [];
               }
               throw error;

@@ -1,47 +1,22 @@
 
-# Correção Definitiva: Recursão Infinita e Políticas
+# Correção Definitiva: Recursão Infinita e Políticas Duplicadas
 
-Este script resolve os erros `42P17` (Infinite Recursion), `500` (Internal Error) e `42710` (Policy exists).
+Este script resolve os erros:
+1. `42710`: Policy already exists (Limpeza prévia).
+2. `42P17`: Infinite recursion (Uso de SECURITY DEFINER).
+3. `406`: Not Acceptable (Erro colateral da recursão).
 
 Execute este script no **SQL Editor** do Supabase.
-
-## O que este script faz:
-1.  Remove forçadamente TODAS as políticas relacionadas a escritórios, membros e perfis para garantir um estado limpo.
-2.  Recria a função de segurança crítica `check_is_member` com privilégios de sistema para evitar o loop de verificação.
-3.  Reaplica as políticas de segurança corretas.
 
 ```sql
 BEGIN;
 
 -- ============================================================
--- 1. LIMPEZA SEGURA DE POLÍTICAS (DROP ALL)
+-- 1. LIMPEZA TOTAL DE POLÍTICAS (DROP ALL)
+-- Removemos todas as variações de nomes para evitar o erro 42710
 -- ============================================================
 
--- Tabela: OFFICES
-DROP POLICY IF EXISTS "View offices" ON public.offices;
-DROP POLICY IF EXISTS "Offices view" ON public.offices;
-DROP POLICY IF EXISTS "Offices select" ON public.offices;
-DROP POLICY IF EXISTS "Create offices" ON public.offices;
-DROP POLICY IF EXISTS "Offices create" ON public.offices;
-DROP POLICY IF EXISTS "Offices insert" ON public.offices;
-DROP POLICY IF EXISTS "Update offices" ON public.offices;
-DROP POLICY IF EXISTS "Offices update" ON public.offices;
-DROP POLICY IF EXISTS "Delete offices" ON public.offices;
-
--- Tabela: OFFICE_MEMBERS
-DROP POLICY IF EXISTS "View members" ON public.office_members;
-DROP POLICY IF EXISTS "Members view" ON public.office_members;
-DROP POLICY IF EXISTS "Select members" ON public.office_members;
-DROP POLICY IF EXISTS "Manage members" ON public.office_members;
-DROP POLICY IF EXISTS "Members manage" ON public.office_members;
-DROP POLICY IF EXISTS "View team members" ON public.office_members;
-DROP POLICY IF EXISTS "Manage team members" ON public.office_members;
-DROP POLICY IF EXISTS "Join requests" ON public.office_members;
-DROP POLICY IF EXISTS "Create join request" ON public.office_members;
-DROP POLICY IF EXISTS "Admin manage members" ON public.office_members;
-DROP POLICY IF EXISTS "Admin delete members" ON public.office_members;
-
--- Tabela: PROFILES (Causa do erro 406/42710)
+-- Tabela: PROFILES
 DROP POLICY IF EXISTS "Profiles viewable" ON public.profiles;
 DROP POLICY IF EXISTS "Public Profiles Access" ON public.profiles;
 DROP POLICY IF EXISTS "Profiles are viewable by everyone" ON public.profiles;
@@ -51,19 +26,38 @@ DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Profiles insert own" ON public.profiles;
 DROP POLICY IF EXISTS "Insert Own Profile" ON public.profiles;
 
+-- Tabela: OFFICES
+DROP POLICY IF EXISTS "View offices" ON public.offices;
+DROP POLICY IF EXISTS "Offices view" ON public.offices;
+DROP POLICY IF EXISTS "Offices select" ON public.offices;
+DROP POLICY IF EXISTS "Create offices" ON public.offices;
+DROP POLICY IF EXISTS "Offices create" ON public.offices;
+DROP POLICY IF EXISTS "Update offices" ON public.offices;
+DROP POLICY IF EXISTS "Offices update" ON public.offices;
+
+-- Tabela: OFFICE_MEMBERS
+DROP POLICY IF EXISTS "View members" ON public.office_members;
+DROP POLICY IF EXISTS "Members view" ON public.office_members;
+DROP POLICY IF EXISTS "Manage members" ON public.office_members;
+DROP POLICY IF EXISTS "Members manage" ON public.office_members;
+DROP POLICY IF EXISTS "View team members" ON public.office_members;
+DROP POLICY IF EXISTS "Manage team members" ON public.office_members;
+DROP POLICY IF EXISTS "Join requests" ON public.office_members;
+
 -- ============================================================
 -- 2. FUNÇÃO DE SEGURANÇA (SECURITY DEFINER)
+-- Esta é a correção para o Erro 500 / Recursão
 -- ============================================================
--- Esta função é o segredo para evitar a recursão. Ela roda como admin/postgres.
 
 CREATE OR REPLACE FUNCTION public.check_is_member(_office_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql
-SECURITY DEFINER -- Executa sem checar RLS novamente
-SET search_path = public, extensions, temp
+SECURITY DEFINER -- IMPORTANTE: Executa como superusuário para não checar RLS novamente
+SET search_path = public, extensions, temp -- Segurança contra hijacking
 AS $$
 BEGIN
   -- Verifica se o usuário atual (auth.uid()) está na lista de membros do escritório
+  -- Como é SECURITY DEFINER, ele consegue ler a tabela office_members sem disparar o RLS dela
   RETURN EXISTS (
     SELECT 1 
     FROM public.office_members 
@@ -123,7 +117,7 @@ FOR ALL USING (
 );
 
 -- Quem pode entrar (Solicitação)?
--- O próprio usuário pode criar uma solicitação 'pending'
+-- O próprio usuário pode criar uma solicitação 'pending' para si mesmo
 CREATE POLICY "Join requests" ON public.office_members
 FOR INSERT WITH CHECK (
   user_id = (select auth.uid()) 
@@ -133,7 +127,7 @@ FOR INSERT WITH CHECK (
 -- 5. RECRIAR POLÍTICAS (PROFILES)
 -- ============================================================
 
--- Leitura pública para que usuários possam ver nomes uns dos outros
+-- Leitura pública para que usuários possam ver nomes uns dos outros na equipe
 CREATE POLICY "Profiles viewable" ON public.profiles
 FOR SELECT USING (true);
 
