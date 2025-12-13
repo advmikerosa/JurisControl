@@ -619,7 +619,14 @@ class StorageService {
                 )
             `);
             
-          if (error) throw error;
+          // Tratamento para Erro 500 (Recursão)
+          if (error) {
+              if (error.code === '42P17') { // Infinite Recursion Code
+                  console.error("FATAL: Infinite Recursion in Database Policies. Please run DB_FIX_RECURSION.md script.");
+                  return [];
+              }
+              throw error;
+          }
 
           return (data || []).map((o: any) => ({
               id: o.id,
@@ -772,6 +779,7 @@ class StorageService {
             
             if(officeError) {
                 if (officeError.code === '23505') throw new Error("Este identificador (@handle) já está em uso.");
+                if (officeError.code === '42P17') throw new Error("Erro Crítico no Banco de Dados (Recursão). Contate o suporte.");
                 throw officeError;
             }
             
