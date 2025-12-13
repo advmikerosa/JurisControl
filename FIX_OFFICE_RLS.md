@@ -8,15 +8,25 @@ Copie e cole o código abaixo no **SQL Editor** do Supabase. Este script corrige
 -- 1. CORREÇÃO DE PERMISSÕES (RLS)
 -- ============================================================
 
+-- Remover políticas antigas para evitar conflitos de nome (Erro 42710)
+-- Removemos variações de nomes que podem ter sido criadas por scripts diferentes
+DROP POLICY IF EXISTS "View offices" ON public.offices;
+DROP POLICY IF EXISTS "Offices view" ON public.offices;
+
+DROP POLICY IF EXISTS "View members" ON public.office_members;
+DROP POLICY IF EXISTS "Members view" ON public.office_members;
+
+DROP POLICY IF EXISTS "Manage members" ON public.office_members;
+DROP POLICY IF EXISTS "Members manage" ON public.office_members;
+DROP POLICY IF EXISTS "Join or Manage members" ON public.office_members;
+
 -- Permitir que qualquer usuário autenticado busque escritórios
 -- (Necessário para validar se o @handle existe e para encontrar o ID ao entrar)
-DROP POLICY IF EXISTS "View offices" ON public.offices;
 CREATE POLICY "View offices" ON public.offices
 FOR SELECT
 USING ( true );
 
 -- Permitir que o usuário veja associações onde ELE é o usuário ou o escritório pertence a ele
-DROP POLICY IF EXISTS "View members" ON public.office_members;
 CREATE POLICY "View members" ON public.office_members
 FOR SELECT
 USING (
@@ -24,12 +34,9 @@ USING (
   EXISTS (SELECT 1 FROM public.offices WHERE id = office_id AND owner_id = auth.uid())
 );
 
--- Permitir inserção na tabela de membros (necessário para "Entrar" e Trigger de criação)
--- Removemos versões anteriores da política para evitar erro de duplicidade
-DROP POLICY IF EXISTS "Manage members" ON public.office_members;
-DROP POLICY IF EXISTS "Join or Manage members" ON public.office_members;
-
-CREATE POLICY "Join or Manage members" ON public.office_members
+-- Permitir inserção e gestão na tabela de membros
+-- (Necessário para "Entrar em Escritório" e Trigger de criação automática)
+CREATE POLICY "Manage members" ON public.office_members
 FOR ALL
 USING (
   user_id = auth.uid() OR 

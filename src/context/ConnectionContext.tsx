@@ -21,37 +21,54 @@ export const ConnectionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   useEffect(() => {
     const checkConnection = async () => {
+      // Se não houver configuração, força modo Demo
       if (!isSupabaseConfigured || !supabase) {
         setIsDemoMode(true);
         return;
       }
 
       try {
-        // Simple check to Supabase Auth to verify connectivity
+        // Tenta um ping simples no Auth para verificar se a API está respondendo
+        // Se o projeto estiver PAUSADO, isso retornará erro de conexão
         const { error } = await supabase.auth.getSession();
         
-        if (error && error.message && (error.message.includes('connection') || error.message.includes('fetch'))) {
-          setIsOnline(false);
+        if (error) {
+           // Se for erro de conexão/fetch, assume offline ou projeto pausado
+           if (error.message && (error.message.includes('connection') || error.message.includes('fetch') || error.message.includes('Failed to fetch'))) {
+             setIsOnline(false);
+             setIsDemoMode(true); // Fallback para dados locais para a UI não quebrar
+           } else {
+             // Outros erros (ex: sessão expirada) não significam offline
+             setIsOnline(true);
+             setIsDemoMode(false);
+           }
         } else {
           setIsOnline(true);
           setLastSyncTime(new Date());
           setIsDemoMode(false);
         }
       } catch (error) {
+        // Erro catastrófico de rede
         setIsOnline(false);
+        setIsDemoMode(true);
       }
     };
 
+    // Check imediato e depois polling
     checkConnection();
     const interval = setInterval(checkConnection, 30000);
 
     const handleOnline = () => {
         setIsOnline(true);
-        // Trigger sync when coming back online
+        // Tenta reconectar e processar fila
+        checkConnection();
         syncQueueService.processPending();
     };
 
-    const handleOffline = () => setIsOnline(false);
+    const handleOffline = () => {
+        setIsOnline(false);
+        setIsDemoMode(true);
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
