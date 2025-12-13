@@ -94,26 +94,32 @@ export const Login: React.FC = () => {
         }
       }
     } catch (err: any) {
+      console.error("Auth Error:", err);
       // Handle Account Suspended Check
       if (err.code === 'ACCOUNT_SUSPENDED') {
           setReactivateConfirmEmail(email); 
           setShowReactivateModal(true);
       } else {
           let errorMessage = err.message || 'Ocorreu um erro.';
-          if (errorMessage.includes('Invalid login credentials')) {
+          const errorCode = err.status || err.code;
+
+          if (errorCode === 500) {
+             errorMessage = 'Erro interno no servidor (Database Trigger). Por favor, contate o administrador e execute o script de correção DB_FIX_SIGNUP_ERROR.md.';
+          } else if (errorMessage.includes('Invalid login credentials')) {
             errorMessage = 'E-mail ou senha incorretos.';
           } else if (errorMessage.includes('infinite recursion')) {
              errorMessage = 'Erro interno no banco de dados. Tente criar a conta sem escritório por enquanto.';
              setSetupOfficeNow(false); // Sugestão automática de fallback
+          } else if (errorMessage.includes('Database error saving new user')) {
+             errorMessage = 'Erro no banco de dados. O trigger de criação de usuário falhou. Verifique os logs do Supabase.';
           }
-          addToast(errorMessage, 'error');
+          addToast(errorMessage, 'error', 6000);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  // ... (Restante das funções handleReactivate, handleForgotPassword mantidas iguais)
   const handleReactivate = async () => {
       if (reactivateConfirmEmail !== email) {
           addToast('O e-mail de confirmação não confere.', 'error');
@@ -280,7 +286,7 @@ export const Login: React.FC = () => {
         {mode === 'login' && (<div className="mt-6 text-center"><button type="button" onClick={() => setShowForgotModal(true)} className="text-xs font-medium text-slate-500 hover:text-indigo-400 transition-colors">Esqueceu sua senha?</button></div>)}
       </motion.div>
 
-      {/* Modals (Forgot Password & Reactivate) - mantidos iguais */}
+      {/* Modals (Forgot Password & Reactivate) */}
       <Modal isOpen={showForgotModal} onClose={() => setShowForgotModal(false)} title="Recuperar Senha" maxWidth="max-w-sm">
          <div className="space-y-4">
             <p className="text-sm text-slate-400">Digite seu e-mail para receber as instruções.</p>
