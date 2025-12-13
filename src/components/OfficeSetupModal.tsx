@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Modal } from './ui/Modal';
-import { Building, LogIn, AtSign, MapPin, Loader2 } from 'lucide-react';
+import { Building, LogIn, AtSign, MapPin, Loader2, AlertCircle } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { storageService } from '../services/storageService';
@@ -77,10 +77,13 @@ export const OfficeSetupModal: React.FC<OfficeSetupModalProps> = ({ isOpen, onCl
         const joinedOffice = await storageService.joinOffice(joinHandle);
         updateProfile({
             offices: [...(user?.offices || []), joinedOffice.id],
-            currentOfficeId: joinedOffice.id
+            // Note: We don't set currentOfficeId immediately if pending, 
+            // but we add it to list so user can see status
         });
         
-        addToast(`Você entrou em ${joinedOffice.name}!`, 'success');
+        // Custom Feedback for Join Request
+        addToast(`Solicitação enviada para ${joinedOffice.name}! Aguarde a aprovação do administrador.`, 'info');
+        
         onClose();
         setJoinHandle('');
     } catch (error: any) {
@@ -199,6 +202,12 @@ export const OfficeSetupModal: React.FC<OfficeSetupModalProps> = ({ isOpen, onCl
                  />
               </div>
            </div>
+           
+           <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-200">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <p>Ao solicitar entrada, você precisará aguardar a aprovação do administrador para acessar os dados.</p>
+           </div>
+
            <div className="flex gap-3 justify-end pt-4 border-t border-slate-200 dark:border-white/5 mt-6">
               <button 
                 type="button" 
@@ -213,7 +222,7 @@ export const OfficeSetupModal: React.FC<OfficeSetupModalProps> = ({ isOpen, onCl
                 className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium shadow-lg shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-70"
               >
                 {isLoading && <Loader2 size={16} className="animate-spin" />}
-                Entrar
+                Solicitar Entrada
               </button>
            </div>
         </form>

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Modal } from './ui/Modal';
 import { Office, OfficeMember, MemberRole } from '../types';
-import { Camera, Building, Users, Settings as SettingsIcon, Save, Trash2, Plus, Mail, Phone, Globe, MapPin, Instagram, Linkedin, Facebook, DollarSign, FileText, Scale, User, Shield, AtSign } from 'lucide-react';
+import { Camera, Building, Users, Settings as SettingsIcon, Save, Trash2, Plus, Mail, Phone, Globe, MapPin, Instagram, Linkedin, Facebook, DollarSign, FileText, Scale, User, Shield, AtSign, Check, X } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { storageService } from '../services/storageService';
 import { useAuth } from '../context/AuthContext';
@@ -151,6 +151,38 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
       }
   };
 
+  const approveMember = async (userId: string) => {
+      try {
+          await storageService.approveMember(office.id, userId);
+          addToast('Membro aprovado com sucesso!', 'success');
+          
+          // Update local state
+          const updatedMembers = formData.members.map(m => 
+              m.userId === userId ? { ...m, status: 'active' as const } : m
+          );
+          setFormData({ ...formData, members: updatedMembers });
+      } catch (e) {
+          addToast('Erro ao aprovar membro.', 'error');
+      }
+  };
+
+  const rejectMember = async (userId: string) => {
+      if (confirm('Deseja recusar esta solicitação de entrada?')) {
+          try {
+              await storageService.rejectMember(office.id, userId);
+              addToast('Solicitação recusada.', 'info');
+              
+              // Remove from local state
+              setFormData({ ...formData, members: formData.members.filter(m => m.userId !== userId) });
+          } catch (e) {
+              addToast('Erro ao recusar solicitação.', 'error');
+          }
+      }
+  };
+
+  const pendingMembers = formData.members.filter(m => m.status === 'pending');
+  const activeMembers = formData.members.filter(m => m.status !== 'pending' && m.status !== 'invited');
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Editar Perfil do Escritório" maxWidth="max-w-4xl" 
       footer={
@@ -172,6 +204,7 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
              </button>
              <button onClick={() => setActiveTab('team')} className={`text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors ${activeTab === 'team' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:bg-white/5'}`}>
                  <Users size={18} /> Equipe & Permissões
+                 {pendingMembers.length > 0 && <span className="ml-auto bg-amber-500 text-white text-[10px] px-1.5 rounded-full">{pendingMembers.length}</span>}
              </button>
              <button onClick={() => setActiveTab('extras')} className={`text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors ${activeTab === 'extras' ? 'bg-indigo-600/20 text-indigo-300' : 'text-slate-400 hover:bg-white/5'}`}>
                  <SettingsIcon size={18} /> Extras
@@ -268,8 +301,43 @@ export const OfficeEditModal: React.FC<OfficeEditModalProps> = ({ isOpen, onClos
                         </div>
                      )}
 
+                     {/* Pending Requests Section */}
+                     {pendingMembers.length > 0 && canManageTeam && (
+                         <div className="space-y-3 mb-6">
+                             <h4 className="text-sm font-bold text-amber-400 flex items-center gap-2 border-b border-amber-500/20 pb-2">
+                                <Users size={16} /> Solicitações Pendentes
+                             </h4>
+                             {pendingMembers.map(member => (
+                                 <div key={member.userId} className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 flex justify-between items-center">
+                                     <div className="flex items-center gap-3">
+                                         <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold">{member.name.charAt(0)}</div>
+                                         <div>
+                                             <p className="text-sm font-bold text-white">{member.name}</p>
+                                             <p className="text-xs text-amber-200/70">{member.email || 'Solicitou acesso'}</p>
+                                         </div>
+                                     </div>
+                                     <div className="flex items-center gap-2">
+                                         <button 
+                                            onClick={() => approveMember(member.userId)} 
+                                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
+                                         >
+                                             <Check size={14} /> Aprovar
+                                         </button>
+                                         <button 
+                                            onClick={() => rejectMember(member.userId)} 
+                                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-colors"
+                                         >
+                                             <X size={14} /> Recusar
+                                         </button>
+                                     </div>
+                                 </div>
+                             ))}
+                         </div>
+                     )}
+
                      <div className="space-y-3">
-                         {formData.members.map(member => (
+                         <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wide border-b border-white/10 pb-2">Membros Ativos</h4>
+                         {activeMembers.map(member => (
                              <div key={member.userId} className="p-4 rounded-xl bg-white/5 border border-white/10">
                                  <div className="flex justify-between items-start mb-4">
                                      <div className="flex items-center gap-3">

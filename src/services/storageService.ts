@@ -645,7 +645,8 @@ class StorageService {
             email: userDetails?.email || '',
             avatarUrl: userDetails?.avatar || '',
             role: 'Admin',
-            permissions: { financial: true, cases: true, documents: true, settings: true }
+            permissions: { financial: true, cases: true, documents: true, settings: true },
+            status: 'active' // Dono nasce ativo
         }],
         createdAt: new Date().toISOString(),
         social: {}
@@ -717,20 +718,22 @@ class StorageService {
             };
         }
 
+        // Insere com status PENDING
         const newMember: OfficeMember = {
              userId: userId,
              name: u.full_name || 'Novo Membro',
              email: session?.user?.email || '',
              avatarUrl: u.avatar_url || '',
              role: 'Advogado',
-             permissions: { financial: false, cases: true, documents: true, settings: false }
+             permissions: { financial: false, cases: true, documents: true, settings: false },
+             status: 'pending' // Aguardando aprovação
         };
         
         const updatedMembers = [...members, newMember];
         const { error: updateError } = await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', office.id);
         if (updateError) throw updateError;
 
-        this.logActivity(`Entrou no escritório: ${office.name}`);
+        this.logActivity(`Solicitou entrada no escritório: ${office.name}`);
         return {
             id: office.id,
             name: office.name,
@@ -744,6 +747,7 @@ class StorageService {
         };
 
     } else {
+        // Mock Implementation: For simulation simplicity, we just add as pending but UI might show immediately if not careful
         const offices = await this.getOffices();
         const targetOffice = offices.find(o => o.handle.toLowerCase() === officeHandle.toLowerCase());
         if (!targetOffice) throw new Error("Escritório não encontrado com este identificador.");
@@ -759,20 +763,59 @@ class StorageService {
              email: user?.email || '',
              avatarUrl: user?.avatar || '',
              role: 'Advogado',
-             permissions: { financial: false, cases: true, documents: true, settings: false }
+             permissions: { financial: false, cases: true, documents: true, settings: false },
+             status: 'pending' // Mock Pending
            });
            const updatedOffices = offices.map(o => o.id === targetOffice.id ? targetOffice : o);
            localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(updatedOffices));
-           this.logActivity(`Entrou no escritório: ${targetOffice.name}`);
+           this.logActivity(`Solicitou entrada no escritório: ${targetOffice.name}`);
         }
         return targetOffice;
     }
   }
 
+  async approveMember(officeId: string, userId: string): Promise<void> {
+      if (isSupabaseConfigured && supabase) {
+          const { data: office } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', officeId).single();
+          if (office) {
+              const updatedMembers = office.members.map((m: any) => {
+                  if (m.userId === userId) return { ...m, status: 'active' };
+                  return m;
+              });
+              await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', officeId);
+          }
+      } else {
+          const offices = await this.getOffices();
+          const office = offices.find(o => o.id === officeId);
+          if (office) {
+              const member = office.members.find(m => m.userId === userId);
+              if (member) member.status = 'active';
+              localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
+          }
+      }
+  }
+
+  async rejectMember(officeId: string, userId: string): Promise<void> {
+      if (isSupabaseConfigured && supabase) {
+          const { data: office } = await supabase.from(TABLE_NAMES.OFFICES).select('*').eq('id', officeId).single();
+          if (office) {
+              const updatedMembers = office.members.filter((m: any) => m.userId !== userId);
+              await supabase.from(TABLE_NAMES.OFFICES).update({ members: updatedMembers }).eq('id', officeId);
+          }
+      } else {
+          const offices = await this.getOffices();
+          const office = offices.find(o => o.id === officeId);
+          if (office) {
+              office.members = office.members.filter(m => m.userId !== userId);
+              localStorage.setItem(LOCAL_KEYS.OFFICES, JSON.stringify(offices));
+          }
+      }
+  }
+
   async inviteUserToOffice(officeId: string, userHandle: string): Promise<boolean> {
      if (!userHandle.startsWith('@') && !userHandle.includes('@')) throw new Error("Informe e-mail ou @usuario.");
      await new Promise(resolve => setTimeout(resolve, 800));
-     // Here you would implement logic to find the user by handle and add them to office members
+     // Here you would implement logic to find the user by handle and add them to office members with status 'invited'
      return true; 
   }
 

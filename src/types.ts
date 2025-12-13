@@ -216,6 +216,7 @@ export interface OfficeMember {
   name: string;
   role: MemberRole;
   permissions: OfficePermissions;
+  status?: 'active' | 'pending' | 'invited';
   email?: string;
   avatarUrl?: string;
   joinedAt?: string;

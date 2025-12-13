@@ -1,10 +1,11 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, Sun, Moon, ChevronDown, Menu, Loader2, X, Trash2, Plus, LogIn, Briefcase, Check } from 'lucide-react';
+import { Search, Bell, Sun, Moon, ChevronDown, Menu, Loader2, X, Trash2, Plus, LogIn, Briefcase, Check, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Office, SearchResult, SystemNotification } from '../../types';
 import { OfficeSetupModal } from '../OfficeSetupModal';
+import { useToast } from '../../context/ToastContext';
 
 interface HeaderProps {
   user: User | null;
@@ -33,6 +34,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = (props) => {
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const [isOfficeMenuOpen, setIsOfficeMenuOpen] = React.useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = React.useState(false);
   
@@ -63,6 +65,24 @@ export const Header: React.FC<HeaderProps> = (props) => {
       setSetupMode(mode);
       setIsOfficeSetupOpen(true);
       setIsOfficeMenuOpen(false);
+  };
+
+  const handleOfficeSelect = (office: Office) => {
+      // Find current user status in this office
+      const member = office.members.find(m => m.userId === props.user?.id);
+      
+      if (member?.status === 'pending') {
+          addToast('Seu acesso a este escritório está aguardando aprovação.', 'warning');
+          return;
+      }
+      
+      props.setCurrentOffice(office);
+      setIsOfficeMenuOpen(false);
+  };
+
+  const getMemberStatus = (office: Office) => {
+      const member = office.members.find(m => m.userId === props.user?.id);
+      return member?.status || 'active';
   };
 
   const timeAgo = (date: Date) => {
@@ -141,18 +161,36 @@ export const Header: React.FC<HeaderProps> = (props) => {
                 </button>
                 <AnimatePresence>
                     {isOfficeMenuOpen && (
-                        <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 5 }} className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-50">
+                        <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 5 }} className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl overflow-hidden z-50">
                             
                             <div className="p-2">
                                 {props.userOffices.length > 0 ? (
                                     <>
-                                        <div className="max-h-[200px] overflow-y-auto custom-scrollbar mb-2">
-                                            {props.userOffices.map(office => (
-                                                <button key={office.id} onClick={() => { props.setCurrentOffice(office); setIsOfficeMenuOpen(false); }} className={`w-full text-left px-3 py-2.5 text-sm rounded-lg transition-colors flex items-center justify-between ${props.currentOffice?.id === office.id ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}>
-                                                    <span className="truncate">{office.name}</span>
-                                                    {props.currentOffice?.id === office.id && <Check size={14} />}
-                                                </button>
-                                            ))}
+                                        <div className="max-h-[250px] overflow-y-auto custom-scrollbar mb-2 space-y-1">
+                                            {props.userOffices.map(office => {
+                                                const status = getMemberStatus(office);
+                                                const isPending = status === 'pending';
+                                                
+                                                return (
+                                                    <button 
+                                                        key={office.id} 
+                                                        onClick={() => handleOfficeSelect(office)} 
+                                                        className={`w-full text-left px-3 py-2.5 text-sm rounded-lg transition-colors flex items-center justify-between group
+                                                            ${props.currentOffice?.id === office.id ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}
+                                                            ${isPending ? 'opacity-70' : ''}
+                                                        `}
+                                                    >
+                                                        <span className="truncate flex-1">{office.name}</span>
+                                                        {isPending ? (
+                                                            <span className="flex items-center gap-1 text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                                                                <AlertCircle size={10} /> Pendente
+                                                            </span>
+                                                        ) : (
+                                                            props.currentOffice?.id === office.id && <Check size={14} />
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                         <div className="h-px bg-slate-200 dark:bg-white/5 my-1" />
                                     </>
